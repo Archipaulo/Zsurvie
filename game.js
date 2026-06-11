@@ -1,18 +1,34 @@
 /* =========================================================================
-   ZSURVIE — défense de barricade incrémentale
-   Survivez le plus de jours possible face à la horde.
+   ZSURVIE — défense de base incrémentale en vue surélevée
+   Les monstres arrivent de tous les côtés : protégez la petite maison !
    Améliorations temporaires en partie (🪙) + recherches permanentes au
-   Laboratoire (🧬), conservées entre les tentatives via localStorage.
+   Laboratoire (💎), payées avec les gemmes produites par la mine et
+   conservées entre les tentatives via localStorage.
    ========================================================================= */
 "use strict";
 
 const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+const mainCtx = canvas.getContext("2d");
 const W = canvas.width, H = canvas.height;
 
-const GROUND_Y = 600;        // sol
-const WALL_X = 230;          // bord droit de la barricade
-const SPAWN_X = W + 60;      // apparition des zombies
+// rendu pixel art : le monde est dessiné en basse résolution puis agrandi
+// sans lissage (gros pixels), l'interface reste nette en pleine résolution
+const PIX = 4;
+const pixCanvas = document.createElement("canvas");
+pixCanvas.width = W / PIX;
+pixCanvas.height = H / PIX;
+const pixCtx = pixCanvas.getContext("2d");
+let ctx = mainCtx; // contexte courant utilisé par les fonctions de dessin
+
+const HORIZON = 110;          // ligne d'horizon de la vue surélevée
+const CX = 640, CY = 420;     // centre de la maison (sur le plan du sol)
+const HOUSE_R = 86;           // rayon de collision de la maison
+const MINE_X = CX + 215, MINE_Y = CY + 115;
+
+// facteur de profondeur : plus c'est haut à l'écran, plus c'est loin (petit)
+function depth(y) {
+  return 0.62 + 0.55 * Math.min(1, Math.max(0, (y - HORIZON) / (H - HORIZON)));
+}
 
 /* ========================= SAUVEGARDE / MÉTA ========================= */
 
@@ -27,37 +43,37 @@ const LAB_UPGRADES = [
     desc: "Votre arme tire plus vite, pour toujours.",
     effect: l => `+${l * 8}% cadence de tir`,
     max: 20, baseCost: 4,  costMult: 1.5 },
-  { id: "wallhp",  icon: "🧱", name: "Barricade blindée",
-    desc: "Renforce la structure de la barricade au début de chaque journée 1.",
-    effect: l => `+${l * 20}% PV de barricade`,
+  { id: "wallhp",  icon: "🏠", name: "Maison fortifiée",
+    desc: "Renforce les murs de la maison pour toutes les parties futures.",
+    effect: l => `+${l * 20}% PV de la maison`,
     max: 25, baseCost: 3,  costMult: 1.45 },
   { id: "loot",    icon: "💰", name: "Fouille experte",
-    desc: "Les zombies lâchent plus de pièces.",
+    desc: "Les monstres lâchent plus de pièces.",
     effect: l => `+${l * 10}% de pièces`,
     max: 20, baseCost: 4,  costMult: 1.5 },
-  { id: "extract", icon: "🧪", name: "Extraction d'ADN",
-    desc: "Vous récoltez davantage d'ADN sur les spécimens et en fin de journée.",
-    effect: l => `+${l * 15}% d'ADN récolté`,
+  { id: "extract", icon: "⛏️", name: "Foreuse améliorée",
+    desc: "La mine produit ses gemmes plus vite et les monstres rares en lâchent plus.",
+    effect: l => `+${l * 15}% de gemmes`,
     max: 15, baseCost: 6,  costMult: 1.6 },
   { id: "start",   icon: "🎒", name: "Réserves de départ",
     desc: "Commencez chaque tentative avec un pécule de pièces.",
     effect: l => `+${l * 60} 🪙 au départ`,
     max: 15, baseCost: 3,  costMult: 1.5 },
   { id: "regen",   icon: "🔧", name: "Auto-réparation",
-    desc: "Des nano-machines réparent la barricade en continu.",
+    desc: "Des nano-machines réparent la maison en continu.",
     effect: l => `+${(l * 0.6).toFixed(1)} PV/s de régénération`,
     max: 15, baseCost: 5,  costMult: 1.55 },
   { id: "crit",    icon: "🎯", name: "Visée chirurgicale",
     desc: "Chance d'infliger un coup critique (dégâts x3).",
     effect: l => `${l * 3}% de chance critique`,
     max: 12, baseCost: 5,  costMult: 1.6 },
-  { id: "turret",  icon: "🤖", name: "Tourelle automatique",
-    desc: "Installe une tourelle sur la barricade. Chaque niveau la rend plus puissante.",
+  { id: "turret",  icon: "🤖", name: "Tourelle de toit",
+    desc: "Installe une tourelle sur le toit. Chaque niveau la rend plus puissante.",
     effect: l => l === 0 ? "Non installée" : `Tourelle niv. ${l}`,
     max: 10, baseCost: 12, costMult: 1.7 },
   { id: "pierce",  icon: "🏹", name: "Balles perforantes",
-    desc: "Vos balles traversent des zombies supplémentaires.",
-    effect: l => `Traverse ${l} zombie${l > 1 ? "s" : ""} de plus`,
+    desc: "Vos balles traversent des monstres supplémentaires.",
+    effect: l => `Traverse ${l} monstre${l > 1 ? "s" : ""} de plus`,
     max: 5,  baseCost: 15, costMult: 2.1 },
 ];
 
@@ -66,13 +82,14 @@ let meta = loadMeta();
 function defaultMeta() {
   const lab = {};
   for (const u of LAB_UPGRADES) lab[u.id] = 0;
-  return { adn: 0, lab, bestDay: 0, totalKills: 0, runs: 0 };
+  return { gems: 0, lab, bestDay: 0, totalKills: 0, runs: 0 };
 }
 function loadMeta() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return defaultMeta();
     const m = Object.assign(defaultMeta(), JSON.parse(raw));
+    if (m.adn != null && !m.gems) m.gems = m.adn; // anciennes sauvegardes
     m.lab = Object.assign(defaultMeta().lab, m.lab || {});
     return m;
   } catch (e) { return defaultMeta(); }
@@ -87,21 +104,21 @@ function labCost(u) {
 /* ========================= AMÉLIORATIONS EN PARTIE ========================= */
 
 const RUN_UPGRADES = [
-  { id: "dmg",   icon: "🗡️", name: "Dégâts",        baseCost: 20,  costMult: 1.55, max: 60,
+  { id: "dmg",   icon: "🗡️", name: "Dégâts",   baseCost: 20,  costMult: 1.55, max: 60,
     tip: "+35% de dégâts" },
-  { id: "rate",  icon: "⚡", name: "Cadence",        baseCost: 25,  costMult: 1.6,  max: 40,
+  { id: "rate",  icon: "⚡", name: "Cadence",   baseCost: 25,  costMult: 1.6,  max: 40,
     tip: "+12% de vitesse de tir" },
-  { id: "range", icon: "🔭", name: "Portée",         baseCost: 30,  costMult: 1.7,  max: 12,
+  { id: "range", icon: "🔭", name: "Portée",    baseCost: 30,  costMult: 1.7,  max: 12,
     tip: "+45 de portée" },
-  { id: "wallhp",icon: "🧱", name: "Barricade",      baseCost: 30,  costMult: 1.55, max: 50,
+  { id: "wallhp",icon: "🏠", name: "Maison",    baseCost: 30,  costMult: 1.55, max: 50,
     tip: "+30% PV max et répare 40%" },
-  { id: "repair",icon: "🔨", name: "Réparer",        baseCost: 15,  costMult: 1.35, max: 999,
-    tip: "Répare 50% de la barricade" },
-  { id: "regen", icon: "💚", name: "Régén",          baseCost: 40,  costMult: 1.65, max: 25,
+  { id: "repair",icon: "🔨", name: "Réparer",   baseCost: 15,  costMult: 1.35, max: 999,
+    tip: "Répare 50% de la maison" },
+  { id: "regen", icon: "💚", name: "Régén",     baseCost: 40,  costMult: 1.65, max: 25,
     tip: "+1 PV/s de régénération" },
-  { id: "loot",  icon: "💰", name: "Butin",          baseCost: 35,  costMult: 1.7,  max: 25,
+  { id: "loot",  icon: "💰", name: "Butin",     baseCost: 35,  costMult: 1.7,  max: 25,
     tip: "+20% de pièces" },
-  { id: "explo", icon: "💥", name: "Explosifs",      baseCost: 120, costMult: 1.75, max: 15,
+  { id: "explo", icon: "💥", name: "Explosifs", baseCost: 120, costMult: 1.75, max: 15,
     tip: "Balles explosives : zone +" },
 ];
 
@@ -116,32 +133,39 @@ let speed = 1;
 let paused = false;
 let gameOver = false;
 
+function baseHouseMax() {
+  return Math.round(150 * (1 + 0.20 * meta.lab.wallhp) * (1 + 0.30 * (run ? run.up.wallhp : 0)));
+}
+
 function newRun() {
-  const lab = meta.lab;
-  const wallMax = Math.round(150 * (1 + 0.20 * lab.wallhp));
   run = {
     day: 1,
     time: 0,
-    money: lab.start * 60,
+    money: meta.lab.start * 60,
     kills: 0,
-    adnEarned: 0,
+    gemsEarned: 0,
     up: Object.fromEntries(RUN_UPGRADES.map(u => [u.id, 0])),
-    wallHp: wallMax,
-    wallMax,
-    zombies: [],
+    houseHp: 0,
+    houseMax: 0,
+    monsters: [],
     bullets: [],
     particles: [],
     texts: [],
     coins: [],
-    // état de la vague du jour
+    gems: [],
     toSpawn: 0,
     spawnTimer: 0,
     dayActive: false,
-    dayDelay: 1.2,          // pause avant le début du jour
+    dayDelay: 1.2,
     shootCd: 0,
     turretCd: 0,
+    gunAngle: 0,
+    turretAngle: Math.PI,
+    mineTimer: 4,           // première gemme rapide pour montrer la mine
     shake: 0,
   };
+  run.houseMax = baseHouseMax();
+  run.houseHp = run.houseMax;
   startDay(1);
   meta.runs++;
   saveMeta();
@@ -152,11 +176,12 @@ function newRun() {
 /* ------- statistiques dérivées (labo + améliorations de partie) ------- */
 const stats = {
   get dmg()    { return (10 + meta.lab.dmg * 4) * (1 + 0.35 * run.up.dmg); },
-  get rate()   { return 1.1 * (1 + 0.08 * meta.lab.rate) * (1 + 0.12 * run.up.rate); },
-  get range()  { return 430 + run.up.range * 45; },
+  get rate()   { return 1.3 * (1 + 0.08 * meta.lab.rate) * (1 + 0.12 * run.up.rate); },
+  get range()  { return 360 + run.up.range * 45; },
   get regen()  { return meta.lab.regen * 0.6 + run.up.regen * 1.0; },
   get lootMul(){ return (1 + 0.10 * meta.lab.loot) * (1 + 0.20 * run.up.loot); },
-  get adnMul() { return 1 + 0.15 * meta.lab.extract; },
+  get gemMul() { return 1 + 0.15 * meta.lab.extract; },
+  get mineDelay() { return 13 / this.gemMul; },
   get crit()   { return meta.lab.crit * 0.03; },
   get pierce() { return meta.lab.pierce; },
   get exploR() { return run.up.explo > 0 ? 35 + run.up.explo * 14 : 0; },
@@ -166,14 +191,14 @@ const stats = {
 
 /* ========================= JOURS & APPARITIONS ========================= */
 
-function dayZombieCount(day) { return Math.min(6 + Math.round(day * 2.5), 60); }
-function dayHpMult(day)      { return Math.pow(1.23, day - 1); }
-function daySpawnGap(day)    { return Math.max(0.4, 2.0 - day * 0.05); }
-function isBossDay(day)      { return day % 5 === 0; }
+function dayMonsterCount(day) { return Math.min(5 + day * 2, 60); }
+function dayHpMult(day)       { return Math.pow(1.23, day - 1); }
+function daySpawnGap(day)     { return Math.max(0.4, 2.0 - day * 0.05); }
+function isBossDay(day)       { return day % 5 === 0; }
 
 function startDay(day) {
   run.day = day;
-  run.toSpawn = dayZombieCount(day);
+  run.toSpawn = dayMonsterCount(day);
   run.spawnTimer = 0;
   run.dayActive = true;
   run.dayDelay = 1.2;
@@ -183,15 +208,14 @@ function startDay(day) {
 
 function endDay() {
   run.dayActive = false;
-  const gain = Math.max(1, Math.round((1 + run.day / 5) * stats.adnMul));
-  gainAdn(gain, WALL_X + 60, 300);
-  addText(`Jour ${run.day} survécu !`, W / 2, 250, "#ffd34d", 26);
+  const gain = Math.max(1, Math.round((1 + run.day / 5) * stats.gemMul));
+  gainGems(gain, CX, CY - 160);
+  addText(`Jour ${run.day} survécu !`, W / 2, 220, "#ffd34d", 26);
   setTimeout(() => { if (!gameOver) startDay(run.day + 1); }, 1600 / speed);
 }
 
-/* ------- types de zombies ------- */
-// poids d'apparition selon le jour
-function pickZombieType(day) {
+/* ------- types de monstres ------- */
+function pickMonsterType(day) {
   const r = Math.random();
   if (day >= 6 && r < 0.07) return "dore";
   if (day >= 5 && r < 0.22) return "costaud";
@@ -199,78 +223,89 @@ function pickZombieType(day) {
   return "marcheur";
 }
 
-function spawnZombie(type) {
+// point d'apparition hors écran, tout autour de la base
+function spawnPoint() {
+  const a = Math.random() * Math.PI * 2;
+  const x = CX + Math.cos(a) * 820;
+  const y = CY + Math.sin(a) * 470;
+  return { x, y: Math.max(HORIZON + 28, y) };
+}
+
+function spawnMonster(type) {
   const day = run.day;
   const hpBase = 22 * dayHpMult(day);
   const rewardBase = 5 + day * 1.6;
-  const Z = {
-    marcheur: { hp: hpBase,        spd: 48,  dmg: 6,  size: 1.0, reward: rewardBase,
-                color: "#5d9b4a", color2: "#477a38" },
-    rapide:   { hp: hpBase * 0.55, spd: 85,  dmg: 4,  size: 0.82, reward: rewardBase * 0.8,
-                color: "#8fb84d", color2: "#6e9138" },
-    costaud:  { hp: hpBase * 3.2,  spd: 26,  dmg: 14, size: 1.45, reward: rewardBase * 2.6,
-                color: "#4a7a62", color2: "#365c49" },
-    dore:     { hp: hpBase * 1.6,  spd: 60,  dmg: 5,  size: 1.0, reward: rewardBase * 1.5,
-                color: "#d9b13b", color2: "#b08c22", adn: true },
-    boss:     { hp: hpBase * 18,   spd: 18,  dmg: 45, size: 2.6, reward: rewardBase * 14,
-                color: "#7a4a8f", color2: "#5c3370", boss: true },
+  const T = {
+    marcheur: { hp: hpBase,        spd: 46,  dmg: 6,  size: 1.0,  reward: rewardBase,
+                color: "#6abf4b", color2: "#4e9637", belly: "#a8e08a" },
+    rapide:   { hp: hpBase * 0.55, spd: 88,  dmg: 4,  size: 0.78, reward: rewardBase * 0.8,
+                color: "#e8c33c", color2: "#bf9c22", belly: "#ffe89a" },
+    costaud:  { hp: hpBase * 3.2,  spd: 26,  dmg: 14, size: 1.5,  reward: rewardBase * 2.6,
+                color: "#3f8f8f", color2: "#2d6b6b", belly: "#8accc9", spikes: true },
+    dore:     { hp: hpBase * 1.6,  spd: 62,  dmg: 5,  size: 1.0,  reward: rewardBase * 1.5,
+                color: "#f0c93c", color2: "#c79e1d", belly: "#fff0b0", gem: true },
+    boss:     { hp: hpBase * 18,   spd: 17,  dmg: 45, size: 2.7,  reward: rewardBase * 14,
+                color: "#9656b8", color2: "#6e3a8c", belly: "#cfa0e8", boss: true, spikes: true },
   }[type];
-  run.zombies.push({
-    type, x: SPAWN_X + Math.random() * 80,
-    y: GROUND_Y - 2 - Math.random() * 10,
-    hp: Z.hp, maxHp: Z.hp, spd: Z.spd * (0.9 + Math.random() * 0.2),
-    dmg: Z.dmg, size: Z.size, reward: Z.reward,
-    color: Z.color, color2: Z.color2,
-    adn: !!Z.adn, boss: !!Z.boss,
+  const p = spawnPoint();
+  run.monsters.push({
+    type, x: p.x, y: p.y,
+    hp: T.hp, maxHp: T.hp, spd: T.spd * (0.9 + Math.random() * 0.2),
+    dmg: T.dmg, size: T.size, reward: T.reward,
+    color: T.color, color2: T.color2, belly: T.belly,
+    gem: !!T.gem, boss: !!T.boss, spikes: !!T.spikes,
     attackCd: 0, walk: Math.random() * 10, hitFlash: 0,
+    blink: 1 + Math.random() * 3, wobbleSeed: Math.random() * 10,
   });
 }
 
 /* ========================= COMBAT ========================= */
 
-function nearestZombie(maxDist) {
+function distToHouse(m) { return Math.hypot(m.x - CX, m.y - CY); }
+
+function nearestMonster(maxDist) {
   let best = null, bd = maxDist;
-  for (const z of run.zombies) {
-    const d = z.x - WALL_X;
-    if (d < bd) { bd = d; best = z; }
+  for (const m of run.monsters) {
+    const d = distToHouse(m);
+    if (d < bd) { bd = d; best = m; }
   }
   return best;
 }
 
-function fireBullet(fromY, dmg, target) {
-  const fx = WALL_X - 14;
-  const ang = Math.atan2((target.y - target.size * 30) - fromY, target.x - fx);
+function fireBullet(fx, fy, dmg, target) {
+  const tx = target.x, ty = target.y - target.size * 18 * depth(target.y);
+  const ang = Math.atan2(ty - fy, tx - fx);
   const crit = Math.random() < stats.crit;
   run.bullets.push({
-    x: fx, y: fromY,
-    vx: Math.cos(ang) * 900, vy: Math.sin(ang) * 900,
+    x: fx, y: fy,
+    vx: Math.cos(ang) * 760, vy: Math.sin(ang) * 760,
     dmg: crit ? dmg * 3 : dmg, crit,
-    pierce: stats.pierce, hit: new Set(),
+    pierce: stats.pierce, hit: new Set(), life: 1.4,
   });
-  // douille / flash
-  addParticle(fx, fromY, 3, "#ffe27a", 0.15, 60);
+  addParticle(fx, fy, 3, "#ffe27a", 0.12, 50);
+  return ang;
 }
 
-function damageZombie(z, dmg, crit) {
-  z.hp -= dmg;
-  z.hitFlash = 0.1;
-  addText(Math.round(dmg).toString(), z.x, z.y - z.size * 58,
+function damageMonster(m, dmg, crit) {
+  m.hp -= dmg;
+  m.hitFlash = 0.1;
+  addText(Math.round(dmg).toString(), m.x, m.y - m.size * 52 * depth(m.y),
           crit ? "#ffd34d" : "#fff", crit ? 22 : 15);
-  if (z.hp <= 0) killZombie(z);
+  if (m.hp <= 0) killMonster(m);
 }
 
-function killZombie(z) {
-  const i = run.zombies.indexOf(z);
+function killMonster(m) {
+  const i = run.monsters.indexOf(m);
   if (i === -1) return;
-  run.zombies.splice(i, 1);
+  run.monsters.splice(i, 1);
   run.kills++; meta.totalKills++;
-  const coins = Math.round(z.reward * stats.lootMul);
+  const coins = Math.round(m.reward * stats.lootMul);
   run.money += coins;
-  run.coins.push({ x: z.x, y: z.y - 30, t: 0, amount: coins });
-  if (z.adn) gainAdn(Math.max(1, Math.round(2 * stats.adnMul)), z.x, z.y - 40);
-  if (z.boss) gainAdn(Math.max(3, Math.round(5 * stats.adnMul)), z.x, z.y - 60);
-  for (let k = 0; k < (z.boss ? 26 : 9); k++)
-    addParticle(z.x, z.y - z.size * 30, 4 + Math.random() * 4, z.color, 0.6, 180);
+  run.coins.push({ x: m.x, y: m.y - 30, t: 0, amount: coins });
+  if (m.gem) gainGems(Math.max(1, Math.round(2 * stats.gemMul)), m.x, m.y - 40);
+  if (m.boss) gainGems(Math.max(3, Math.round(5 * stats.gemMul)), m.x, m.y - 60);
+  for (let k = 0; k < (m.boss ? 26 : 9); k++)
+    addParticle(m.x, m.y - m.size * 18, 4 + Math.random() * 4, m.color, 0.6, 180);
   refreshHud();
   refreshUpgradeBar();
 }
@@ -278,17 +313,17 @@ function killZombie(z) {
 function explode(x, y, radius, dmg) {
   addParticle(x, y, radius, "rgba(255,160,40,0.55)", 0.25, 0, true);
   run.shake = Math.min(run.shake + 3, 8);
-  for (const z of [...run.zombies]) {
-    const d = Math.hypot(z.x - x, (z.y - z.size * 30) - y);
-    if (d < radius + z.size * 22) damageZombie(z, dmg * 0.5, false);
+  for (const m of [...run.monsters]) {
+    const d = Math.hypot(m.x - x, (m.y - m.size * 18) - y);
+    if (d < radius + m.size * 18) damageMonster(m, dmg * 0.5, false);
   }
 }
 
-function gainAdn(n, x, y) {
-  run.adnEarned += n;
-  meta.adn += n;
+function gainGems(n, x, y) {
+  run.gemsEarned += n;
+  meta.gems += n;
   saveMeta();
-  addText(`+${n} 🧬`, x, y, "#6df0c2", 20);
+  addText(`+${n} 💎`, x, y, "#6df0c2", 20);
   refreshHud();
 }
 
@@ -319,10 +354,10 @@ let lastT = performance.now();
 function loop(now) {
   let dt = Math.min((now - lastT) / 1000, 0.05);
   lastT = now;
-  if (!paused && !gameOver) {
+  if (run && !paused && !gameOver) {
     for (let i = 0; i < speed; i++) update(dt);
   }
-  draw();
+  if (run) draw();
   requestAnimationFrame(loop);
 }
 
@@ -337,45 +372,70 @@ function update(dt) {
       run.spawnTimer -= dt;
       if (run.spawnTimer <= 0) {
         run.spawnTimer = daySpawnGap(run.day) * (0.6 + Math.random() * 0.8);
-        spawnZombie(pickZombieType(run.day));
+        spawnMonster(pickMonsterType(run.day));
         run.toSpawn--;
-        if (run.toSpawn === 0 && isBossDay(run.day)) spawnZombie("boss");
+        if (run.toSpawn === 0 && isBossDay(run.day)) spawnMonster("boss");
       }
-    } else if (run.zombies.length === 0) {
+    } else if (run.monsters.length === 0) {
       endDay();
     }
   }
 
-  /* --- tir du survivant --- */
+  /* --- la mine produit des gemmes --- */
+  run.mineTimer -= dt;
+  if (run.mineTimer <= 0) {
+    run.mineTimer = stats.mineDelay;
+    run.gems.push({ x: MINE_X, y: MINE_Y - 30, vy: -120, t: 0, amount: 1 });
+  }
+  for (const g of [...run.gems]) {
+    g.t += dt;
+    if (g.t < 0.8) {                 // petit bond hors de la mine
+      g.y += g.vy * dt; g.vy += 360 * dt;
+    } else if (g.t < 1.5) {          // vol vers le compteur en haut
+      const k = (g.t - 0.8) / 0.7;
+      g.x += (640 - g.x) * k * 0.25;
+      g.y += (30 - g.y) * k * 0.25;
+    } else {
+      run.gems.splice(run.gems.indexOf(g), 1);
+      gainGems(g.amount, 640, 60);
+    }
+  }
+
+  /* --- tir du survivant (sur le toit) --- */
   run.shootCd -= dt;
-  const target = nearestZombie(stats.range);
+  const gunX = CX - 16, gunY = CY - 168;
+  const target = nearestMonster(stats.range);
+  if (target) run.gunAngle = Math.atan2(target.y - 60 - gunY, target.x - gunX);
   if (target && run.shootCd <= 0) {
     run.shootCd = 1 / stats.rate;
-    fireBullet(GROUND_Y - 195, stats.dmg, target);
+    fireBullet(gunX, gunY, stats.dmg, target);
   }
-  /* --- tourelle --- */
+  /* --- tourelle de toit --- */
   if (meta.lab.turret > 0) {
     run.turretCd -= dt;
-    const t2 = nearestZombie(stats.range * 0.85);
+    const tx = CX + 34, ty = CY - 135;
+    const t2 = nearestMonster(stats.range * 0.85);
+    if (t2) run.turretAngle = Math.atan2(t2.y - 60 - ty, t2.x - tx);
     if (t2 && run.turretCd <= 0) {
       run.turretCd = 1 / stats.turretRate;
-      fireBullet(GROUND_Y - 90, stats.turretDmg, t2);
+      fireBullet(tx, ty, stats.turretDmg, t2);
     }
   }
 
   /* --- balles --- */
   for (const b of [...run.bullets]) {
-    b.x += b.vx * dt; b.y += b.vy * dt;
-    if (b.x > W + 50 || b.y > H || b.y < 0) {
+    b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+    if (b.life <= 0 || b.x < -50 || b.x > W + 50 || b.y < HORIZON - 40 || b.y > H + 50) {
       run.bullets.splice(run.bullets.indexOf(b), 1);
       continue;
     }
-    for (const z of run.zombies) {
-      if (b.hit.has(z)) continue;
-      const zx = z.x, zy = z.y - z.size * 30;
-      if (Math.abs(b.x - zx) < z.size * 20 && Math.abs(b.y - zy) < z.size * 34) {
-        b.hit.add(z);
-        damageZombie(z, b.dmg, b.crit);
+    for (const m of run.monsters) {
+      if (b.hit.has(m)) continue;
+      const d = depth(m.y);
+      const mx = m.x, my = m.y - m.size * 18 * d;
+      if (Math.abs(b.x - mx) < m.size * 20 * d && Math.abs(b.y - my) < m.size * 26 * d) {
+        b.hit.add(m);
+        damageMonster(m, b.dmg, b.crit);
         if (stats.exploR > 0) explode(b.x, b.y, stats.exploR, b.dmg);
         if (b.hit.size > b.pierce) {
           run.bullets.splice(run.bullets.indexOf(b), 1);
@@ -385,27 +445,37 @@ function update(dt) {
     }
   }
 
-  /* --- zombies --- */
-  for (const z of run.zombies) {
-    z.hitFlash = Math.max(0, z.hitFlash - dt);
-    if (z.x > WALL_X + z.size * 16 + 6) {
-      z.x -= z.spd * dt;
-      z.walk += dt * z.spd * 0.15;
+  /* --- monstres : convergent vers la maison de tous les côtés --- */
+  for (const m of run.monsters) {
+    m.hitFlash = Math.max(0, m.hitFlash - dt);
+    m.blink -= dt;
+    if (m.blink < -0.12) m.blink = 1.5 + Math.random() * 3;
+    const d = distToHouse(m);
+    const stopAt = HOUSE_R + m.size * 10;
+    if (d > stopAt) {
+      const wob = Math.sin(run.time * 2.2 + m.wobbleSeed) * 0.35;
+      const ang = Math.atan2(CY - m.y, CX - m.x) + wob * 0.3;
+      const dep = depth(m.y);   // les monstres lointains paraissent plus lents
+      m.x += Math.cos(ang) * m.spd * dt * dep;
+      m.y += Math.sin(ang) * m.spd * dt * dep;
+      m.y = Math.max(HORIZON + 24, m.y);
+      m.walk += dt * (m.type === "rapide" ? 14 : m.type === "costaud" || m.boss ? 5 : 9);
     } else {
-      z.attackCd -= dt;
-      if (z.attackCd <= 0) {
-        z.attackCd = 0.9;
-        run.wallHp -= z.dmg;
+      m.walk += dt * 3;
+      m.attackCd -= dt;
+      if (m.attackCd <= 0) {
+        m.attackCd = 0.9;
+        run.houseHp -= m.dmg;
         run.shake = Math.min(run.shake + 1.5, 8);
-        addParticle(WALL_X + 8, z.y - z.size * 30, 5, "#c9a36a", 0.3, 120);
-        if (run.wallHp <= 0) { run.wallHp = 0; die(); return; }
+        addParticle(CX + (m.x - CX) * 0.5, CY - 40 + (m.y - CY) * 0.3, 5, "#d9c08a", 0.3, 120);
+        if (run.houseHp <= 0) { run.houseHp = 0; die(); return; }
       }
     }
   }
 
   /* --- régénération --- */
-  if (stats.regen > 0 && run.wallHp > 0)
-    run.wallHp = Math.min(run.wallMax, run.wallHp + stats.regen * dt);
+  if (stats.regen > 0 && run.houseHp > 0)
+    run.houseHp = Math.min(run.houseMax, run.houseHp + stats.regen * dt);
 
   /* --- particules / textes / pièces --- */
   for (const p of [...run.particles]) {
@@ -433,8 +503,8 @@ function die() {
   const s = document.getElementById("death-stats");
   s.innerHTML = `
     <div class="stat"><span class="label">Jours survécus</span>☀️ ${run.day}</div>
-    <div class="stat"><span class="label">Zombies éliminés</span>💀 ${run.kills}</div>
-    <div class="stat"><span class="label">ADN récolté</span>🧬 ${run.adnEarned}</div>
+    <div class="stat"><span class="label">Monstres éliminés</span>💀 ${run.kills}</div>
+    <div class="stat"><span class="label">Gemmes récoltées</span>💎 ${run.gemsEarned}</div>
     <div class="stat"><span class="label">Record</span>🏆 Jour ${meta.bestDay}</div>`;
   document.getElementById("death-screen").classList.remove("hidden");
 }
@@ -454,12 +524,13 @@ function fmt(n) {
 }
 
 function refreshHud() {
-  document.getElementById("hud-day").textContent = `☀️ Jour ${run.day}`;
+  if (run) {
+    document.getElementById("hud-day").textContent = `☀️ Jour ${run.day}`;
+    document.getElementById("hud-money").textContent = `🪙 ${fmt(run.money)}`;
+  }
   document.getElementById("hud-best").textContent = `Record : Jour ${meta.bestDay}`;
-  document.getElementById("hud-money").textContent = `🪙 ${fmt(run.money)}`;
-  document.getElementById("hud-adn").textContent = `🧬 ${meta.adn}`;
-  const labAdn = document.getElementById("lab-adn");
-  if (labAdn) labAdn.textContent = `🧬 ${meta.adn}`;
+  document.getElementById("hud-adn").textContent = `💎 ${meta.gems}`;
+  document.getElementById("lab-adn").textContent = `💎 ${meta.gems}`;
 }
 
 /* ------- barre d'améliorations en jeu ------- */
@@ -501,11 +572,11 @@ function buyRunUpgrade(u) {
   run.money -= cost;
   run.up[u.id]++;
   if (u.id === "wallhp") {
-    run.wallMax = Math.round(150 * (1 + 0.20 * meta.lab.wallhp) * (1 + 0.30 * run.up.wallhp));
-    run.wallHp = Math.min(run.wallMax, run.wallHp + run.wallMax * 0.4);
+    run.houseMax = baseHouseMax();
+    run.houseHp = Math.min(run.houseMax, run.houseHp + run.houseMax * 0.4);
   }
   if (u.id === "repair") {
-    run.wallHp = Math.min(run.wallMax, run.wallHp + run.wallMax * 0.5);
+    run.houseHp = Math.min(run.houseMax, run.houseHp + run.houseMax * 0.5);
   }
   refreshHud();
   refreshUpgradeBar();
@@ -530,17 +601,14 @@ function buildLab() {
       <div class="lc-desc">${u.desc}</div>
       <div class="lc-effect">${u.effect(lvl)}</div>`;
     const btn = document.createElement("button");
-    btn.className = "lab-buy" + (maxed ? " maxed" : meta.adn >= cost ? " affordable" : "");
-    btn.textContent = maxed ? "MAX" : `Rechercher — 🧬 ${cost}`;
+    btn.className = "lab-buy" + (maxed ? " maxed" : meta.gems >= cost ? " affordable" : "");
+    btn.textContent = maxed ? "MAX" : `Rechercher — 💎 ${cost}`;
     btn.addEventListener("click", () => {
-      if (maxed || meta.adn < labCost(u)) return;
-      meta.adn -= labCost(u);
+      if (maxed || meta.gems < labCost(u)) return;
+      meta.gems -= labCost(u);
       meta.lab[u.id]++;
       saveMeta();
-      // les bonus de barricade s'appliquent immédiatement
-      if (u.id === "wallhp" && run) {
-        run.wallMax = Math.round(150 * (1 + 0.20 * meta.lab.wallhp) * (1 + 0.30 * run.up.wallhp));
-      }
+      if (u.id === "wallhp" && run) run.houseMax = baseHouseMax();
       refreshHud();
       buildLab();
       refreshUpgradeBar();
@@ -551,22 +619,35 @@ function buildLab() {
   refreshHud();
 }
 
-let labWasPaused = false;
-function openLab() {
+/* ------- lobby du laboratoire ------- */
+function openLobby() {
   buildLab();
-  labWasPaused = paused;
   paused = true;
-  document.getElementById("lab-screen").classList.remove("hidden");
+  document.getElementById("lobby-best").textContent = `🏆 Record : Jour ${meta.bestDay}`;
+  document.getElementById("lobby-runs").textContent = `⚔️ Parties : ${meta.runs}`;
+  document.getElementById("lobby-kills").textContent = `💀 Monstres : ${fmt(meta.totalKills)}`;
+  document.getElementById("btn-lobby-start").textContent =
+    run && !gameOver ? "▶️ Reprendre la partie" : "⚔️ Lancer l'assaut";
+  document.getElementById("lobby").classList.remove("hidden");
 }
-function closeLab() {
-  document.getElementById("lab-screen").classList.add("hidden");
-  if (!gameOver) paused = labWasPaused;
+function leaveLobby() {
+  document.getElementById("lobby").classList.add("hidden");
+  if (run && !gameOver) {
+    paused = false;            // on reprend la partie en cours
+  } else {
+    gameOver = false;
+    paused = false;
+    newRun();                  // nouvelle tentative
+  }
 }
 
 /* ------- boutons ------- */
-document.getElementById("btn-lab").addEventListener("click", openLab);
-document.getElementById("btn-lab-close").addEventListener("click", closeLab);
-document.getElementById("btn-death-lab").addEventListener("click", openLab);
+document.getElementById("btn-lab").addEventListener("click", openLobby);
+document.getElementById("btn-lobby-start").addEventListener("click", leaveLobby);
+document.getElementById("btn-death-lab").addEventListener("click", () => {
+  document.getElementById("death-screen").classList.add("hidden");
+  openLobby();
+});
 document.getElementById("btn-restart").addEventListener("click", restart);
 document.getElementById("btn-speed").addEventListener("click", () => {
   speed = speed >= 3 ? 1 : speed + 1;
@@ -584,204 +665,426 @@ document.getElementById("btn-reset-save").addEventListener("click", () => {
   if (confirm("Effacer définitivement toute la progression (laboratoire compris) ?")) {
     localStorage.removeItem(SAVE_KEY);
     meta = loadMeta();
-    paused = false;
+    paused = true;
     document.getElementById("pause-screen").classList.add("hidden");
     gameOver = false;
+    run = null;
     document.getElementById("death-screen").classList.add("hidden");
-    newRun();
+    ctx.clearRect(0, 0, W, H);
+    refreshHud();
+    openLobby();
   }
 });
 
 /* ========================= RENDU ========================= */
 
 function draw() {
+  /* ---- passe 1 : le monde, en basse résolution (pixel art) ---- */
+  ctx = pixCtx;
   ctx.save();
+  ctx.setTransform(1 / PIX, 0, 0, 1 / PIX, 0, 0);
   if (run.shake > 0)
     ctx.translate((Math.random() - 0.5) * run.shake, (Math.random() - 0.5) * run.shake);
 
-  drawBackground();
-  drawWall();
-  drawSurvivor();
-  if (meta.lab.turret > 0) drawTurret();
-  for (const z of run.zombies) drawZombie(z);
+  drawGround();
+  drawRangeRing();
+
+  // entités triées par profondeur (y croissant) pour la superposition
+  const drawables = [
+    { y: CY, fn: drawHouse },
+    { y: MINE_Y, fn: drawMine },
+    ...run.monsters.map(m => ({ y: m.y, fn: () => drawMonster(m) })),
+  ];
+  drawables.sort((a, b) => a.y - b.y);
+  for (const d of drawables) d.fn();
+
   drawBullets();
   drawParticles();
-  drawCoinsAndTexts();
-  drawWallHpBar();
+  drawGems();
+  ctx.restore();
 
+  /* ---- passe 2 : agrandissement x4 sans lissage ---- */
+  ctx = mainCtx;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(pixCanvas, 0, 0, W, H);
+
+  /* ---- passe 3 : textes et barres d'interface, nets ---- */
+  ctx.save();
+  if (run.shake > 0)
+    ctx.translate((Math.random() - 0.5) * run.shake, (Math.random() - 0.5) * run.shake);
+  drawCoinsAndTexts();
+  drawHouseHpBar();
   ctx.restore();
 }
 
-function drawBackground() {
-  // ciel crépusculaire
-  const sky = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
-  sky.addColorStop(0, "#1c2a45");
-  sky.addColorStop(0.6, "#3d3354");
-  sky.addColorStop(1, "#7a4a4a");
+function drawGround() {
+  // ciel et horizon
+  const sky = ctx.createLinearGradient(0, 0, 0, HORIZON);
+  sky.addColorStop(0, "#6db5e8");
+  sky.addColorStop(1, "#bfe3f5");
   ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, W, GROUND_Y);
+  ctx.fillRect(0, 0, W, HORIZON);
 
-  // lune
-  ctx.fillStyle = "#e8e3c8";
-  ctx.beginPath(); ctx.arc(1050, 110, 42, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "#d6d0b2";
-  ctx.beginPath(); ctx.arc(1035, 100, 9, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(1065, 125, 6, 0, Math.PI * 2); ctx.fill();
+  // collines lointaines
+  ctx.fillStyle = "#7fb56a";
+  ctx.beginPath();
+  ctx.moveTo(0, HORIZON);
+  for (let x = 0; x <= W; x += 80)
+    ctx.lineTo(x, HORIZON - 14 - 16 * Math.abs(Math.sin(x * 0.013 + 2)));
+  ctx.lineTo(W, HORIZON);
+  ctx.closePath();
+  ctx.fill();
 
-  // ville en ruine au loin
-  ctx.fillStyle = "#242b3d";
-  for (let i = 0; i < 14; i++) {
-    const bx = 80 + i * 95, bh = 60 + ((i * 73) % 130);
-    ctx.fillRect(bx, GROUND_Y - 110 - bh, 56, bh + 110);
+  // grande prairie en dégradé (effet de profondeur)
+  const grass = ctx.createLinearGradient(0, HORIZON, 0, H);
+  grass.addColorStop(0, "#8fcf6e");
+  grass.addColorStop(1, "#5fa844");
+  ctx.fillStyle = grass;
+  ctx.fillRect(0, HORIZON, W, H - HORIZON);
+
+  // touffes d'herbe et cailloux (fixes, pseudo-aléatoires)
+  for (let i = 0; i < 60; i++) {
+    const gx = (i * 211 + 37) % W;
+    const gy = HORIZON + 30 + ((i * 127 + 51) % (H - HORIZON - 60));
+    const d = depth(gy);
+    ctx.fillStyle = i % 3 ? "rgba(60,130,45,0.5)" : "rgba(255,255,255,0.25)";
+    ctx.fillRect(gx, gy, 7 * d, 3 * d);
   }
-  ctx.fillStyle = "#2e3850";
-  for (let i = 0; i < 18; i++) {
-    const bx = 30 + i * 75, bh = 30 + ((i * 47) % 80);
-    ctx.fillRect(bx, GROUND_Y - 40 - bh, 44, bh + 40);
-  }
 
-  // sol
-  ctx.fillStyle = "#4a4036";
-  ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
-  ctx.fillStyle = "#5a5044";
-  ctx.fillRect(0, GROUND_Y, W, 10);
-  ctx.fillStyle = "#3c342c";
-  for (let i = 0; i < 20; i++)
-    ctx.fillRect((i * 137 + 40) % W, GROUND_Y + 25 + (i * 53) % 60, 26, 6);
+  // terre battue autour de la maison
+  ctx.fillStyle = "#c9a76a";
+  ctx.beginPath();
+  ctx.ellipse(CX, CY + 8, 150, 64, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#d9b87c";
+  ctx.beginPath();
+  ctx.ellipse(CX, CY + 8, 122, 50, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // petit chemin vers la mine
+  ctx.strokeStyle = "#c9a76a";
+  ctx.lineWidth = 18;
+  ctx.beginPath();
+  ctx.moveTo(CX + 70, CY + 40);
+  ctx.quadraticCurveTo(CX + 150, CY + 60, MINE_X - 20, MINE_Y + 6);
+  ctx.stroke();
 }
 
-function drawWall() {
-  const left = WALL_X - 90;
-  // corps de la barricade : planches
-  for (let row = 0; row < 6; row++) {
-    const y = GROUND_Y - 30 - row * 28;
-    ctx.fillStyle = row % 2 ? "#8a6a42" : "#7a5c38";
-    ctx.fillRect(left, y - 26, 90, 26);
-    ctx.strokeStyle = "#5c452a";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(left, y - 26, 90, 26);
-  }
-  // poutres verticales
-  ctx.fillStyle = "#6a4f30";
-  ctx.fillRect(left + 6, GROUND_Y - 198, 12, 198);
-  ctx.fillRect(left + 72, GROUND_Y - 198, 12, 198);
-  // plateforme du survivant
-  ctx.fillStyle = "#5c452a";
-  ctx.fillRect(left - 8, GROUND_Y - 204, 106, 10);
-  // sacs de sable au pied
-  ctx.fillStyle = "#9c8a5a";
+function drawRangeRing() {
+  ctx.strokeStyle = "rgba(255,255,255,0.22)";
+  ctx.lineWidth = 5;
+  ctx.setLineDash([14, 16]);
+  ctx.beginPath();
+  ctx.ellipse(CX, CY, stats.range, stats.range * 0.55, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+/* ------- la petite maison ------- */
+function drawHouse() {
+  const x = CX, y = CY;
+
+  // ombre au sol
+  ctx.fillStyle = "rgba(0,0,0,0.2)";
+  ctx.beginPath();
+  ctx.ellipse(x + 6, y + 26, 96, 34, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // mur latéral droit (perspective)
+  ctx.fillStyle = "#d9b88a";
+  ctx.beginPath();
+  ctx.moveTo(x + 58, y - 88);
+  ctx.lineTo(x + 92, y - 102);
+  ctx.lineTo(x + 92, y - 6);
+  ctx.lineTo(x + 58, y + 22);
+  ctx.closePath();
+  ctx.fill();
+
+  // mur avant
+  ctx.fillStyle = "#f0d6a8";
+  ctx.fillRect(x - 62, y - 88, 120, 110);
+  ctx.strokeStyle = "#b3905c";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(x - 62, y - 88, 120, 110);
+
+  // porte
+  ctx.fillStyle = "#8a5c30";
+  ctx.fillRect(x - 18, y - 24, 32, 46);
+  ctx.strokeStyle = "#6b4522";
+  ctx.strokeRect(x - 18, y - 24, 32, 46);
+  ctx.fillStyle = "#e8c84a";
+  ctx.beginPath(); ctx.arc(x + 7, y - 2, 3, 0, Math.PI * 2); ctx.fill();
+
+  // fenêtre
+  ctx.fillStyle = "#9adcf0";
+  ctx.fillRect(x - 50, y - 64, 26, 24);
+  ctx.strokeStyle = "#6b4522";
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(x - 50, y - 64, 26, 24);
+  ctx.beginPath();
+  ctx.moveTo(x - 37, y - 64); ctx.lineTo(x - 37, y - 40);
+  ctx.moveTo(x - 50, y - 52); ctx.lineTo(x - 24, y - 52);
+  ctx.stroke();
+
+  // toit : pan avant + pan latéral
+  ctx.fillStyle = "#c0563c";
+  ctx.beginPath();
+  ctx.moveTo(x - 74, y - 86);
+  ctx.lineTo(x - 2, y - 142);
+  ctx.lineTo(x + 70, y - 86);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "#8e3a26";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.fillStyle = "#a8462f";
+  ctx.beginPath();
+  ctx.moveTo(x - 2, y - 142);
+  ctx.lineTo(x + 38, y - 152);
+  ctx.lineTo(x + 98, y - 100);
+  ctx.lineTo(x + 70, y - 86);
+  ctx.closePath();
+  ctx.fill();
+
+  // cheminée
+  ctx.fillStyle = "#9c6b48";
+  ctx.fillRect(x + 42, y - 146, 16, 26);
+  ctx.fillStyle = "#7a4f33";
+  ctx.fillRect(x + 40, y - 150, 20, 6);
+  // fumée
+  ctx.fillStyle = "rgba(255,255,255,0.45)";
   for (let i = 0; i < 3; i++) {
+    const t = (run.time * 0.5 + i * 0.33) % 1;
     ctx.beginPath();
-    ctx.ellipse(WALL_X + 2, GROUND_Y - 10 - i * 16, 22, 10, 0, 0, Math.PI * 2);
+    ctx.arc(x + 50 + Math.sin(t * 6) * 5, y - 156 - t * 34, 4 + t * 6, 0, Math.PI * 2);
     ctx.fill();
   }
-  ctx.fillStyle = "#8a7a4e";
-  ctx.beginPath();
-  ctx.ellipse(WALL_X + 10, GROUND_Y - 8, 18, 9, 0, 0, Math.PI * 2);
-  ctx.fill();
+
+  drawGunner(x - 16, y - 138, run.gunAngle, run.shootCd > 1 / stats.rate - 0.06);
+  if (meta.lab.turret > 0)
+    drawTurret(x + 34, y - 126, run.turretAngle, run.turretCd > 1 / stats.turretRate - 0.06);
 }
 
-function drawSurvivor() {
-  const x = WALL_X - 45, y = GROUND_Y - 204;
+function drawGunner(x, y, ang, flash) {
   const bob = Math.sin(run.time * 3) * 1.5;
   // jambes
   ctx.fillStyle = "#3a4a60";
-  ctx.fillRect(x - 8, y - 22, 7, 22);
-  ctx.fillRect(x + 2, y - 22, 7, 22);
+  ctx.fillRect(x - 7, y - 14, 6, 14);
+  ctx.fillRect(x + 2, y - 14, 6, 14);
   // corps
   ctx.fillStyle = "#7a3b2e";
-  ctx.fillRect(x - 11, y - 48 + bob, 22, 28);
-  // tête
+  ctx.fillRect(x - 9, y - 36 + bob, 19, 23);
+  // tête + casquette
   ctx.fillStyle = "#e8b88a";
-  ctx.fillRect(x - 8, y - 66 + bob, 17, 17);
-  // casquette
+  ctx.fillRect(x - 7, y - 51 + bob, 15, 15);
   ctx.fillStyle = "#314a31";
-  ctx.fillRect(x - 9, y - 70 + bob, 19, 6);
-  ctx.fillRect(x + 2, y - 66 + bob, 12, 4);
-  // fusil pointé vers la droite
+  ctx.fillRect(x - 8, y - 55 + bob, 17, 6);
+  // fusil orienté vers la cible
+  ctx.save();
+  ctx.translate(x, y - 30 + bob);
+  ctx.rotate(ang);
   ctx.fillStyle = "#2c2c2c";
-  ctx.fillRect(x + 2, y - 44 + bob, 34, 6);
-  ctx.fillRect(x + 8, y - 38 + bob, 6, 10);
-  // flash de tir
-  if (run.shootCd > 1 / stats.rate - 0.06) {
+  ctx.fillRect(2, -3, 30, 6);
+  ctx.fillRect(8, 3, 6, 8);
+  if (flash) {
     ctx.fillStyle = "#ffe27a";
-    ctx.beginPath();
-    ctx.arc(x + 40, y - 41 + bob, 7, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(36, 0, 7, 0, Math.PI * 2); ctx.fill();
   }
+  ctx.restore();
 }
 
-function drawTurret() {
-  const x = WALL_X - 28, y = GROUND_Y - 90;
+function drawTurret(x, y, ang, flash) {
   ctx.fillStyle = "#4a5566";
-  ctx.fillRect(x - 12, y - 6, 24, 16);
+  ctx.fillRect(x - 11, y - 6, 22, 12);
   ctx.fillStyle = "#5d7396";
-  ctx.beginPath(); ctx.arc(x, y - 8, 11, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y - 8, 10, 0, Math.PI * 2); ctx.fill();
+  ctx.save();
+  ctx.translate(x, y - 9);
+  ctx.rotate(ang);
   ctx.fillStyle = "#2c2c2c";
-  ctx.fillRect(x, y - 12, 26, 7);
-  if (run.turretCd > 1 / stats.turretRate - 0.06) {
+  ctx.fillRect(4, -3, 24, 6);
+  if (flash) {
     ctx.fillStyle = "#ffe27a";
-    ctx.beginPath(); ctx.arc(x + 30, y - 9, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(32, 0, 6, 0, Math.PI * 2); ctx.fill();
   }
+  ctx.restore();
 }
 
-function drawZombie(z) {
-  const s = z.size;
-  const x = z.x, y = z.y;
-  const lurch = Math.sin(z.walk) * 3 * s;
-  const lean = Math.sin(z.walk * 0.5) * 0.06;
+/* ------- la mine à gemmes ------- */
+function drawMine() {
+  const x = MINE_X, y = MINE_Y;
+  // ombre
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.beginPath();
+  ctx.ellipse(x, y + 10, 62, 20, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // monticule rocheux
+  ctx.fillStyle = "#8a8f99";
+  ctx.beginPath();
+  ctx.ellipse(x, y - 22, 56, 42, 0, Math.PI, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#a3a8b3";
+  ctx.beginPath();
+  ctx.ellipse(x - 12, y - 30, 34, 28, 0, Math.PI, Math.PI * 2);
+  ctx.fill();
+  // entrée et étais en bois
+  ctx.fillStyle = "#2b2b33";
+  ctx.beginPath();
+  ctx.ellipse(x, y + 2, 22, 26, 0, Math.PI, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#8a5c30";
+  ctx.fillRect(x - 27, y - 26, 8, 32);
+  ctx.fillRect(x + 19, y - 26, 8, 32);
+  ctx.fillRect(x - 31, y - 32, 62, 8);
+  // cristaux qui scintillent
+  const tw = (Math.sin(run.time * 4) + 1) / 2;
+  drawCrystal(x - 38, y - 2, 9, tw);
+  drawCrystal(x + 40, y - 8, 11, 1 - tw);
+  drawCrystal(x + 26, y + 8, 7, tw);
+  // pancarte
+  ctx.fillStyle = "#8a5c30";
+  ctx.fillRect(x - 58, y - 4, 5, 18);
+  ctx.fillStyle = "#b3905c";
+  ctx.fillRect(x - 70, y - 16, 29, 15);
+  ctx.font = "bold 11px Trebuchet MS";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#4a2f16";
+  ctx.fillText("💎", x - 55, y - 4);
+}
+
+function drawCrystal(x, y, s, glow) {
+  ctx.fillStyle = `rgba(109,240,194,${0.75 + glow * 0.25})`;
+  ctx.beginPath();
+  ctx.moveTo(x, y - s * 1.6);
+  ctx.lineTo(x + s * 0.8, y - s * 0.4);
+  ctx.lineTo(x + s * 0.4, y);
+  ctx.lineTo(x - s * 0.4, y);
+  ctx.lineTo(x - s * 0.8, y - s * 0.4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = `rgba(255,255,255,${0.3 + glow * 0.4})`;
+  ctx.fillRect(x - s * 0.25, y - s * 1.2, s * 0.3, s * 0.7);
+}
+
+/* ------- petits monstres animés ------- */
+function drawMonster(m) {
+  const d = depth(m.y);
+  const s = m.size * d;
+  const x = m.x, y = m.y;
+  const hopH = m.type === "rapide" ? 9 : m.boss ? 3 : 5;
+  const hop = Math.abs(Math.sin(m.walk)) * hopH * s;
+  const squash = 1 + Math.sin(m.walk * 2) * 0.07;       // rebond pâte à modeler
+  const toHouse = Math.atan2(CY - y, CX - x);
+  const lookX = Math.cos(toHouse) * 2.5 * s;
+  const lookY = Math.sin(toHouse) * 1.5 * s;
+
+  const body = m.hitFlash > 0 ? "#ffffff" : m.color;
+  const dark = m.hitFlash > 0 ? "#dddddd" : m.color2;
+  const belly = m.hitFlash > 0 ? "#ffffff" : m.belly;
+
+  // ombre au sol
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.beginPath();
+  ctx.ellipse(x, y + 2, 16 * s * (1 - hop / 40), 6 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(-0.08 + lean);
+  ctx.translate(x, y - hop);
+  ctx.scale(squash, 2 - squash);
 
-  const body = z.hitFlash > 0 ? "#ffffff" : z.color;
-  const dark = z.hitFlash > 0 ? "#dddddd" : z.color2;
+  // pieds qui trottinent
+  const step = Math.sin(m.walk) * 5 * s;
+  ctx.fillStyle = dark;
+  ctx.beginPath(); ctx.ellipse(-7 * s + step, 0, 5.5 * s, 3.5 * s, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(7 * s - step, 0, 5.5 * s, 3.5 * s, 0, 0, Math.PI * 2); ctx.fill();
 
-  // jambes traînantes
-  ctx.fillStyle = dark;
-  ctx.fillRect(-9 * s, -20 * s, 7 * s, 20 * s);
-  ctx.fillRect(2 * s + lurch * 0.4, -18 * s, 7 * s, 18 * s);
-  // torse déchiré
+  // corps patate
   ctx.fillStyle = body;
-  ctx.fillRect(-12 * s, -46 * s + lurch * 0.3, 24 * s, 28 * s);
+  ctx.beginPath();
+  ctx.ellipse(0, -17 * s, 15 * s, 17 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // ventre clair
+  ctx.fillStyle = belly;
+  ctx.beginPath();
+  ctx.ellipse(lookX * 0.8, -13 * s, 8 * s, 9 * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // petits bras ballants
+  const wave = Math.sin(m.walk + 1) * 0.5;
   ctx.fillStyle = dark;
-  ctx.fillRect(-12 * s, -28 * s + lurch * 0.3, 10 * s, 6 * s);
-  // bras tendus vers la barricade
-  ctx.fillStyle = body;
-  ctx.fillRect(-30 * s, -42 * s + lurch, 20 * s, 6 * s);
-  ctx.fillRect(-26 * s, -32 * s - lurch, 16 * s, 6 * s);
-  // tête penchée
-  ctx.fillStyle = body;
-  ctx.fillRect(-14 * s, -64 * s + lurch * 0.5, 18 * s, 18 * s);
-  // œil
-  ctx.fillStyle = z.boss ? "#ff5b5b" : "#e8e84a";
-  ctx.fillRect(-11 * s, -58 * s + lurch * 0.5, 5 * s, 5 * s);
-  ctx.fillStyle = "#1a1a1a";
-  ctx.fillRect(-10 * s, -57 * s + lurch * 0.5, 2.5 * s, 2.5 * s);
-  // mâchoire
-  ctx.fillStyle = dark;
-  ctx.fillRect(-14 * s, -49 * s + lurch * 0.5, 12 * s, 3 * s);
-  // couronne du zombie doré
-  if (z.adn) {
-    ctx.fillStyle = "#fff27a";
-    ctx.fillRect(-13 * s, -69 * s + lurch * 0.5, 16 * s, 4 * s);
+  ctx.save();
+  ctx.translate(-14 * s, -18 * s); ctx.rotate(-0.6 + wave);
+  ctx.beginPath(); ctx.ellipse(0, 4 * s, 3 * s, 6 * s, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.translate(14 * s, -18 * s); ctx.rotate(0.6 - wave);
+  ctx.beginPath(); ctx.ellipse(0, 4 * s, 3 * s, 6 * s, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
+  // piquants du costaud / cornes du colosse
+  if (m.spikes) {
+    ctx.fillStyle = dark;
+    for (const [sx, sy, r] of [[-8, -30, -0.5], [0, -33, 0], [8, -30, 0.5]]) {
+      ctx.save();
+      ctx.translate(sx * s, sy * s); ctx.rotate(r);
+      ctx.beginPath();
+      ctx.moveTo(-3 * s, 0); ctx.lineTo(0, -7 * s); ctx.lineTo(3 * s, 0);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
   }
+  // couronne du monstre doré
+  if (m.gem) {
+    ctx.fillStyle = "#fff27a";
+    ctx.beginPath();
+    ctx.moveTo(-7 * s, -31 * s); ctx.lineTo(-7 * s, -38 * s); ctx.lineTo(-3 * s, -33 * s);
+    ctx.lineTo(0, -39 * s); ctx.lineTo(3 * s, -33 * s); ctx.lineTo(7 * s, -38 * s);
+    ctx.lineTo(7 * s, -31 * s);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // yeux qui regardent la maison, avec clignement
+  const blink = m.blink < 0 ? 0.15 : 1;
+  for (const ex of [-5.5, 5.5]) {
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.ellipse(ex * s + lookX * 0.4, -23 * s, 4.2 * s, 4.6 * s * blink, 0, 0, Math.PI * 2);
+    ctx.fill();
+    if (blink === 1) {
+      ctx.fillStyle = m.boss ? "#c01818" : "#1a1a1a";
+      ctx.beginPath();
+      ctx.arc(ex * s + lookX, -23 * s + lookY, 2.4 * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // bouche
+  ctx.strokeStyle = "#1a1a1a";
+  ctx.lineWidth = 4 * s;
+  ctx.beginPath();
+  ctx.arc(lookX * 0.6, -15 * s, 3.5 * s, 0.15 * Math.PI, 0.85 * Math.PI);
+  ctx.stroke();
+  if (m.boss) { // crocs du colosse
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.moveTo(-3 * s, -13 * s); ctx.lineTo(-1.6 * s, -9.5 * s); ctx.lineTo(-0.2 * s, -13 * s);
+    ctx.moveTo(3 * s, -13 * s); ctx.lineTo(1.6 * s, -9.5 * s); ctx.lineTo(0.2 * s, -13 * s);
+    ctx.fill();
+  }
+
   ctx.restore();
 
   // barre de vie
-  if (z.hp < z.maxHp) {
-    const w = 44 * s;
+  if (m.hp < m.maxHp) {
+    const w = 36 * s;
     ctx.fillStyle = "rgba(0,0,0,0.6)";
-    ctx.fillRect(x - w / 2, y - 74 * s, w, 6);
-    ctx.fillStyle = z.boss ? "#c75bff" : "#6dd96d";
-    ctx.fillRect(x - w / 2, y - 74 * s, w * Math.max(0, z.hp / z.maxHp), 6);
+    ctx.fillRect(x - w / 2, y - 48 * s - hop, w, 5);
+    ctx.fillStyle = m.boss ? "#c75bff" : "#6dd96d";
+    ctx.fillRect(x - w / 2, y - 48 * s - hop, w * Math.max(0, m.hp / m.maxHp), 5);
   }
 }
 
 function drawBullets() {
   for (const b of run.bullets) {
-    ctx.fillStyle = b.crit ? "#ffd34d" : "#ffe9a8";
+    ctx.fillStyle = b.crit ? "#ffd34d" : "#fff3c0";
     ctx.save();
     ctx.translate(b.x, b.y);
     ctx.rotate(Math.atan2(b.vy, b.vx));
@@ -809,6 +1112,12 @@ function drawParticles() {
   }
 }
 
+function drawGems() {
+  for (const g of run.gems) {
+    drawCrystal(g.x, g.y, 9, (Math.sin(run.time * 8 + g.t * 5) + 1) / 2);
+  }
+}
+
 function drawCoinsAndTexts() {
   ctx.textAlign = "center";
   for (const c of run.coins) {
@@ -831,9 +1140,10 @@ function drawCoinsAndTexts() {
   }
 }
 
-function drawWallHpBar() {
-  const x = WALL_X - 100, y = GROUND_Y - 305, w = 130, h = 16;
-  const ratio = run.wallHp / run.wallMax;
+function drawHouseHpBar() {
+  const w = 140, h = 14;
+  const x = CX - w / 2, y = CY - 232;
+  const ratio = run.houseHp / run.houseMax;
   ctx.fillStyle = "rgba(0,0,0,0.65)";
   ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
   ctx.fillStyle = ratio > 0.5 ? "#5fd35f" : ratio > 0.25 ? "#e8c84a" : "#e85b4a";
@@ -841,10 +1151,10 @@ function drawWallHpBar() {
   ctx.strokeStyle = "#fff";
   ctx.lineWidth = 2;
   ctx.strokeRect(x - 2, y - 2, w + 4, h + 4);
-  ctx.font = "bold 12px Trebuchet MS";
+  ctx.font = "bold 11px Trebuchet MS";
   ctx.fillStyle = "#fff";
   ctx.textAlign = "center";
-  ctx.fillText(`${Math.ceil(run.wallHp)} / ${run.wallMax}`, x + w / 2, y + 12);
+  ctx.fillText(`${Math.ceil(run.houseHp)} / ${run.houseMax}`, CX, y + 11);
 }
 
 /* ========================= MISE À L'ÉCHELLE ========================= */
@@ -860,5 +1170,6 @@ window.addEventListener("resize", fitToWindow);
 /* ========================= DÉMARRAGE ========================= */
 
 fitToWindow();
-newRun();
+refreshHud();
+openLobby();               // le jeu démarre dans le lobby du laboratoire
 requestAnimationFrame(loop);

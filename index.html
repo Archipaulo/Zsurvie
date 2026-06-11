@@ -18,7 +18,7 @@
     </div>
     <div class="hud-group">
       <div id="hud-money" class="hud-pill money">🪙 0</div>
-      <div id="hud-adn" class="hud-pill adn">🧬 0</div>
+      <div id="hud-adn" class="hud-pill adn">💎 0</div>
     </div>
     <div class="hud-group">
       <button id="btn-lab" class="hud-btn">🔬 Laboratoire</button>
@@ -36,29 +36,36 @@
   <!-- Écran de défaite -->
   <div id="death-screen" class="overlay hidden">
     <div class="panel">
-      <h1>💀 La barricade est tombée !</h1>
+      <h1>💀 La maison est tombée !</h1>
       <div id="death-stats"></div>
       <p class="hint">Vos recherches au laboratoire sont permanentes.<br>
-      Dépensez votre ADN 🧬 pour revenir plus fort !</p>
+      Dépensez vos gemmes 💎 pour revenir plus fort !</p>
       <div class="panel-buttons">
-        <button id="btn-death-lab" class="big-btn lab-btn">🔬 Laboratoire</button>
+        <button id="btn-death-lab" class="big-btn lab-btn">🔬 Retour au laboratoire</button>
         <button id="btn-restart" class="big-btn restart-btn">🔄 Recommencer</button>
       </div>
     </div>
   </div>
 
-  <!-- Laboratoire -->
-  <div id="lab-screen" class="overlay hidden">
-    <div class="panel lab-panel">
-      <div class="lab-header">
-        <h1>🔬 Laboratoire</h1>
-        <div id="lab-adn" class="hud-pill adn">🧬 0</div>
-      </div>
-      <p class="hint">Améliorations permanentes — conservées même après la chute de la barricade.</p>
+  <!-- Laboratoire : lobby plein écran entre les parties -->
+  <div id="lobby" class="lobby">
+    <div class="lobby-deco lobby-deco-l">⚗️🧪🔭</div>
+    <div class="lobby-deco lobby-deco-r">🧫🔬⚗️</div>
+    <div class="lobby-inner">
+      <header class="lobby-header">
+        <h1>🔬 LABORATOIRE</h1>
+        <p class="lobby-sub">Recherches permanentes — conservées même quand la maison tombe.</p>
+        <div class="lobby-chips">
+          <div class="hud-pill adn" id="lab-adn">💎 0</div>
+          <div class="hud-pill small" id="lobby-best">🏆 Record : Jour 0</div>
+          <div class="hud-pill small" id="lobby-runs">⚔️ Parties : 0</div>
+          <div class="hud-pill small" id="lobby-kills">💀 Monstres : 0</div>
+        </div>
+      </header>
       <div id="lab-grid"></div>
-      <div class="panel-buttons">
-        <button id="btn-lab-close" class="big-btn restart-btn">✔️ Fermer</button>
-      </div>
+      <footer class="lobby-footer">
+        <button id="btn-lobby-start" class="big-btn start-btn">⚔️ Lancer l'assaut</button>
+      </footer>
     </div>
   </div>
 
