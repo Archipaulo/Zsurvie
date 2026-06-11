@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zsurvie — Survivez à la horde</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game-wrap">
+  <canvas id="game" width="1280" height="720"></canvas>
+
+  <!-- HUD haut -->
+  <div id="hud-top">
+    <div class="hud-group">
+      <div id="hud-day" class="hud-pill">☀️ Jour 1</div>
+      <div id="hud-best" class="hud-pill small">Record : Jour 0</div>
+    </div>
+    <div class="hud-group">
+      <div id="hud-money" class="hud-pill money">🪙 0</div>
+      <div id="hud-adn" class="hud-pill adn">🧬 0</div>
+    </div>
+    <div class="hud-group">
+      <button id="btn-lab" class="hud-btn">🔬 Laboratoire</button>
+      <button id="btn-speed" class="hud-btn">⏩ x1</button>
+      <button id="btn-pause" class="hud-btn">⏸️</button>
+    </div>
+  </div>
+
+  <!-- Barre d'améliorations en jeu (bas) -->
+  <div id="upgrade-bar"></div>
+
+  <!-- Bannière de jour -->
+  <div id="day-banner" class="hidden"></div>
+
+  <!-- Écran de défaite -->
+  <div id="death-screen" class="overlay hidden">
+    <div class="panel">
+      <h1>💀 La barricade est tombée !</h1>
+      <div id="death-stats"></div>
+      <p class="hint">Vos recherches au laboratoire sont permanentes.<br>
+      Dépensez votre ADN 🧬 pour revenir plus fort !</p>
+      <div class="panel-buttons">
+        <button id="btn-death-lab" class="big-btn lab-btn">🔬 Laboratoire</button>
+        <button id="btn-restart" class="big-btn restart-btn">🔄 Recommencer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Laboratoire -->
+  <div id="lab-screen" class="overlay hidden">
+    <div class="panel lab-panel">
+      <div class="lab-header">
+        <h1>🔬 Laboratoire</h1>
+        <div id="lab-adn" class="hud-pill adn">🧬 0</div>
+      </div>
+      <p class="hint">Améliorations permanentes — conservées même après la chute de la barricade.</p>
+      <div id="lab-grid"></div>
+      <div class="panel-buttons">
+        <button id="btn-lab-close" class="big-btn restart-btn">✔️ Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Écran de pause -->
+  <div id="pause-screen" class="overlay hidden">
+    <div class="panel">
+      <h1>⏸️ Pause</h1>
+      <div class="panel-buttons">
+        <button id="btn-resume" class="big-btn restart-btn">▶️ Reprendre</button>
+        <button id="btn-reset-save" class="big-btn danger-btn">🗑️ Effacer la sauvegarde</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
