@@ -1,6 +1,6 @@
 # 🧟 Zsurvie
 
-Jeu de défense incrémental en **pixel art**, vue surélevée. Les petits
+Jeu de défense incrémental en **voxel art**, vue surélevée. Les petits
 monstres arrivent de **tous les côtés** : protégez la petite maison,
 améliorez votre équipement en pleine partie, et investissez les gemmes
 produites par la **mine** dans le **Laboratoire** pour des recherches
@@ -47,9 +47,12 @@ npx serve .
 ## 🛠️ Technique
 
 - HTML5 Canvas + JavaScript pur, sans aucune dépendance.
-- **Pixel art procédural** : le monde est dessiné dans un canvas basse
-  résolution (320×180) puis agrandi x4 sans lissage ; les textes et barres
-  restent nets en pleine résolution.
+- **Voxel art procédural** : maison, mine et monstres sont des modèles 3D en
+  petits cubes (grilles de voxels générées par code) projetés en vue oblique
+  — faces du dessus éclaircies, faces avant ombrées — puis pré-rendus en
+  sprites pour rester fluide même avec 60 monstres à l'écran.
+- Animations voxel : 2 frames de marche (pieds et bras), clignement des yeux,
+  flash blanc à l'impact, écrasement « pâte à modeler » au rebond.
 - Vue surélevée avec profondeur : tri des entités par plan, ombres au sol,
   taille et vitesse modulées par l'éloignement.
 - Fichiers : `index.html` (structure), `style.css` (interface et lobby),

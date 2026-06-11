@@ -1,5 +1,5 @@
 /* =========================================================================
-   ZSURVIE — défense de base incrémentale en vue surélevée
+   ZSURVIE — défense de base incrémentale en vue surélevée, rendu voxel
    Les monstres arrivent de tous les côtés : protégez la petite maison !
    Améliorations temporaires en partie (🪙) + recherches permanentes au
    Laboratoire (💎), payées avec les gemmes produites par la mine et
@@ -11,14 +11,10 @@ const canvas = document.getElementById("game");
 const mainCtx = canvas.getContext("2d");
 const W = canvas.width, H = canvas.height;
 
-// rendu pixel art : le monde est dessiné en basse résolution puis agrandi
-// sans lissage (gros pixels), l'interface reste nette en pleine résolution
-const PIX = 4;
-const pixCanvas = document.createElement("canvas");
-pixCanvas.width = W / PIX;
-pixCanvas.height = H / PIX;
-const pixCtx = pixCanvas.getContext("2d");
+// rendu voxel : les décors et créatures sont des modèles 3D en petits cubes,
+// pré-rendus en sprites (faces dessus claires / faces avant ombrées)
 let ctx = mainCtx; // contexte courant utilisé par les fonctions de dessin
+mainCtx.imageSmoothingEnabled = false;
 
 const HORIZON = 110;          // ligne d'horizon de la vue surélevée
 const CX = 640, CY = 420;     // centre de la maison (sur le plan du sol)
@@ -676,13 +672,243 @@ document.getElementById("btn-reset-save").addEventListener("click", () => {
   }
 });
 
+/* ========================= MOTEUR VOXEL ========================= */
+/* Un modèle est une grille creuse de cubes colorés (Map "x,y,z" -> couleur).
+   Projection oblique surélevée : x = largeur écran, y = profondeur (écrasée),
+   z = hauteur. Seules les faces du dessus (éclaircies) et de devant sont
+   visibles ; peintre de l'arrière vers l'avant, du bas vers le haut. */
+
+const VU = 6;  // largeur d'un voxel à l'écran
+const VY = 4;  // profondeur projetée d'un voxel
+const VZ = 6;  // hauteur projetée d'un voxel
+
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = v => Math.max(0, Math.min(255, Math.round(v * f)));
+  return `rgb(${ch(n >> 16)},${ch((n >> 8) & 255)},${ch(n & 255)})`;
+}
+
+function vset(vox, x, y, z, c) { vox.set(x + "," + y + "," + z, c); }
+function vbox(vox, x0, x1, y0, y1, z0, z1, c) {
+  for (let x = x0; x <= x1; x++)
+    for (let y = y0; y <= y1; y++)
+      for (let z = z0; z <= z1; z++) vset(vox, x, y, z, c);
+}
+
+// pré-rend un modèle voxel en sprite (canvas hors écran), ancré bas-centre
+function renderVox(vox) {
+  let mnX = 1e9, mxX = -1e9, mnY = 1e9, mxY = -1e9, mnZ = 1e9, mxZ = -1e9;
+  for (const k of vox.keys()) {
+    const [x, y, z] = k.split(",").map(Number);
+    if (x < mnX) mnX = x; if (x > mxX) mxX = x;
+    if (y < mnY) mnY = y; if (y > mxY) mxY = y;
+    if (z < mnZ) mnZ = z; if (z > mxZ) mxZ = z;
+  }
+  const c = document.createElement("canvas");
+  c.width = (mxX - mnX + 1) * VU;
+  c.height = (mxY - mnY + 1) * VY + (mxZ - mnZ + 1) * VZ;
+  const g = c.getContext("2d");
+  for (let y = mnY; y <= mxY; y++)
+    for (let z = mnZ; z <= mxZ; z++)
+      for (let x = mnX; x <= mxX; x++) {
+        const col = vox.get(x + "," + y + "," + z);
+        if (!col) continue;
+        const sx = (x - mnX) * VU;
+        const sy = (y - mnY) * VY + (mxZ - z) * VZ;
+        if (!vox.has(x + "," + y + "," + (z + 1))) {   // face du dessus
+          g.fillStyle = shade(col, 1.28);
+          g.fillRect(sx, sy, VU, VY);
+        }
+        if (!vox.has(x + "," + (y + 1) + "," + z)) {   // face avant
+          g.fillStyle = col;
+          g.fillRect(sx, sy + VY, VU, VZ);
+          if (!vox.has((x - 1) + "," + y + "," + z)) { // arête gauche éclairée
+            g.fillStyle = shade(col, 1.12);
+            g.fillRect(sx, sy + VY, 2, VZ);
+          }
+          if (!vox.has((x + 1) + "," + y + "," + z)) { // arête droite ombrée
+            g.fillStyle = shade(col, 0.78);
+            g.fillRect(sx + VU - 2, sy + VY, 2, VZ);
+          }
+        }
+      }
+  return c;
+}
+
+// silhouette blanche d'un sprite (flash de dégâts)
+function whiten(c) {
+  const w = document.createElement("canvas");
+  w.width = c.width; w.height = c.height;
+  const g = w.getContext("2d");
+  g.drawImage(c, 0, 0);
+  g.globalCompositeOperation = "source-in";
+  g.fillStyle = "#fff";
+  g.fillRect(0, 0, w.width, w.height);
+  return w;
+}
+
+// ellipse en blocs (ombres, terre battue) pour rester dans le style voxel
+function blockEllipse(cx, cy, rx, ry, color, step = 8) {
+  ctx.fillStyle = color;
+  for (let yy = -ry; yy < ry; yy += step) {
+    const t = (yy + step / 2) / ry;
+    const w = rx * Math.sqrt(Math.max(0, 1 - t * t));
+    const wq = Math.ceil(w / step) * step;
+    if (wq > 0) ctx.fillRect(cx - wq, cy + yy, wq * 2, Math.min(step, ry - yy));
+  }
+}
+
+/* ------- modèle voxel d'un monstre ------- */
+function buildMonsterVox(T, frame, blink) {
+  const vox = new Map();
+  const body = T.color, dark = T.color2, belly = T.belly;
+
+  // pieds qui trottinent (avance / recule selon la frame)
+  const off = frame === 0 ? 1 : -1;
+  vbox(vox, -4, -2, -2 + off, 2 + off, 0, 1, dark);
+  vbox(vox, 2, 4, -2 - off, 2 - off, 0, 1, dark);
+
+  // corps patate (ellipsoïde)
+  for (let x = -5; x <= 5; x++)
+    for (let y = -3; y <= 3; y++)
+      for (let z = 2; z <= 12; z++) {
+        const dx = x / 5.4, dy = y / 3.4, dz = (z - 7) / 5.6;
+        if (dx * dx + dy * dy + dz * dz <= 1) vset(vox, x, y, z, body);
+      }
+
+  // colonne la plus en avant du corps pour une coordonnée (x, z)
+  const frontY = (x, z) => {
+    for (let y = 3; y >= -3; y--) if (vox.has(x + "," + y + "," + z)) return y;
+    return null;
+  };
+  const paintFront = (x, z, c) => {
+    const y = frontY(x, z);
+    if (y !== null) vset(vox, x, y, z, c);
+  };
+
+  // ventre clair sur l'avant
+  for (let x = -3; x <= 3; x++)
+    for (let z = 3; z <= 10; z++) {
+      const dx = x / 3.4, dz = (z - 6) / 4.4;
+      if (dx * dx + dz * dz <= 1) paintFront(x, z, belly);
+    }
+
+  // yeux (fermés pendant le clignement)
+  for (const ex of [-3, 2]) {
+    if (blink) {
+      paintFront(ex, 9, dark); paintFront(ex + 1, 9, dark);
+    } else {
+      paintFront(ex, 9, "#ffffff");  paintFront(ex + 1, 9, "#ffffff");
+      paintFront(ex, 10, "#ffffff"); paintFront(ex + 1, 10, "#ffffff");
+      paintFront(ex === -3 ? ex + 1 : ex, 9, T.boss ? "#c01818" : "#1a1a1a");
+    }
+  }
+
+  // bouche (et crocs du colosse)
+  for (let x = -1; x <= 1; x++) paintFront(x, 6, "#1a1a1a");
+  if (T.boss) { paintFront(-1, 5, "#ffffff"); paintFront(1, 5, "#ffffff"); }
+
+  // petits bras ballants (balancent avec la frame)
+  vbox(vox, -7, -6, -1, 1, 4 + off, 7 + off, dark);
+  vbox(vox, 6, 7, -1, 1, 4 - off, 7 - off, dark);
+
+  // piquants du costaud / cornes du colosse
+  if (T.spikes) {
+    vbox(vox, -3, -3, 0, 0, 12, 13, dark);
+    vbox(vox, 0, 0, 0, 0, 13, 15, dark);
+    vbox(vox, 3, 3, 0, 0, 12, 13, dark);
+  }
+  // couronne du monstre doré
+  if (T.gem) {
+    vbox(vox, -3, 3, -1, 1, 13, 13, "#fff27a");
+    for (const px of [-3, 0, 3]) vbox(vox, px, px, -1, 1, 14, 14, "#fff27a");
+  }
+  return vox;
+}
+
+const monsterSprites = {};
+function monsterSprite(m, frame, blink, flash) {
+  const key = `${m.type}|${frame}|${blink ? 1 : 0}|${flash ? 1 : 0}`;
+  let s = monsterSprites[key];
+  if (!s) {
+    let c = renderVox(buildMonsterVox(m, frame, blink));
+    if (flash) c = whiten(c);
+    s = monsterSprites[key] = c;
+  }
+  return s;
+}
+
+/* ------- modèle voxel de la maison ------- */
+function buildHouseVox() {
+  const vox = new Map();
+  const roofZ = x => 13 + Math.round((15 - Math.abs(x)) * 0.65);
+
+  // murs + pignon sous le toit
+  for (let x = -13; x <= 13; x++)
+    vbox(vox, x, x, 1, 15, 0, Math.max(12, roofZ(x) - 2),
+         Math.abs(x) === 13 ? "#d9b88a" : "#f0d6a8");
+  // recolore les flancs pour donner du volume
+  for (let y = 1; y <= 14; y++)
+    for (let z = 0; z <= 12; z++) {
+      vset(vox, -13, y, z, "#d9b88a"); vset(vox, 13, y, z, "#d9b88a");
+    }
+
+  // porte (face avant) + poignée
+  vbox(vox, -2, 2, 15, 15, 0, 7, "#8a5c30");
+  vset(vox, 1, 15, 3, "#e8c84a");
+
+  // fenêtre à croisillons
+  vbox(vox, -11, -7, 15, 15, 5, 9, "#6b4522");
+  for (let x = -10; x <= -8; x++)
+    for (let z = 6; z <= 8; z++)
+      if (x !== -9 && z !== 7) vset(vox, x, 15, z, "#9adcf0");
+
+  // toit à deux pans en escalier (faîte au centre)
+  for (let x = -15; x <= 15; x++) {
+    const rz = roofZ(x);
+    vbox(vox, x, x, 0, 16, rz - 1, rz, x < 0 ? "#c0563c" : "#a8462f");
+  }
+
+  // cheminée sur le pan droit
+  vbox(vox, 6, 8, 6, 8, 16, 26, "#9c6b48");
+  vbox(vox, 5, 9, 5, 9, 27, 28, "#7a4f33");
+  return vox;
+}
+
+/* ------- modèle voxel de la mine ------- */
+function buildMineVox() {
+  const vox = new Map();
+  // monticule rocheux (demi-ellipsoïde)
+  for (let x = -9; x <= 9; x++)
+    for (let y = -6; y <= 6; y++)
+      for (let z = 0; z <= 8; z++) {
+        const dx = x / 9.4, dy = y / 6.4, dz = z / 8.4;
+        if (dx * dx + dy * dy + dz * dz <= 1)
+          vset(vox, x, y, z, x < -1 && z >= 4 ? "#a3a8b3" : "#8a8f99");
+      }
+  // entrée sombre creusée dans la face avant
+  for (let x = -3; x <= 3; x++)
+    for (let z = 0; z <= 4; z++)
+      for (let y = 2; y <= 6; y++)
+        if (vox.has(x + "," + y + "," + z)) vset(vox, x, y, z, "#2b2b33");
+  // étais en bois
+  vbox(vox, -5, -4, 5, 6, 0, 5, "#8a5c30");
+  vbox(vox, 4, 5, 5, 6, 0, 5, "#8a5c30");
+  vbox(vox, -6, 6, 5, 6, 6, 7, "#8a5c30");
+  return vox;
+}
+
+let houseSprite = null, mineSprite = null;
+function getHouseSprite() { return houseSprite || (houseSprite = renderVox(buildHouseVox())); }
+function getMineSprite()  { return mineSprite  || (mineSprite  = renderVox(buildMineVox())); }
+
 /* ========================= RENDU ========================= */
 
 function draw() {
-  /* ---- passe 1 : le monde, en basse résolution (pixel art) ---- */
-  ctx = pixCtx;
+  /* ---- passe 1 : le monde en voxels ---- */
+  ctx = mainCtx;
+  ctx.imageSmoothingEnabled = false;
   ctx.save();
-  ctx.setTransform(1 / PIX, 0, 0, 1 / PIX, 0, 0);
   if (run.shake > 0)
     ctx.translate((Math.random() - 0.5) * run.shake, (Math.random() - 0.5) * run.shake);
 
@@ -703,12 +929,7 @@ function draw() {
   drawGems();
   ctx.restore();
 
-  /* ---- passe 2 : agrandissement x4 sans lissage ---- */
-  ctx = mainCtx;
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(pixCanvas, 0, 0, W, H);
-
-  /* ---- passe 3 : textes et barres d'interface, nets ---- */
+  /* ---- passe 2 : textes et barres d'interface ---- */
   ctx.save();
   if (run.shake > 0)
     ctx.translate((Math.random() - 0.5) * run.shake, (Math.random() - 0.5) * run.shake);
@@ -718,29 +939,28 @@ function draw() {
 }
 
 function drawGround() {
-  // ciel et horizon
-  const sky = ctx.createLinearGradient(0, 0, 0, HORIZON);
-  sky.addColorStop(0, "#6db5e8");
-  sky.addColorStop(1, "#bfe3f5");
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, W, HORIZON);
+  // ciel en bandes plates (style voxel)
+  const skyBands = ["#6db5e8", "#84c1ec", "#9ed0f0", "#bfe3f5"];
+  for (let i = 0; i < skyBands.length; i++) {
+    ctx.fillStyle = skyBands[i];
+    ctx.fillRect(0, (HORIZON / skyBands.length) * i, W, HORIZON / skyBands.length + 1);
+  }
 
-  // collines lointaines
+  // collines lointaines en gros blocs étagés
   ctx.fillStyle = "#7fb56a";
-  ctx.beginPath();
-  ctx.moveTo(0, HORIZON);
-  for (let x = 0; x <= W; x += 80)
-    ctx.lineTo(x, HORIZON - 14 - 16 * Math.abs(Math.sin(x * 0.013 + 2)));
-  ctx.lineTo(W, HORIZON);
-  ctx.closePath();
-  ctx.fill();
+  for (let x = 0; x < W; x += 24) {
+    const h = 14 + 16 * Math.abs(Math.sin(x * 0.013 + 2));
+    const hq = Math.max(6, Math.round(h / 6) * 6);
+    ctx.fillRect(x, HORIZON - hq, 24, hq);
+  }
 
-  // grande prairie en dégradé (effet de profondeur)
-  const grass = ctx.createLinearGradient(0, HORIZON, 0, H);
-  grass.addColorStop(0, "#8fcf6e");
-  grass.addColorStop(1, "#5fa844");
-  ctx.fillStyle = grass;
-  ctx.fillRect(0, HORIZON, W, H - HORIZON);
+  // prairie en bandes de profondeur
+  const grassBands = ["#8fcf6e", "#83c361", "#76b754", "#6aae4c", "#5fa844"];
+  const bandH = (H - HORIZON) / grassBands.length;
+  for (let i = 0; i < grassBands.length; i++) {
+    ctx.fillStyle = grassBands[i];
+    ctx.fillRect(0, HORIZON + bandH * i, W, bandH + 1);
+  }
 
   // touffes d'herbe et cailloux (fixes, pseudo-aléatoires)
   for (let i = 0; i < 60; i++) {
@@ -751,22 +971,17 @@ function drawGround() {
     ctx.fillRect(gx, gy, 7 * d, 3 * d);
   }
 
-  // terre battue autour de la maison
+  // terre battue autour de la maison, en blocs
+  blockEllipse(CX, CY + 8, 150, 64, "#c9a76a", 8);
+  blockEllipse(CX, CY + 8, 122, 50, "#d9b87c", 8);
+  // petit chemin de dalles vers la mine
   ctx.fillStyle = "#c9a76a";
-  ctx.beginPath();
-  ctx.ellipse(CX, CY + 8, 150, 64, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#d9b87c";
-  ctx.beginPath();
-  ctx.ellipse(CX, CY + 8, 122, 50, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // petit chemin vers la mine
-  ctx.strokeStyle = "#c9a76a";
-  ctx.lineWidth = 18;
-  ctx.beginPath();
-  ctx.moveTo(CX + 70, CY + 40);
-  ctx.quadraticCurveTo(CX + 150, CY + 60, MINE_X - 20, MINE_Y + 6);
-  ctx.stroke();
+  for (let t = 0; t <= 1; t += 0.12) {
+    const u = 1 - t;
+    const px = u * u * (CX + 70) + 2 * u * t * (CX + 150) + t * t * (MINE_X - 20);
+    const py = u * u * (CY + 40) + 2 * u * t * (CY + 60) + t * t * (MINE_Y + 6);
+    ctx.fillRect(px - 9, py - 5, 18, 10);
+  }
 }
 
 function drawRangeRing() {
@@ -784,79 +999,20 @@ function drawHouse() {
   const x = CX, y = CY;
 
   // ombre au sol
-  ctx.fillStyle = "rgba(0,0,0,0.2)";
-  ctx.beginPath();
-  ctx.ellipse(x + 6, y + 26, 96, 34, 0, 0, Math.PI * 2);
-  ctx.fill();
+  blockEllipse(x + 6, y + 26, 96, 34, "rgba(0,0,0,0.2)", 8);
 
-  // mur latéral droit (perspective)
-  ctx.fillStyle = "#d9b88a";
-  ctx.beginPath();
-  ctx.moveTo(x + 58, y - 88);
-  ctx.lineTo(x + 92, y - 102);
-  ctx.lineTo(x + 92, y - 6);
-  ctx.lineTo(x + 58, y + 22);
-  ctx.closePath();
-  ctx.fill();
+  // maison voxel pré-rendue, ancrée bas-centre
+  const c = getHouseSprite();
+  ctx.drawImage(c, x - c.width / 2, y + 26 - c.height);
 
-  // mur avant
-  ctx.fillStyle = "#f0d6a8";
-  ctx.fillRect(x - 62, y - 88, 120, 110);
-  ctx.strokeStyle = "#b3905c";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(x - 62, y - 88, 120, 110);
-
-  // porte
-  ctx.fillStyle = "#8a5c30";
-  ctx.fillRect(x - 18, y - 24, 32, 46);
-  ctx.strokeStyle = "#6b4522";
-  ctx.strokeRect(x - 18, y - 24, 32, 46);
-  ctx.fillStyle = "#e8c84a";
-  ctx.beginPath(); ctx.arc(x + 7, y - 2, 3, 0, Math.PI * 2); ctx.fill();
-
-  // fenêtre
-  ctx.fillStyle = "#9adcf0";
-  ctx.fillRect(x - 50, y - 64, 26, 24);
-  ctx.strokeStyle = "#6b4522";
-  ctx.lineWidth = 2.5;
-  ctx.strokeRect(x - 50, y - 64, 26, 24);
-  ctx.beginPath();
-  ctx.moveTo(x - 37, y - 64); ctx.lineTo(x - 37, y - 40);
-  ctx.moveTo(x - 50, y - 52); ctx.lineTo(x - 24, y - 52);
-  ctx.stroke();
-
-  // toit : pan avant + pan latéral
-  ctx.fillStyle = "#c0563c";
-  ctx.beginPath();
-  ctx.moveTo(x - 74, y - 86);
-  ctx.lineTo(x - 2, y - 142);
-  ctx.lineTo(x + 70, y - 86);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = "#8e3a26";
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  ctx.fillStyle = "#a8462f";
-  ctx.beginPath();
-  ctx.moveTo(x - 2, y - 142);
-  ctx.lineTo(x + 38, y - 152);
-  ctx.lineTo(x + 98, y - 100);
-  ctx.lineTo(x + 70, y - 86);
-  ctx.closePath();
-  ctx.fill();
-
-  // cheminée
-  ctx.fillStyle = "#9c6b48";
-  ctx.fillRect(x + 42, y - 146, 16, 26);
-  ctx.fillStyle = "#7a4f33";
-  ctx.fillRect(x + 40, y - 150, 20, 6);
-  // fumée
+  // fumée en blocs au-dessus de la cheminée
   ctx.fillStyle = "rgba(255,255,255,0.45)";
   for (let i = 0; i < 3; i++) {
     const t = (run.time * 0.5 + i * 0.33) % 1;
-    ctx.beginPath();
-    ctx.arc(x + 50 + Math.sin(t * 6) * 5, y - 156 - t * 34, 4 + t * 6, 0, Math.PI * 2);
-    ctx.fill();
+    const sz = 4 + t * 8;
+    const sx = Math.round((x + 44 + Math.sin(t * 6) * 5) / 4) * 4;
+    const sy = Math.round((y - 196 - t * 34) / 4) * 4;
+    ctx.fillRect(sx - sz / 2, sy - sz / 2, sz, sz);
   }
 
   drawGunner(x - 16, y - 138, run.gunAngle, run.shootCd > 1 / stats.rate - 0.06);
@@ -887,16 +1043,19 @@ function drawGunner(x, y, ang, flash) {
   ctx.fillRect(8, 3, 6, 8);
   if (flash) {
     ctx.fillStyle = "#ffe27a";
-    ctx.beginPath(); ctx.arc(36, 0, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillRect(30, -6, 12, 12);
   }
   ctx.restore();
 }
 
 function drawTurret(x, y, ang, flash) {
+  // socle et coupole en blocs empilés
   ctx.fillStyle = "#4a5566";
   ctx.fillRect(x - 11, y - 6, 22, 12);
   ctx.fillStyle = "#5d7396";
-  ctx.beginPath(); ctx.arc(x, y - 8, 10, 0, Math.PI * 2); ctx.fill();
+  ctx.fillRect(x - 9, y - 16, 18, 10);
+  ctx.fillStyle = "#7e95b8";
+  ctx.fillRect(x - 6, y - 19, 12, 3);
   ctx.save();
   ctx.translate(x, y - 9);
   ctx.rotate(ang);
@@ -904,7 +1063,7 @@ function drawTurret(x, y, ang, flash) {
   ctx.fillRect(4, -3, 24, 6);
   if (flash) {
     ctx.fillStyle = "#ffe27a";
-    ctx.beginPath(); ctx.arc(32, 0, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillRect(26, -5, 10, 10);
   }
   ctx.restore();
 }
@@ -913,28 +1072,10 @@ function drawTurret(x, y, ang, flash) {
 function drawMine() {
   const x = MINE_X, y = MINE_Y;
   // ombre
-  ctx.fillStyle = "rgba(0,0,0,0.18)";
-  ctx.beginPath();
-  ctx.ellipse(x, y + 10, 62, 20, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // monticule rocheux
-  ctx.fillStyle = "#8a8f99";
-  ctx.beginPath();
-  ctx.ellipse(x, y - 22, 56, 42, 0, Math.PI, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#a3a8b3";
-  ctx.beginPath();
-  ctx.ellipse(x - 12, y - 30, 34, 28, 0, Math.PI, Math.PI * 2);
-  ctx.fill();
-  // entrée et étais en bois
-  ctx.fillStyle = "#2b2b33";
-  ctx.beginPath();
-  ctx.ellipse(x, y + 2, 22, 26, 0, Math.PI, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#8a5c30";
-  ctx.fillRect(x - 27, y - 26, 8, 32);
-  ctx.fillRect(x + 19, y - 26, 8, 32);
-  ctx.fillRect(x - 31, y - 32, 62, 8);
+  blockEllipse(x, y + 10, 62, 20, "rgba(0,0,0,0.18)", 6);
+  // monticule voxel pré-rendu
+  const c = getMineSprite();
+  ctx.drawImage(c, x - c.width / 2, y + 18 - c.height);
   // cristaux qui scintillent
   const tw = (Math.sin(run.time * 4) + 1) / 2;
   drawCrystal(x - 38, y - 2, 9, tw);
@@ -951,21 +1092,18 @@ function drawMine() {
   ctx.fillText("💎", x - 55, y - 4);
 }
 
+// cristal en empilement de blocs (style voxel)
 function drawCrystal(x, y, s, glow) {
   ctx.fillStyle = `rgba(109,240,194,${0.75 + glow * 0.25})`;
-  ctx.beginPath();
-  ctx.moveTo(x, y - s * 1.6);
-  ctx.lineTo(x + s * 0.8, y - s * 0.4);
-  ctx.lineTo(x + s * 0.4, y);
-  ctx.lineTo(x - s * 0.4, y);
-  ctx.lineTo(x - s * 0.8, y - s * 0.4);
-  ctx.closePath();
-  ctx.fill();
+  ctx.fillRect(x - s * 0.25, y - s * 1.6, s * 0.5, s * 0.45);   // pointe
+  ctx.fillRect(x - s * 0.55, y - s * 1.15, s * 1.1, s * 0.45);  // épaules
+  ctx.fillRect(x - s * 0.8, y - s * 0.7, s * 1.6, s * 0.4);     // corps
+  ctx.fillRect(x - s * 0.4, y - s * 0.3, s * 0.8, s * 0.3);     // base
   ctx.fillStyle = `rgba(255,255,255,${0.3 + glow * 0.4})`;
   ctx.fillRect(x - s * 0.25, y - s * 1.2, s * 0.3, s * 0.7);
 }
 
-/* ------- petits monstres animés ------- */
+/* ------- petits monstres voxel animés ------- */
 function drawMonster(m) {
   const d = depth(m.y);
   const s = m.size * d;
@@ -973,112 +1111,27 @@ function drawMonster(m) {
   const hopH = m.type === "rapide" ? 9 : m.boss ? 3 : 5;
   const hop = Math.abs(Math.sin(m.walk)) * hopH * s;
   const squash = 1 + Math.sin(m.walk * 2) * 0.07;       // rebond pâte à modeler
-  const toHouse = Math.atan2(CY - y, CX - x);
-  const lookX = Math.cos(toHouse) * 2.5 * s;
-  const lookY = Math.sin(toHouse) * 1.5 * s;
-
-  const body = m.hitFlash > 0 ? "#ffffff" : m.color;
-  const dark = m.hitFlash > 0 ? "#dddddd" : m.color2;
-  const belly = m.hitFlash > 0 ? "#ffffff" : m.belly;
 
   // ombre au sol
-  ctx.fillStyle = "rgba(0,0,0,0.22)";
-  ctx.beginPath();
-  ctx.ellipse(x, y + 2, 16 * s * (1 - hop / 40), 6 * s, 0, 0, Math.PI * 2);
-  ctx.fill();
+  blockEllipse(x, y + 2, 16 * s * (1 - hop / 40), 6 * s, "rgba(0,0,0,0.22)", 4);
 
+  // sprite voxel : 2 frames de marche + clignement + flash de dégâts
+  const spr = monsterSprite(m, Math.sin(m.walk) > 0 ? 0 : 1, m.blink < 0, m.hitFlash > 0);
+  const sc = s * 0.48;
   ctx.save();
   ctx.translate(x, y - hop);
   ctx.scale(squash, 2 - squash);
-
-  // pieds qui trottinent
-  const step = Math.sin(m.walk) * 5 * s;
-  ctx.fillStyle = dark;
-  ctx.beginPath(); ctx.ellipse(-7 * s + step, 0, 5.5 * s, 3.5 * s, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(7 * s - step, 0, 5.5 * s, 3.5 * s, 0, 0, Math.PI * 2); ctx.fill();
-
-  // corps patate
-  ctx.fillStyle = body;
-  ctx.beginPath();
-  ctx.ellipse(0, -17 * s, 15 * s, 17 * s, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // ventre clair
-  ctx.fillStyle = belly;
-  ctx.beginPath();
-  ctx.ellipse(lookX * 0.8, -13 * s, 8 * s, 9 * s, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // petits bras ballants
-  const wave = Math.sin(m.walk + 1) * 0.5;
-  ctx.fillStyle = dark;
-  ctx.save();
-  ctx.translate(-14 * s, -18 * s); ctx.rotate(-0.6 + wave);
-  ctx.beginPath(); ctx.ellipse(0, 4 * s, 3 * s, 6 * s, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
-  ctx.save();
-  ctx.translate(14 * s, -18 * s); ctx.rotate(0.6 - wave);
-  ctx.beginPath(); ctx.ellipse(0, 4 * s, 3 * s, 6 * s, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
-
-  // piquants du costaud / cornes du colosse
-  if (m.spikes) {
-    ctx.fillStyle = dark;
-    for (const [sx, sy, r] of [[-8, -30, -0.5], [0, -33, 0], [8, -30, 0.5]]) {
-      ctx.save();
-      ctx.translate(sx * s, sy * s); ctx.rotate(r);
-      ctx.beginPath();
-      ctx.moveTo(-3 * s, 0); ctx.lineTo(0, -7 * s); ctx.lineTo(3 * s, 0);
-      ctx.closePath(); ctx.fill();
-      ctx.restore();
-    }
-  }
-  // couronne du monstre doré
-  if (m.gem) {
-    ctx.fillStyle = "#fff27a";
-    ctx.beginPath();
-    ctx.moveTo(-7 * s, -31 * s); ctx.lineTo(-7 * s, -38 * s); ctx.lineTo(-3 * s, -33 * s);
-    ctx.lineTo(0, -39 * s); ctx.lineTo(3 * s, -33 * s); ctx.lineTo(7 * s, -38 * s);
-    ctx.lineTo(7 * s, -31 * s);
-    ctx.closePath(); ctx.fill();
-  }
-
-  // yeux qui regardent la maison, avec clignement
-  const blink = m.blink < 0 ? 0.15 : 1;
-  for (const ex of [-5.5, 5.5]) {
-    ctx.fillStyle = "#fff";
-    ctx.beginPath();
-    ctx.ellipse(ex * s + lookX * 0.4, -23 * s, 4.2 * s, 4.6 * s * blink, 0, 0, Math.PI * 2);
-    ctx.fill();
-    if (blink === 1) {
-      ctx.fillStyle = m.boss ? "#c01818" : "#1a1a1a";
-      ctx.beginPath();
-      ctx.arc(ex * s + lookX, -23 * s + lookY, 2.4 * s, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  // bouche
-  ctx.strokeStyle = "#1a1a1a";
-  ctx.lineWidth = 4 * s;
-  ctx.beginPath();
-  ctx.arc(lookX * 0.6, -15 * s, 3.5 * s, 0.15 * Math.PI, 0.85 * Math.PI);
-  ctx.stroke();
-  if (m.boss) { // crocs du colosse
-    ctx.fillStyle = "#fff";
-    ctx.beginPath();
-    ctx.moveTo(-3 * s, -13 * s); ctx.lineTo(-1.6 * s, -9.5 * s); ctx.lineTo(-0.2 * s, -13 * s);
-    ctx.moveTo(3 * s, -13 * s); ctx.lineTo(1.6 * s, -9.5 * s); ctx.lineTo(0.2 * s, -13 * s);
-    ctx.fill();
-  }
-
+  ctx.drawImage(spr, -spr.width * sc / 2, -spr.height * sc,
+                spr.width * sc, spr.height * sc);
   ctx.restore();
 
   // barre de vie
   if (m.hp < m.maxHp) {
     const w = 36 * s;
     ctx.fillStyle = "rgba(0,0,0,0.6)";
-    ctx.fillRect(x - w / 2, y - 48 * s - hop, w, 5);
+    ctx.fillRect(x - w / 2, y - 62 * s - hop, w, 5);
     ctx.fillStyle = m.boss ? "#c75bff" : "#6dd96d";
-    ctx.fillRect(x - w / 2, y - 48 * s - hop, w * Math.max(0, m.hp / m.maxHp), 5);
+    ctx.fillRect(x - w / 2, y - 62 * s - hop, w * Math.max(0, m.hp / m.maxHp), 5);
   }
 }
 
@@ -1100,9 +1153,8 @@ function drawParticles() {
       ctx.strokeStyle = p.color;
       ctx.globalAlpha = a;
       ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * (1.4 - a * 0.6), 0, Math.PI * 2);
-      ctx.stroke();
+      const r = p.size * (1.4 - a * 0.6);
+      ctx.strokeRect(p.x - r, p.y - r, r * 2, r * 2);
     } else {
       ctx.globalAlpha = a;
       ctx.fillStyle = p.color;
