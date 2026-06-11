@@ -22,6 +22,11 @@ npx serve .
 2. **Survivez aux journées** — chaque jour, une vague de monstres converge
    vers la maison depuis toutes les directions. Votre survivant sur le toit
    (et la tourelle, une fois débloquée) tire automatiquement.
+   Le bestiaire s'enrichit au fil des jours : marcheur, rapide, costaud à
+   piquants, doré (lâche des gemmes), sauteur bondissant, gluant qui se
+   divise en deux à sa mort, volant à ailes battantes, casqué blindé
+   (moitié moins de dégâts subis, sauf coups critiques) et le colosse
+   tous les 5 jours.
 3. **Ramassez les pièces 🪙** — chaque monstre éliminé rapporte des pièces, à
    dépenser immédiatement dans la barre d'améliorations en bas de l'écran
    (dégâts, cadence, portée, maison, réparation, régénération, butin, balles
@@ -39,7 +44,8 @@ npx serve .
 ## ⌨️ Commandes
 
 - Tout se joue à la souris : cliquez sur les améliorations (vertes = achetables).
-- **⏩** accélère le jeu (x1 / x2 / x3), **⏸️** met en pause.
+- **⏩** accélère le jeu (x1 / x2 / x3), **🔊** coupe/réactive le son,
+  **⏸️** met en pause.
 - Le bouton **🔬 Laboratoire** en jeu met la partie en pause et ouvre le lobby.
 - La progression (gemmes, laboratoire, record) est sauvegardée automatiquement
   dans le navigateur (`localStorage`).
@@ -52,5 +58,9 @@ npx serve .
   restent nets en pleine résolution.
 - Vue surélevée avec profondeur : tri des entités par plan, ombres au sol,
   taille et vitesse modulées par l'éloignement.
+- Décor généré procéduralement (graine fixe) : arbres, rochers, buissons à
+  baies, clôtures, fleurs, nuages qui dérivent, sapins à l'horizon.
+- Sons rétro 8-bit synthétisés en direct avec la Web Audio API : aucun
+  fichier audio (tirs, impacts, pièces, gemmes, explosions, fanfares).
 - Fichiers : `index.html` (structure), `style.css` (interface et lobby),
   `game.js` (logique du jeu, rendu, équilibrage).

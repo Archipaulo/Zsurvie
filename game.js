@@ -82,7 +82,7 @@ let meta = loadMeta();
 function defaultMeta() {
   const lab = {};
   for (const u of LAB_UPGRADES) lab[u.id] = 0;
-  return { gems: 0, lab, bestDay: 0, totalKills: 0, runs: 0 };
+  return { gems: 0, lab, bestDay: 0, totalKills: 0, runs: 0, muted: false };
 }
 function loadMeta() {
   try {
@@ -100,6 +100,89 @@ function saveMeta() {
 function labCost(u) {
   return Math.round(u.baseCost * Math.pow(u.costMult, meta.lab[u.id]));
 }
+
+/* ========================= SONS RÉTRO 8-BIT ========================= */
+/* Tout est synthétisé avec la Web Audio API : aucun fichier audio.      */
+
+const SFX = (() => {
+  let ac = null;
+  let muted = !!meta.muted;
+  const last = {};
+
+  function audio() {
+    if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === "suspended") ac.resume();
+    return ac;
+  }
+  function throttle(name, ms) {
+    const t = performance.now();
+    if (last[name] && t - last[name] < ms) return false;
+    last[name] = t;
+    return true;
+  }
+  // bip carré/triangle avec glissando — la brique de base du son 8-bit
+  function tone({ f = 440, f2 = 0, dur = 0.1, type = "square", vol = 0.12, delay = 0 }) {
+    if (muted) return;
+    let a; try { a = audio(); } catch (e) { return; }
+    const t0 = a.currentTime + delay;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f, t0);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    o.connect(g); g.connect(a.destination);
+    o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  // souffle de bruit blanc filtré — impacts et explosions
+  function blast({ dur = 0.15, vol = 0.18, freq = 1200, delay = 0 }) {
+    if (muted) return;
+    let a; try { a = audio(); } catch (e) { return; }
+    const t0 = a.currentTime + delay;
+    const len = Math.max(1, Math.floor(a.sampleRate * dur));
+    const buf = a.createBuffer(1, len, a.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    const src = a.createBufferSource(); src.buffer = buf;
+    const fl = a.createBiquadFilter(); fl.type = "lowpass"; fl.frequency.value = freq;
+    const g = a.createGain();
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    src.connect(fl); fl.connect(g); g.connect(a.destination);
+    src.start(t0);
+  }
+
+  return {
+    shoot()  { if (throttle("shoot", 50)) tone({ f: 880, f2: 240, dur: 0.06, vol: 0.045 }); },
+    hit()    { if (throttle("hit", 50)) blast({ dur: 0.04, vol: 0.05, freq: 2600 }); },
+    kill()   { if (throttle("kill", 70)) {
+                 tone({ f: 620, f2: 110, dur: 0.16, type: "sawtooth", vol: 0.07 });
+                 tone({ f: 1318, dur: 0.05, vol: 0.05, delay: 0.03 });
+               } },
+    explo()  { if (throttle("explo", 90)) blast({ dur: 0.3, vol: 0.22, freq: 650 }); },
+    gem()    { tone({ f: 1047, dur: 0.07, vol: 0.07 });
+               tone({ f: 1568, dur: 0.1, vol: 0.07, delay: 0.07 }); },
+    houseHit() { if (throttle("hh", 110)) {
+                   tone({ f: 130, f2: 55, dur: 0.14, type: "triangle", vol: 0.2 });
+                   blast({ dur: 0.07, vol: 0.09, freq: 500 });
+                 } },
+    buy()    { tone({ f: 523, dur: 0.06, vol: 0.09 });
+               tone({ f: 784, dur: 0.09, vol: 0.09, delay: 0.06 }); },
+    research() { [523, 659, 784, 1047].forEach((f, i) =>
+                   tone({ f, dur: 0.1, vol: 0.08, delay: i * 0.08 })); },
+    day()    { [392, 523, 659].forEach((f, i) =>
+                 tone({ f, dur: 0.1, vol: 0.07, delay: i * 0.09 })); },
+    death()  { [392, 330, 262, 196].forEach((f, i) =>
+                 tone({ f, dur: 0.24, type: "triangle", vol: 0.12, delay: i * 0.18 })); },
+    toggle() {
+      muted = !muted;
+      meta.muted = muted;
+      saveMeta();
+      return muted;
+    },
+    get muted() { return muted; },
+  };
+})();
 
 /* ========================= AMÉLIORATIONS EN PARTIE ========================= */
 
@@ -203,6 +286,7 @@ function startDay(day) {
   run.dayActive = true;
   run.dayDelay = 1.2;
   showBanner(`☀️ Jour ${day}` + (isBossDay(day) ? "  —  ⚠️ COLOSSE ⚠️" : ""));
+  SFX.day();
   if (day > meta.bestDay) { meta.bestDay = day; saveMeta(); }
 }
 
@@ -215,11 +299,23 @@ function endDay() {
 }
 
 /* ------- types de monstres ------- */
+// tirage pondéré : le bestiaire s'enrichit au fil des jours
 function pickMonsterType(day) {
-  const r = Math.random();
-  if (day >= 6 && r < 0.07) return "dore";
-  if (day >= 5 && r < 0.22) return "costaud";
-  if (day >= 3 && r < 0.45) return "rapide";
+  const pool = [["marcheur", 10]];
+  if (day >= 3)  pool.push(["rapide", 6]);
+  if (day >= 5)  pool.push(["costaud", 4]);
+  if (day >= 6)  pool.push(["dore", 1.3]);
+  if (day >= 7)  pool.push(["sauteur", 4]);
+  if (day >= 8)  pool.push(["gluant", 3.5]);
+  if (day >= 10) pool.push(["volant", 3.5]);
+  if (day >= 12) pool.push(["casque", 3]);
+  let total = 0;
+  for (const [, w] of pool) total += w;
+  let r = Math.random() * total;
+  for (const [type, w] of pool) {
+    r -= w;
+    if (r <= 0) return type;
+  }
   return "marcheur";
 }
 
@@ -231,7 +327,7 @@ function spawnPoint() {
   return { x, y: Math.max(HORIZON + 28, y) };
 }
 
-function spawnMonster(type) {
+function spawnMonster(type, at) {
   const day = run.day;
   const hpBase = 22 * dayHpMult(day);
   const rewardBase = 5 + day * 1.6;
@@ -244,16 +340,31 @@ function spawnMonster(type) {
                 color: "#3f8f8f", color2: "#2d6b6b", belly: "#8accc9", spikes: true },
     dore:     { hp: hpBase * 1.6,  spd: 62,  dmg: 5,  size: 1.0,  reward: rewardBase * 1.5,
                 color: "#f0c93c", color2: "#c79e1d", belly: "#fff0b0", gem: true },
+    // grenouille bondissante : rapide et nerveuse
+    sauteur:  { hp: hpBase * 0.85, spd: 68,  dmg: 6,  size: 0.9,  reward: rewardBase * 1.1,
+                color: "#e8833c", color2: "#b35f24", belly: "#ffc08a" },
+    // se divise en deux gluants miniatures à sa mort
+    gluant:   { hp: hpBase * 1.5,  spd: 36,  dmg: 8,  size: 1.2,  reward: rewardBase * 1.4,
+                color: "#d667b8", color2: "#a8478f", belly: "#f0a8dd", slime: true, split: true },
+    mini:     { hp: hpBase * 0.3,  spd: 74,  dmg: 3,  size: 0.55, reward: rewardBase * 0.35,
+                color: "#d667b8", color2: "#a8478f", belly: "#f0a8dd", slime: true },
+    // vole au-dessus du sol en battant des ailes
+    volant:   { hp: hpBase * 0.7,  spd: 76,  dmg: 5,  size: 0.85, reward: rewardBase * 1.2,
+                color: "#5fa8e0", color2: "#3f7fb3", belly: "#a8d4f0", fly: true },
+    // casque d'acier : moitié moins de dégâts subis (sauf critiques)
+    casque:   { hp: hpBase * 1.3,  spd: 40,  dmg: 10, size: 1.1,  reward: rewardBase * 1.8,
+                color: "#8a9b6a", color2: "#6a7a4e", belly: "#c0cf9a", armor: 0.5 },
     boss:     { hp: hpBase * 18,   spd: 17,  dmg: 45, size: 2.7,  reward: rewardBase * 14,
                 color: "#9656b8", color2: "#6e3a8c", belly: "#cfa0e8", boss: true, spikes: true },
   }[type];
-  const p = spawnPoint();
+  const p = at || spawnPoint();
   run.monsters.push({
     type, x: p.x, y: p.y,
     hp: T.hp, maxHp: T.hp, spd: T.spd * (0.9 + Math.random() * 0.2),
     dmg: T.dmg, size: T.size, reward: T.reward,
     color: T.color, color2: T.color2, belly: T.belly,
     gem: !!T.gem, boss: !!T.boss, spikes: !!T.spikes,
+    fly: !!T.fly, slime: !!T.slime, split: !!T.split, armor: T.armor || 0,
     attackCd: 0, walk: Math.random() * 10, hitFlash: 0,
     blink: 1 + Math.random() * 3, wobbleSeed: Math.random() * 10,
   });
@@ -283,12 +394,15 @@ function fireBullet(fx, fy, dmg, target) {
     pierce: stats.pierce, hit: new Set(), life: 1.4,
   });
   addParticle(fx, fy, 3, "#ffe27a", 0.12, 50);
+  SFX.shoot();
   return ang;
 }
 
 function damageMonster(m, dmg, crit) {
+  if (m.armor > 0 && !crit) dmg *= 1 - m.armor;   // les critiques percent le casque
   m.hp -= dmg;
   m.hitFlash = 0.1;
+  SFX.hit();
   addText(Math.round(dmg).toString(), m.x, m.y - m.size * 52 * depth(m.y),
           crit ? "#ffd34d" : "#fff", crit ? 22 : 15);
   if (m.hp <= 0) killMonster(m);
@@ -304,8 +418,13 @@ function killMonster(m) {
   run.coins.push({ x: m.x, y: m.y - 30, t: 0, amount: coins });
   if (m.gem) gainGems(Math.max(1, Math.round(2 * stats.gemMul)), m.x, m.y - 40);
   if (m.boss) gainGems(Math.max(3, Math.round(5 * stats.gemMul)), m.x, m.y - 60);
+  if (m.split) {  // le gluant se divise en deux miniatures
+    spawnMonster("mini", { x: m.x - 16, y: m.y - 6 });
+    spawnMonster("mini", { x: m.x + 16, y: m.y + 6 });
+  }
   for (let k = 0; k < (m.boss ? 26 : 9); k++)
     addParticle(m.x, m.y - m.size * 18, 4 + Math.random() * 4, m.color, 0.6, 180);
+  SFX.kill();
   refreshHud();
   refreshUpgradeBar();
 }
@@ -313,6 +432,7 @@ function killMonster(m) {
 function explode(x, y, radius, dmg) {
   addParticle(x, y, radius, "rgba(255,160,40,0.55)", 0.25, 0, true);
   run.shake = Math.min(run.shake + 3, 8);
+  SFX.explo();
   for (const m of [...run.monsters]) {
     const d = Math.hypot(m.x - x, (m.y - m.size * 18) - y);
     if (d < radius + m.size * 18) damageMonster(m, dmg * 0.5, false);
@@ -324,7 +444,105 @@ function gainGems(n, x, y) {
   meta.gems += n;
   saveMeta();
   addText(`+${n} 💎`, x, y, "#6df0c2", 20);
+  SFX.gem();
   refreshHud();
+}
+
+/* ========================= DÉCOR DU TERRAIN ========================= */
+
+// générateur pseudo-aléatoire à graine fixe : le décor est identique
+// à chaque partie, sans stocker la moindre image
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const DECOR = (() => {
+  const rnd = mulberry32(20260611);
+  const items = [];
+  const isClear = (x, y) =>
+    Math.hypot(x - CX, (y - CY) * 1.7) > 255 &&
+    Math.hypot(x - MINE_X, (y - MINE_Y) * 1.5) > 125 &&
+    y > HORIZON + 42 && y < 645;
+  const place = (type, count, extra) => {
+    for (let i = 0; i < count; i++) {
+      for (let tries = 0; tries < 50; tries++) {
+        const x = 30 + rnd() * (W - 60);
+        const y = HORIZON + 42 + rnd() * (645 - HORIZON - 42);
+        if (!isClear(x, y)) continue;
+        items.push({ type, x, y, v: rnd(), ...(extra ? extra(rnd) : {}) });
+        break;
+      }
+    }
+  };
+  place("tree", 13);
+  place("rock", 8);
+  place("bush", 9);
+  place("fence", 5, r => ({ n: 3 + Math.floor(r() * 3) }));
+  return items;
+})();
+
+function drawDecor(it) {
+  const d = depth(it.y);
+  const x = it.x, y = it.y;
+  if (it.type === "tree") {
+    const tall = 1 + it.v * 0.4;
+    const leaf = it.v > 0.55 ? ["#3e7a33", "#549642", "#6ab354"] : ["#2e6e44", "#3f8a58", "#55a86e"];
+    ctx.fillStyle = "rgba(0,0,0,0.2)";
+    ctx.beginPath(); ctx.ellipse(x, y + 2, 20 * d, 7 * d, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#6b4a2a";
+    ctx.fillRect(x - 4 * d, y - 26 * d * tall, 8 * d, 26 * d * tall);
+    ctx.fillStyle = leaf[0];
+    ctx.beginPath(); ctx.ellipse(x, y - 32 * d * tall, 22 * d, 16 * d, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = leaf[1];
+    ctx.beginPath(); ctx.ellipse(x - 4 * d, y - 44 * d * tall, 17 * d, 13 * d, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = leaf[2];
+    ctx.beginPath(); ctx.ellipse(x + 3 * d, y - 53 * d * tall, 11 * d, 9 * d, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (it.type === "rock") {
+    const r = (6 + it.v * 9) * d;
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
+    ctx.beginPath(); ctx.ellipse(x, y + 2, r * 1.5, r * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#8a8f99";
+    ctx.beginPath(); ctx.ellipse(x, y - r * 0.6, r * 1.3, r, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#a3a8b3";
+    ctx.beginPath(); ctx.ellipse(x - r * 0.4, y - r * 0.9, r * 0.6, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+    if (it.v > 0.6) {
+      ctx.fillStyle = "#777d87";
+      ctx.beginPath(); ctx.ellipse(x + r * 1.1, y - r * 0.25, r * 0.5, r * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  } else if (it.type === "bush") {
+    const r = (8 + it.v * 6) * d;
+    ctx.fillStyle = "rgba(0,0,0,0.16)";
+    ctx.beginPath(); ctx.ellipse(x, y + 1, r * 1.4, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#4e8a3a";
+    ctx.beginPath(); ctx.ellipse(x, y - r * 0.5, r * 1.4, r * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#63a64c";
+    ctx.beginPath(); ctx.ellipse(x - r * 0.4, y - r * 0.8, r * 0.8, r * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+    if (it.v > 0.5) {       // quelques baies rouges
+      ctx.fillStyle = "#d94f4f";
+      for (const [bx, by] of [[-0.6, -0.5], [0.3, -0.9], [0.8, -0.4]])
+        ctx.fillRect(x + bx * r - 1.5 * d, y + by * r - 1.5 * d, 3 * d, 3 * d);
+    }
+  } else if (it.type === "fence") {
+    const gap = 24 * d;
+    const h = 20 * d;
+    ctx.fillStyle = "#7a5836";
+    for (let i = 0; i < it.n; i++) {     // rails puis poteaux
+      ctx.fillRect(x + i * gap, y - h * 0.75, gap, 3.5 * d);
+      ctx.fillRect(x + i * gap, y - h * 0.35, gap, 3.5 * d);
+    }
+    ctx.fillStyle = "#8d6a42";
+    for (let i = 0; i <= it.n; i++) {
+      ctx.fillRect(x + i * gap - 2.5 * d, y - h, 5 * d, h);
+      ctx.fillStyle = "rgba(0,0,0,0.16)";
+      ctx.fillRect(x + i * gap - 3 * d, y - 1, 6 * d, 3 * d);
+      ctx.fillStyle = "#8d6a42";
+    }
+  }
 }
 
 /* ========================= EFFETS VISUELS ========================= */
@@ -467,6 +685,7 @@ function update(dt) {
         m.attackCd = 0.9;
         run.houseHp -= m.dmg;
         run.shake = Math.min(run.shake + 1.5, 8);
+        SFX.houseHit();
         addParticle(CX + (m.x - CX) * 0.5, CY - 40 + (m.y - CY) * 0.3, 5, "#d9c08a", 0.3, 120);
         if (run.houseHp <= 0) { run.houseHp = 0; die(); return; }
       }
@@ -498,6 +717,7 @@ function update(dt) {
 
 function die() {
   gameOver = true;
+  SFX.death();
   meta.bestDay = Math.max(meta.bestDay, run.day);
   saveMeta();
   const s = document.getElementById("death-stats");
@@ -578,6 +798,7 @@ function buyRunUpgrade(u) {
   if (u.id === "repair") {
     run.houseHp = Math.min(run.houseMax, run.houseHp + run.houseMax * 0.5);
   }
+  SFX.buy();
   refreshHud();
   refreshUpgradeBar();
 }
@@ -608,6 +829,7 @@ function buildLab() {
       meta.gems -= labCost(u);
       meta.lab[u.id]++;
       saveMeta();
+      SFX.research();
       if (u.id === "wallhp" && run) run.houseMax = baseHouseMax();
       refreshHud();
       buildLab();
@@ -653,6 +875,11 @@ document.getElementById("btn-speed").addEventListener("click", () => {
   speed = speed >= 3 ? 1 : speed + 1;
   document.getElementById("btn-speed").textContent = `⏩ x${speed}`;
 });
+const soundBtn = document.getElementById("btn-sound");
+soundBtn.textContent = SFX.muted ? "🔇" : "🔊";
+soundBtn.addEventListener("click", () => {
+  soundBtn.textContent = SFX.toggle() ? "🔇" : "🔊";
+});
 document.getElementById("btn-pause").addEventListener("click", () => {
   paused = true;
   document.getElementById("pause-screen").classList.remove("hidden");
@@ -693,6 +920,7 @@ function draw() {
   const drawables = [
     { y: CY, fn: drawHouse },
     { y: MINE_Y, fn: drawMine },
+    ...DECOR.map(it => ({ y: it.y, fn: () => drawDecor(it) })),
     ...run.monsters.map(m => ({ y: m.y, fn: () => drawMonster(m) })),
   ];
   drawables.sort((a, b) => a.y - b.y);
@@ -725,6 +953,18 @@ function drawGround() {
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, W, HORIZON);
 
+  // nuages qui dérivent lentement
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  for (let i = 0; i < 4; i++) {
+    const cx2 = ((i * 390 + run.time * 7 + i * 60) % (W + 240)) - 120;
+    const cy2 = 22 + (i * 37) % 50;
+    ctx.beginPath();
+    ctx.ellipse(cx2, cy2, 34, 11, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx2 - 22, cy2 + 5, 22, 9, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx2 + 24, cy2 + 4, 24, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   // collines lointaines
   ctx.fillStyle = "#7fb56a";
   ctx.beginPath();
@@ -734,6 +974,18 @@ function drawGround() {
   ctx.lineTo(W, HORIZON);
   ctx.closePath();
   ctx.fill();
+  // rangée de sapins à l'horizon
+  ctx.fillStyle = "#4e7a42";
+  for (let i = 0; i < 32; i++) {
+    const tx = i * 41 + ((i * 53) % 17);
+    const th = 10 + ((i * 29) % 12);
+    ctx.beginPath();
+    ctx.moveTo(tx - 7, HORIZON);
+    ctx.lineTo(tx, HORIZON - th);
+    ctx.lineTo(tx + 7, HORIZON);
+    ctx.closePath();
+    ctx.fill();
+  }
 
   // grande prairie en dégradé (effet de profondeur)
   const grass = ctx.createLinearGradient(0, HORIZON, 0, H);
@@ -749,6 +1001,20 @@ function drawGround() {
     const d = depth(gy);
     ctx.fillStyle = i % 3 ? "rgba(60,130,45,0.5)" : "rgba(255,255,255,0.25)";
     ctx.fillRect(gx, gy, 7 * d, 3 * d);
+  }
+  // petites fleurs des champs
+  const petals = ["#ffffff", "#ffd34d", "#ff8fa8", "#b8a0ff"];
+  for (let i = 0; i < 26; i++) {
+    const fx = (i * 173 + 89) % W;
+    const fy = HORIZON + 40 + ((i * 229 + 17) % (H - HORIZON - 90));
+    if (Math.hypot(fx - CX, (fy - CY) * 1.7) < 200) continue;
+    const d = depth(fy);
+    ctx.fillStyle = "#3c7a2e";
+    ctx.fillRect(fx + 1.5 * d, fy, 2 * d, 5 * d);
+    ctx.fillStyle = petals[i % 4];
+    ctx.fillRect(fx, fy - 4 * d, 5 * d, 5 * d);
+    ctx.fillStyle = "#e8a23c";
+    ctx.fillRect(fx + 1.5 * d, fy - 2.5 * d, 2 * d, 2 * d);
   }
 
   // terre battue autour de la maison
@@ -970,8 +1236,11 @@ function drawMonster(m) {
   const d = depth(m.y);
   const s = m.size * d;
   const x = m.x, y = m.y;
-  const hopH = m.type === "rapide" ? 9 : m.boss ? 3 : 5;
-  const hop = Math.abs(Math.sin(m.walk)) * hopH * s;
+  const hopH = m.type === "sauteur" ? 15 : m.type === "rapide" ? 9 :
+               (m.boss || m.slime || m.type === "costaud" || m.type === "casque") ? 3 : 5;
+  // les volants planent au-dessus du sol, les autres sautillent
+  const hop = m.fly ? 28 * s + Math.sin(m.walk * 0.8) * 6 * s
+                    : Math.abs(Math.sin(m.walk)) * hopH * s;
   const squash = 1 + Math.sin(m.walk * 2) * 0.07;       // rebond pâte à modeler
   const toHouse = Math.atan2(CY - y, CX - x);
   const lookX = Math.cos(toHouse) * 2.5 * s;
@@ -982,20 +1251,58 @@ function drawMonster(m) {
   const belly = m.hitFlash > 0 ? "#ffffff" : m.belly;
 
   // ombre au sol
-  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.fillStyle = m.fly ? "rgba(0,0,0,0.13)" : "rgba(0,0,0,0.22)";
   ctx.beginPath();
-  ctx.ellipse(x, y + 2, 16 * s * (1 - hop / 40), 6 * s, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y + 2, 16 * s * (1 - hop / 60), 6 * s, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.save();
   ctx.translate(x, y - hop);
   ctx.scale(squash, 2 - squash);
 
-  // pieds qui trottinent
-  const step = Math.sin(m.walk) * 5 * s;
-  ctx.fillStyle = dark;
-  ctx.beginPath(); ctx.ellipse(-7 * s + step, 0, 5.5 * s, 3.5 * s, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(7 * s - step, 0, 5.5 * s, 3.5 * s, 0, 0, Math.PI * 2); ctx.fill();
+  if (m.fly) {
+    // ailes battantes
+    const flap = Math.sin(m.walk * 3) * 0.9;
+    ctx.fillStyle = "rgba(220,240,255,0.85)";
+    for (const side of [-1, 1]) {
+      ctx.save();
+      ctx.translate(side * 12 * s, -24 * s);
+      ctx.rotate(side * (0.5 + flap));
+      ctx.beginPath();
+      ctx.ellipse(side * 8 * s, 0, 11 * s, 4.5 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    // petites pattes pendantes
+    ctx.fillStyle = dark;
+    ctx.fillRect(-6 * s, -4 * s, 3 * s, 6 * s);
+    ctx.fillRect(3 * s, -4 * s, 3 * s, 6 * s);
+  } else if (m.slime) {
+    // flaque gluante qui goutte
+    ctx.fillStyle = dark;
+    ctx.beginPath(); ctx.ellipse(0, -1 * s, 16 * s, 5 * s, 0, 0, Math.PI * 2); ctx.fill();
+    const drip = (m.walk * 0.7) % 1;
+    ctx.beginPath();
+    ctx.ellipse(-11 * s, -1 * s + drip * 5 * s, 2.2 * s, 3 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (m.type === "sauteur") {
+    // longues pattes de grenouille repliées
+    const step = Math.sin(m.walk) * 4 * s;
+    ctx.fillStyle = dark;
+    for (const side of [-1, 1]) {
+      ctx.save();
+      ctx.translate(side * 10 * s, -6 * s);
+      ctx.rotate(side * (0.5 - step / (10 * s)));
+      ctx.beginPath(); ctx.ellipse(0, 4 * s, 4 * s, 8 * s, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+  } else {
+    // pieds qui trottinent
+    const step = Math.sin(m.walk) * 5 * s;
+    ctx.fillStyle = dark;
+    ctx.beginPath(); ctx.ellipse(-7 * s + step, 0, 5.5 * s, 3.5 * s, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(7 * s - step, 0, 5.5 * s, 3.5 * s, 0, 0, Math.PI * 2); ctx.fill();
+  }
 
   // corps patate
   ctx.fillStyle = body;
@@ -1031,6 +1338,16 @@ function drawMonster(m) {
       ctx.closePath(); ctx.fill();
       ctx.restore();
     }
+  }
+  // casque d'acier du monstre blindé
+  if (m.armor > 0) {
+    ctx.fillStyle = m.hitFlash > 0 ? "#eeeeee" : "#6a7280";
+    ctx.beginPath();
+    ctx.ellipse(0, -26 * s, 15 * s, 10 * s, 0, Math.PI, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(-15 * s, -27 * s, 30 * s, 3.5 * s);
+    ctx.fillStyle = m.hitFlash > 0 ? "#dddddd" : "#8a92a3";
+    ctx.fillRect(-3 * s, -36 * s, 6 * s, 7 * s);   // pointe du casque
   }
   // couronne du monstre doré
   if (m.gem) {
