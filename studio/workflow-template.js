@@ -54,22 +54,22 @@ Pour chaque candidat, dans l'ordre, fais un appel séparé à l'outil Glob avec 
   }
   RACINE = d
 }
-/* contrôle indépendant : le dossier retenu doit être vide, sauf écrasement demandé explicitement */
-if (entree.ecraser !== true) {
+/* contrôle indépendant : le dossier retenu doit être vide (une production ne réutilise jamais un dossier) */
+{
   const controle = await agent(
     `N'utilise pas l'outil Bash et ne crée rien. Fais un seul appel à l'outil Glob avec le motif \`${RACINE}/**/*\` et indique combien de fichiers il renvoie (0 si aucun).`,
     { label: "🔎 Contrôle du dossier", phase: "Vision", effort: "low",
       schema: objet({ fichiers: { type: "integer", description: "Nombre de fichiers trouvés" } }) })
   if (!controle || !Number.isInteger(controle.fichiers)) throw new Error(`Impossible de vérifier que ${RACINE} est vide : production arrêtée.`)
   if (controle.fichiers > 0) {
-    throw new Error(`${RACINE} contient déjà ${controle.fichiers} fichier(s) : choisissez un dossier vide (args.dossier) ou ajoutez ecraser: true pour le réutiliser volontairement.`)
+    throw new Error(`${RACINE} contient déjà ${controle.fichiers} fichier(s) : une production s'écrit toujours dans un dossier vide. Relancez sans args.dossier, ou avec un dossier vide.`)
   }
 }
 const echecs = []
 log(`Brief reçu pour « ${NOM} ». Livrables dans ${RACINE}/`)
 const bench = par(ROLES_PROD.benchmark), da = par(ROLES_PROD.da), directeur = par(ROLES_PROD.canon)
 const [okBrief, okBench, okDa] = await parallel([
-  () => agent(`N'utilise pas l'outil Bash. Avec l'outil Write (si un fichier existe déjà, lis-le d'abord avec Read, puis remplace-le) :
+  () => agent(`N'utilise pas l'outil Bash. Avec l'outil Write :
 1. écris dans \`${RACINE}/brief.md\` exactement le texte suivant, caractère pour caractère, sans rien ajouter ni reformuler (il est entre les deux lignes de tirets) :
 -----
 ${BRIEF}
@@ -85,11 +85,7 @@ Puis réponds « livré ».`,
   () => agent(prompt(da, TACHES.da(BRIEF), livraison(CHEMINS_SPECIAUX.da)),
     { label: etiquette(da), phase: "Vision" }),
 ])
-if (!okBrief) {
-  // dans un dossier réutilisé, un ancien infos.json pourrait survivre et mélanger deux productions
-  if (entree.ecraser === true) throw new Error(`Le brief n'a pas pu être archivé dans ${RACINE}, dossier réutilisé : production arrêtée pour ne pas mélanger deux productions.`)
-  log("brief.md n'a pas pu être écrit : la commande d'assemblage transmet de toute façon le brief exact.")
-}
+if (!okBrief) log("brief.md n'a pas pu être écrit : la commande d'assemblage transmet de toute façon le brief exact.")
 if (!okBench) echecs.push("vision:a05")
 if (!okDa) echecs.push("vision:a04")
 const lire = chemin => `(lis en entier le fichier \`${RACINE}/${chemin}.md\` ; s'il n'existe pas, fais sans)`

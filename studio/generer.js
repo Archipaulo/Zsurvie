@@ -66,7 +66,7 @@ console.log("✔ Application en un seul fichier : studio/Atelier-Roblox.html");
 const META = `export const meta = {
   name: 'atelier-roblox',
   description: 'Les 50 agents du studio Atelier Roblox transforment un seul brief en bible de production complète pour une map Roblox',
-  whenToUse: 'Quand on veut que tout le studio (vision, 40 spécialistes, QA, coordination, plan) travaille ensemble sur une idée de map. args : { nom, brief } ou simplement le brief en texte. À la fin, exécuter la commande « assemblage » renvoyée par le workflow.',
+  whenToUse: 'Quand on veut que tout le studio (vision, 40 spécialistes, QA, coordination, plan) travaille ensemble sur une idée de map. args : { nom, brief } ou simplement le brief en texte (chaque lancement écrit dans un dossier neuf). À la fin, exécuter la commande « assemblage » renvoyée par le workflow.',
   phases: [
     { title: 'Vision', detail: 'Analyse de marché et direction artistique, puis canon du directeur créatif' },
     { title: 'Contributions', detail: '40 spécialistes livrent leur partie en respectant le canon' },
