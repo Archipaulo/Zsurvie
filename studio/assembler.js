@@ -32,13 +32,18 @@ if (!racine || !fs.existsSync(racine)) {
   process.exit(1);
 }
 let infos = {};
-if (process.argv.includes("--infos-stdin")) {
+const lireInfos = (texte, origine) => {
   try {
-    const brut = JSON.parse(fs.readFileSync(0, "utf8"));
-    if (brut && typeof brut === "object") infos = brut;
+    const v = JSON.parse(texte);
+    if (v && typeof v === "object" && !Array.isArray(v)) return v;
   } catch (e) {
-    console.log(`- infos du workflow illisibles (${e.message}) : brief repris de brief.md`);
+    console.log(`- infos du workflow illisibles (${origine} : ${e.message})`);
   }
+  return null;
+};
+if (process.argv.includes("--infos-stdin")) infos = lireInfos(fs.readFileSync(0, "utf8"), "entrée standard") || {};
+if (!Object.keys(infos).length && fs.existsSync(path.join(racine, "infos.json"))) {
+  infos = lireInfos(fs.readFileSync(path.join(racine, "infos.json"), "utf8"), "infos.json") || {};
 }
 
 const lib = n => fs.readFileSync(path.join(__dirname, n), "utf8");
@@ -146,7 +151,7 @@ if (fs.existsSync(dossierScripts)) {
       if (e.isDirectory()) parcourir(complet, prefixe + e.name + "/");
       else if (/\.(lua|luau)$/.test(e.name)) {
         const code = fs.readFileSync(complet, "utf8");
-        if (!/^\s*--\s*SUPPRIM/i.test(code)) scripts[prefixe + e.name] = code;
+        if (code.trim() !== "-- SUPPRIMÉ") scripts[prefixe + e.name] = code;
       }
     }
   })(dossierScripts, "");
@@ -162,11 +167,16 @@ for (const id of S.CREATEURS) if (!contributions[id]) manque(`contrib:${id}`, "l
 for (const id of S.RELECTEURS_QA) if (!qa[id]) manque(`qa:${id}`, "relecture absente");
 if (!coordination) manque("coord:a03", "coordination absente");
 for (const r of (coordination ? coordination.revisions : [])) {
-  if (contributions[r.agent] && !contributions[r.agent].revise) manque(`rev:${r.agent}`, "révision demandée mais non livrée");
+  if (S.estAgentId(r.agent) && Object.prototype.hasOwnProperty.call(contributions, r.agent) && !contributions[r.agent].revise) manque(`rev:${r.agent}`, "révision demandée mais non livrée");
 }
 if (!plan) manque("plan:a02", "plan absent");
 if (!bible) manque("bible:a01", "synthèse absente");
 const fiche = (cle, chemin) => { if (fichesInvalides.has(chemin)) manque(cle, "fiche JSON absente ou illisible : décisions, tâches ou arbitrages perdus"); };
+const texteVide = v => !v || !String(v).trim();
+for (const id of S.CREATEURS) if (contributions[id] && texteVide(contributions[id].livrable)) manque(`contrib:${id}`, "livrable markdown absent ou vide");
+for (const id of S.RELECTEURS_QA) if (qa[id] && texteVide(qa[id].rapport)) manque(`qa:${id}`, "rapport markdown absent ou vide");
+if (coordination && texteVide(coordination.synthese)) manque("coord:a03", "note de coordination absente ou vide");
+if (plan && texteVide(plan.plan)) manque("plan:a02", "plan markdown absent ou vide");
 fiche("vision:a01", S.CHEMINS_SPECIAUX.canon);
 for (const id of S.CREATEURS) if (contributions[id]) fiche(`contrib:${id}`, S.cheminLivrable(S.AGENTS.find(x => x.id === id)));
 for (const id of S.RELECTEURS_QA) if (qa[id]) fiche(`qa:${id}`, S.cheminLivrable(S.AGENTS.find(x => x.id === id)));
@@ -174,7 +184,7 @@ if (coordination) fiche("coord:a03", S.CHEMINS_SPECIAUX.coordination);
 if (plan) fiche("plan:a02", S.CHEMINS_SPECIAUX.plan);
 if (bible) fiche("bible:a01", S.CHEMINS_SPECIAUX.bible);
 for (const cle of Array.isArray(infos.echecs) ? infos.echecs : []) {
-  if (typeof cle === "string" && /^[a-z]+:a\d\d$/.test(cle)) manque(cle, "échec de l'agent pendant le workflow");
+  if (typeof cle === "string" && /^([a-z]+:a\d\d|infos:brief)$/.test(cle)) manque(cle, "échec de l'agent pendant le workflow");
 }
 
 /* ---------- assemblage ---------- */

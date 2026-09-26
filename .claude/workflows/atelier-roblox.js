@@ -711,9 +711,20 @@ Pour chaque candidat, dans l'ordre, fais un appel séparé à l'outil Glob avec 
   const brut = reserve && String(reserve.dossier || "")
   const d = brut && brut.replace(/[`'"]/g, "").trim().replace(/^.*?(studio\/productions\/)/, "$1").replace(/^\.\//, "").replace(/\/+$/, "")
   if (!d || !FORME_DOSSIER.test(d)) {
-    throw new Error(`Réservation du dossier impossible (réponse : ${brut || "aucune"}). Relancez en précisant args.dossier, par exemple { dossier: "${BASE}-2" }.`)
+    throw new Error(`Réservation du dossier impossible (réponse : ${brut || "aucune"}). Relancez en précisant args.dossier avec un dossier vide de la forme ${BASE}-<n>.`)
   }
   RACINE = d
+}
+/* contrôle indépendant : le dossier retenu doit être vide, sauf écrasement demandé explicitement */
+if (entree.ecraser !== true) {
+  const controle = await agent(
+    `N'utilise pas l'outil Bash et ne crée rien. Fais un seul appel à l'outil Glob avec le motif \`${RACINE}/**/*\` et indique combien de fichiers il renvoie (0 si aucun).`,
+    { label: "🔎 Contrôle du dossier", phase: "Vision", effort: "low",
+      schema: objet({ fichiers: { type: "integer", description: "Nombre de fichiers trouvés" } }) })
+  if (!controle || !Number.isInteger(controle.fichiers)) throw new Error(`Impossible de vérifier que ${RACINE} est vide : production arrêtée.`)
+  if (controle.fichiers > 0) {
+    throw new Error(`${RACINE} contient déjà ${controle.fichiers} fichier(s) : choisissez un dossier vide (args.dossier) ou ajoutez ecraser: true pour le réutiliser volontairement.`)
+  }
 }
 const echecs = []
 log(`Brief reçu pour « ${NOM} ». Livrables dans ${RACINE}/`)
@@ -726,6 +737,7 @@ const [okBrief, okBench, okDa] = await parallel([
   () => agent(prompt(da, TACHES.da(BRIEF), livraison(CHEMINS_SPECIAUX.da)),
     { label: etiquette(da), phase: "Vision" }),
 ])
+if (!okBrief) echecs.push("infos:brief")
 if (!okBench) echecs.push("vision:a05")
 if (!okDa) echecs.push("vision:a04")
 const lire = chemin => `(lis en entier le fichier \`${RACINE}/${chemin}.md\` ; s'il n'existe pas, fais sans)`
@@ -836,8 +848,14 @@ if (!plan) echecs.push("plan:a02")
 if (!bible) echecs.push("bible:a01")
 
 /* ======================= 7. Assemblage ======================= */
-/* le brief exact et les échecs passent par l'entrée standard : rien à recopier à la main dans le JSON */
-const ASSEMBLAGE = `node studio/assembler.js ${RACINE} --infos-stdin <<'FIN_INFOS_ATELIER'\n${JSON.stringify({ brief: BRIEF, echecs })}\nFIN_INFOS_ATELIER`
+/* le brief exact et les échecs passent par l'entrée standard ; une copie reste sur disque (infos.json)
+   pour que l'assembleur puisse être relancé plus tard sans cette commande */
+const INFOS = JSON.stringify({ brief: BRIEF, echecs })
+const okInfos = await agent(
+  `N'utilise pas l'outil Bash. Avec l'outil Write, écris dans \`${RACINE}/infos.json\` exactement le texte suivant, caractère pour caractère (il est entre les deux lignes de tirets), puis réponds « livré » :\n-----\n${INFOS}\n-----`,
+  { label: "📝 Archivage des infos", phase: "Plan & Bible", effort: "low" })
+if (!okInfos) log("infos.json n'a pas pu être écrit : utilisez la commande d'assemblage renvoyée, qui transmet le brief et les échecs.")
+const ASSEMBLAGE = `node studio/assembler.js ${RACINE} --infos-stdin <<'FIN_INFOS_ATELIER'\n${INFOS}\nFIN_INFOS_ATELIER`
 log(`Production terminée. Pour produire production.json et BIBLE-COMPLETE.md, exécuter la commande renvoyée dans « assemblage ».`)
 
 return {

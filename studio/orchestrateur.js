@@ -240,6 +240,11 @@ async function lancerProduction(prodId) {
   if (verrouAutreOnglet()) { toast("Une production tourne déjà dans un autre onglet : attendez qu'elle se termine."); return; }
   if (!state.settings.apiKey) { toast("Ajoutez d'abord votre clé API dans les Réglages."); return; }
   const { projet, prod } = trouve;
+  if (run && run.nonSauve && run.prodId !== prodId) {
+    const autre = trouverProduction(run.prodId);
+    toast(`La production « ${(autre && autre.prod.vision.titre) || "précédente"} » n'est pas enregistrée : exportez-la ou libérez de la place d'abord.`);
+    return;
+  }
   const nonSauveAvant = !!(run && run.nonSauve);
   // le modèle et la clé sont figés pour toute la durée de cette exécution
   run = {
@@ -489,6 +494,7 @@ let renduPlanifie = null;
 let progresPlanifie = null;
 let livresAuDernierRendu = -1;
 let expirationVerrouPlanifiee = null;
+let bibleNouveauxAffiches = 0;
 
 /* changement d'état d'un agent : pendant une production, la page n'est pas
    reconstruite (les boutons restent cliquables), seuls les indicateurs bougent */
@@ -499,7 +505,8 @@ function planifierRendu() {
     if (currentView !== "production") return;
     const t = prodAffichee && trouverProduction(prodAffichee);
     const affichee = document.querySelector(`#prod-wrap [data-prod-id]`);
-    const surPlace = t && run && run.actif && run.prodId === t.prod.id && affichee && affichee.dataset.prodId === t.prod.id;
+    if (run && run.actif && (!t || t.prod.id !== run.prodId)) return;   // son affichage ne dépend pas de ce run
+    const surPlace = t && run && run.actif && affichee && affichee.dataset.prodId === t.prod.id;
     if (!surPlace) { rendreProduction(); return; }
     if (ongletProd === "salle") majSalleSurPlace(t.prod);
     else majBibleSurPlace(t.prod);
@@ -583,7 +590,7 @@ function rendreProduction() {
       <span>🤖 ${esc(prod.source === "claude-code" ? "Workflow Claude Code" : modelesUtilises(prod))}</span>
       <span id="prod-compteur">✅ ${finies}/${unites.length} étapes d'agents</span>
       ${ignores ? `<span>⏭️ ${ignores} ignorée${ignores > 1 ? "s" : ""}</span>` : ""}
-      ${cout !== null ? `<span id="prod-cout">💶 ≈ ${cout.toFixed(2)} $ consommés</span>` : ""}
+      <span id="prod-cout">${cout !== null ? `💶 ≈ ${cout.toFixed(2)} $ consommés` : ""}</span>
       ${prod.erreur ? `<span class="txt-danger">⛔ ${esc(prod.erreur)}</span>` : ""}
       ${ailleurs ? `<span>🔒 En cours dans un autre onglet</span>` : ""}
     </div>
@@ -737,7 +744,8 @@ function majBibleSurPlace(prod) {
   majEntete(prod, unites);
   const nouveaux = unites.filter(u => u.etat === "fini").length - livresAuDernierRendu;
   const zone = document.getElementById("bible-maj");
-  if (!zone || nouveaux <= 0) return;
+  if (!zone || nouveaux <= 0 || nouveaux === bibleNouveauxAffiches) return;
+  bibleNouveauxAffiches = nouveaux;
   zone.innerHTML = `<div class="import-bar">🆕 ${nouveaux} nouveau${nouveaux > 1 ? "x" : ""} livrable${nouveaux > 1 ? "s" : ""} depuis l'affichage
     <button class="ghost-btn" id="btn-bible-maj">🔄 Afficher</button></div>`;
   zone.querySelector("#btn-bible-maj").addEventListener("click", rendreProduction);
@@ -823,8 +831,9 @@ function sectionsBible(prod) {
 }
 function rendreBible(el, projet, prod) {
   const sections = sectionsBible(prod);
+  bibleNouveauxAffiches = 0;
   if (!sections.length) {
-    el.innerHTML = `<p class="muted">La bible se remplit au fur et à mesure que les agents livrent.</p>`;
+    el.innerHTML = `<div id="bible-maj"></div><p class="muted">La bible se remplit au fur et à mesure que les agents livrent.</p>`;
     return;
   }
   const nbTaches = prod.plan ? (prod.plan.taches || []).length : 0;

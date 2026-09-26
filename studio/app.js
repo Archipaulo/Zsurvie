@@ -15,6 +15,7 @@ const STATUTS_PROJET = ["actif", "pause", "termine"];
 const STATUTS_TACHE = ["todo", "encours", "revision", "fini"];
 const STATUTS_PROD = ["prete", "en_cours", "termine", "incomplet", "interrompu"];
 const ID_SUR = /^[A-Za-z0-9_-]{1,40}$/;
+const idSur = v => typeof v === "string" && ID_SUR.test(v);
 
 const agentById = Object.fromEntries(AGENTS.map(a => [a.id, a]));
 const deptById = Object.fromEntries(DEPTS.map(d => [d.id, d]));
@@ -49,14 +50,14 @@ function normaliser(brut) {
 }
 function normaliserProjet(p) {
   return {
-    id: ID_SUR.test(p.id) ? p.id : uid(),
+    id: idSur(p.id) ? p.id : uid(),
     nom: texte(p.nom, "Projet sans nom"),
     type: texte(p.type, "Autre"),
     desc: texte(p.desc),
     statut: STATUTS_PROJET.includes(p.statut) ? p.statut : "actif",
     phases: PHASES.map((_, i) => !!liste(p.phases)[i]),
     tasks: liste(p.tasks).filter(objetSimple).map(t => ({
-      id: ID_SUR.test(t.id) ? t.id : uid(),
+      id: idSur(t.id) ? t.id : uid(),
       titre: texte(t.titre, "Tâche"),
       statut: STATUTS_TACHE.includes(t.statut) ? t.statut : "todo",
       agents: liste(t.agents).filter(estAgentId),
@@ -86,7 +87,7 @@ function normaliserProduction(pr) {
   // « en cours » sans onglet vivant pour la faire tourner = coupée en route
   if (statut === "en_cours" && !verrouFrais(pr.id)) statut = "interrompu";
   return {
-    id: ID_SUR.test(pr.id) ? pr.id : uid(),
+    id: idSur(pr.id) ? pr.id : uid(),
     source: pr.source === "claude-code" ? "claude-code" : "app",
     brief: texte(pr.brief),
     modele: MODELES.includes(pr.modele) ? pr.modele : null,
@@ -191,6 +192,11 @@ function save() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
     alerteStockage = false;
+    if (typeof run !== "undefined" && run && !run.actif && run.nonSauve) {
+      run.nonSauve = false;
+      const t = trouverProduction(run.prodId);
+      if (t && /^Stockage du navigateur plein/.test(t.prod.erreur || "")) delete t.prod.erreur;
+    }
     return true;
   } catch (e) {
     if (!alerteStockage) {
@@ -236,8 +242,15 @@ function agentTasks(agentId) {
 }
 
 /* ------- un autre onglet a modifié les données : on suit ------- */
+const lireJson = v => { try { return JSON.parse(v || "null"); } catch (e) { return null; } };
 window.addEventListener("storage", e => {
-  if (e.key === VERROU_KEY) { planifierRafraichissement(); return; }
+  if (e.key === VERROU_KEY) {
+    // un simple renouvellement (même onglet, même production) ne change rien à l'affichage
+    const avant = lireJson(e.oldValue), apres = lireJson(e.newValue);
+    const cle = v => v ? `${v.onglet}|${v.prodId}` : "";
+    if (cle(avant) !== cle(apres)) planifierRafraichissement();
+    return;
+  }
   if (e.key !== null && e.key !== STORE_KEY) return;
   let autre;
   if (e.key === null || e.newValue === null) autre = defaultState();   // effacement fait ailleurs
@@ -259,11 +272,9 @@ window.addEventListener("storage", e => {
     }
   }
   state = autre;
-  if (vivant && run.nonSauve && save()) {
-    run.nonSauve = false;
-    toast("De la place s'est libérée : la production est enregistrée ✅");
-  }
-  planifierRafraichissement();
+  if (vivant && run.nonSauve && save()) toast("De la place s'est libérée : la production est enregistrée ✅");
+  // immédiat : aucun bouton ne doit rester branché sur les anciens objets
+  rafraichirVue();
 });
 let rafraichissementPlanifie = null;
 function planifierRafraichissement() {
