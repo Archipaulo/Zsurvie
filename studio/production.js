@@ -27,6 +27,10 @@ const ROLES_PROD = {
   bible: "a01",
 };
 const DEPTS_CREATEURS = ["gd", "ld", "env", "build", "code", "ui", "fx", "ops"];
+/* appartenance stricte : « constructor » ou « __proto__ » ne sont pas des agents */
+const aCle = (obj, cle) => !!obj && Object.prototype.hasOwnProperty.call(obj, cle);
+const IDS_AGENTS = new Set(AGENTS.map(a => a.id));
+const estAgentId = id => typeof id === "string" && IDS_AGENTS.has(id);
 const CREATEURS = AGENTS.filter(a => DEPTS_CREATEURS.includes(a.dept)).map(a => a.id);
 const RELECTEURS_QA = AGENTS.filter(a => a.dept === "qa").map(a => a.id);
 

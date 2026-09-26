@@ -37,16 +37,21 @@ if (process.argv.includes("--infos-stdin")) {
     const brut = JSON.parse(fs.readFileSync(0, "utf8"));
     if (brut && typeof brut === "object") infos = brut;
   } catch (e) {
-    console.log(`- infos du workflow illisibles (${e.message}) : brief repris du canon`);
+    console.log(`- infos du workflow illisibles (${e.message}) : brief repris de brief.md`);
   }
 }
 
 const lib = n => fs.readFileSync(path.join(__dirname, n), "utf8");
 const S = new Function(lib("agents.js") + "\n" + lib("production.js") + `
-  return { DEPTS, AGENTS, PHASES, CREATEURS, RELECTEURS_QA, CHEMINS_SPECIAUX, cheminLivrable, productionEnMarkdown };`)();
+  return { DEPTS, AGENTS, PHASES, CREATEURS, RELECTEURS_QA, CHEMINS_SPECIAUX, cheminLivrable, productionEnMarkdown, estAgentId };`)();
 
 const manquants = [];
 const invalides = [];
+const fichesInvalides = new Set();   // chemins dont la fiche JSON est absente ou illisible
+function lireTexte(nom) {
+  const f = path.join(racine, nom);
+  return fs.existsSync(f) ? fs.readFileSync(f, "utf8").trim() : "";
+}
 function lireMd(chemin) {
   const f = path.join(racine, chemin + ".md");
   if (!fs.existsSync(f)) { manquants.push(chemin + ".md"); return null; }
@@ -54,12 +59,17 @@ function lireMd(chemin) {
 }
 function lireJson(chemin) {
   const f = path.join(racine, chemin + ".json");
-  if (!fs.existsSync(f)) { manquants.push(chemin + ".json"); return null; }
-  try { return JSON.parse(fs.readFileSync(f, "utf8")); }
-  catch (e) { invalides.push(`${chemin}.json (${e.message})`); return null; }
+  if (!fs.existsSync(f)) { manquants.push(chemin + ".json"); fichesInvalides.add(chemin); return null; }
+  try {
+    const v = JSON.parse(fs.readFileSync(f, "utf8"));
+    if (v && typeof v === "object" && !Array.isArray(v)) return v;
+    throw new Error("un objet JSON est attendu");
+  } catch (e) { invalides.push(`${chemin}.json (${e.message})`); fichesInvalides.add(chemin); return null; }
 }
 const tableau = v => Array.isArray(v) ? v : [];
-const idsValides = new Set(S.AGENTS.map(a => a.id));
+const objets = v => tableau(v).filter(x => x && typeof x === "object" && !Array.isArray(x));
+const chaine = v => typeof v === "string" ? v : "";
+const chaines = v => tableau(v).filter(x => typeof x === "string");
 
 /* ---------- vision ---------- */
 const ficheCanon = lireJson(S.CHEMINS_SPECIAUX.canon) || {};
@@ -80,9 +90,9 @@ for (const id of S.CREATEURS) {
   if (!md && !fiche) continue;
   contributions[id] = {
     livrable: md || "",
-    decisions: tableau(fiche && fiche.decisions),
-    besoins: tableau(fiche && fiche.besoins),
-    taches: tableau(fiche && fiche.taches),
+    decisions: chaines(fiche && fiche.decisions),
+    besoins: objets(fiche && fiche.besoins).map(b => ({ de: chaine(b.de), besoin: chaine(b.besoin) })),
+    taches: objets(fiche && fiche.taches).map(t => ({ titre: chaine(t.titre), phase: Number.isInteger(t.phase) ? t.phase : 0, charge: chaine(t.charge) || "M" })),
     revise: !!(fiche && fiche.revise),
   };
 }
@@ -92,7 +102,9 @@ for (const id of S.RELECTEURS_QA) {
   const md = lireMd(S.cheminLivrable(a));
   const fiche = lireJson(S.cheminLivrable(a));
   if (!md && !fiche) continue;
-  qa[id] = { rapport: md || "", problemes: tableau(fiche && fiche.problemes) };
+  qa[id] = { rapport: md || "", problemes: objets(fiche && fiche.problemes).map(p => ({
+    gravite: ["bloquant", "majeur", "mineur"].includes(p.gravite) ? p.gravite : "mineur",
+    agent: chaine(p.agent), probleme: chaine(p.probleme), correction: chaine(p.correction) })) };
 }
 
 /* ---------- coordination, plan, bible ---------- */
@@ -100,19 +112,19 @@ const ficheCoord = lireJson(S.CHEMINS_SPECIAUX.coordination);
 const mdCoord = lireMd(S.CHEMINS_SPECIAUX.coordination);
 const coordination = (ficheCoord || mdCoord) ? {
   synthese: mdCoord || "",
-  conflits: tableau(ficheCoord && ficheCoord.conflits),
-  revisions: tableau(ficheCoord && ficheCoord.revisions),
+  conflits: objets(ficheCoord && ficheCoord.conflits).map(c => ({ sujet: chaine(c.sujet), agents: chaines(c.agents), arbitrage: chaine(c.arbitrage) })),
+  revisions: objets(ficheCoord && ficheCoord.revisions).map(r => ({ agent: chaine(r.agent), consignes: chaine(r.consignes) })),
 } : null;
 
 const fichePlan = lireJson(S.CHEMINS_SPECIAUX.plan);
 const mdPlan = lireMd(S.CHEMINS_SPECIAUX.plan);
 const plan = (fichePlan || mdPlan) ? {
   plan: mdPlan || "",
-  taches: tableau(fichePlan && fichePlan.taches).map(t => ({
-    titre: String(t.titre || ""),
+  taches: objets(fichePlan && fichePlan.taches).map(t => ({
+    titre: chaine(t.titre),
     phase: Number.isInteger(t.phase) ? Math.min(Math.max(t.phase, 0), S.PHASES.length - 1) : 0,
-    agents: tableau(t.agents).filter(x => idsValides.has(x)),
-    note: String(t.note || ""),
+    agents: chaines(t.agents).filter(S.estAgentId),
+    note: chaine(t.note),
   })).filter(t => t.titre),
 } : null;
 
@@ -154,6 +166,13 @@ for (const r of (coordination ? coordination.revisions : [])) {
 }
 if (!plan) manque("plan:a02", "plan absent");
 if (!bible) manque("bible:a01", "synthèse absente");
+const fiche = (cle, chemin) => { if (fichesInvalides.has(chemin)) manque(cle, "fiche JSON absente ou illisible : décisions, tâches ou arbitrages perdus"); };
+fiche("vision:a01", S.CHEMINS_SPECIAUX.canon);
+for (const id of S.CREATEURS) if (contributions[id]) fiche(`contrib:${id}`, S.cheminLivrable(S.AGENTS.find(x => x.id === id)));
+for (const id of S.RELECTEURS_QA) if (qa[id]) fiche(`qa:${id}`, S.cheminLivrable(S.AGENTS.find(x => x.id === id)));
+if (coordination) fiche("coord:a03", S.CHEMINS_SPECIAUX.coordination);
+if (plan) fiche("plan:a02", S.CHEMINS_SPECIAUX.plan);
+if (bible) fiche("bible:a01", S.CHEMINS_SPECIAUX.bible);
 for (const cle of Array.isArray(infos.echecs) ? infos.echecs : []) {
   if (typeof cle === "string" && /^[a-z]+:a\d\d$/.test(cle)) manque(cle, "échec de l'agent pendant le workflow");
 }
@@ -163,7 +182,7 @@ const production = {
   id: "cc-" + path.basename(racine),
   source: "claude-code",
   nom: vision.titre || path.basename(racine),
-  brief: typeof infos.brief === "string" && infos.brief ? infos.brief : (ficheCanon.brief || ""),
+  brief: typeof infos.brief === "string" && infos.brief ? infos.brief : (lireTexte("brief.md") || ficheCanon.brief || ""),
   modele: null,
   cree: fs.statSync(racine).mtimeMs,
   statut: Object.keys(echecs).length ? "incomplet" : "termine",

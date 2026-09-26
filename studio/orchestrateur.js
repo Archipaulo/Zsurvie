@@ -33,7 +33,7 @@ function pause(ms, signal) {
 async function lireFlux(res, onProgres) {
   const lecteur = res.body.getReader();
   const dec = new TextDecoder();
-  const r = { texte: "", stop: null, erreur: null, entree: 0, sortie: 0 };
+  const r = { texte: "", caracteres: 0, stop: null, erreur: null, entree: 0, sortie: 0 };
   let tampon = "";
   const traiter = ev => {
     switch (ev.type) {
@@ -50,6 +50,7 @@ async function lireFlux(res, onProgres) {
       case "content_block_delta":
         if (ev.delta && ev.delta.type === "text_delta") {
           r.texte += ev.delta.text;
+          r.caracteres += ev.delta.text.length;   // compte aussi le texte abandonné lors d'un basculement
           if (onProgres) onProgres(r.texte.length);
         }
         break;
@@ -77,14 +78,17 @@ async function lireFlux(res, onProgres) {
       }
     }
   } catch (e) {
-    e.partiel = r;
-    throw e;
+    // l'erreur d'annulation est le même objet pour tous les flux d'un signal : on en crée une par flux
+    const err = new Error((e && e.message) || "flux interrompu");
+    err.name = (e && e.name) || "Error";
+    err.partiel = r;
+    throw err;
   }
   return r;
 }
 
 /* estimation des jetons de sortie d'un flux coupé avant son bilan */
-const jetonsEstimes = texte => Math.ceil(texte.length / 3.5);
+const jetonsEstimes = caracteres => Math.ceil(caracteres / 3.5);
 
 /* un appel complet, avec nouvelles tentatives sur les erreurs passagères */
 async function appelClaude({ model, apiKey, system, user, schema, signal, onProgres, compter }) {
@@ -127,12 +131,12 @@ async function appelClaude({ model, apiKey, system, user, schema, signal, onProg
     try {
       r = await lireFlux(res, onProgres);
     } catch (e) {
-      if (e.partiel) compter(e.partiel.entree, e.partiel.sortie || jetonsEstimes(e.partiel.texte));
-      if (signal && signal.aborted) throw e;
+      if (e.partiel) compter(e.partiel.entree, e.partiel.sortie || jetonsEstimes(e.partiel.caracteres));
+      if (signal && signal.aborted) throw new DOMException("Interrompu", "AbortError");
       derniere = new Error("flux interrompu");
       continue;
     }
-    compter(r.entree, r.sortie || jetonsEstimes(r.texte));
+    compter(r.entree, r.sortie || jetonsEstimes(r.caracteres));
     if (r.erreur) { derniere = new Error(r.erreur.message || r.erreur.type); continue; }
     if (r.stop === "refusal") throw new Error("demande déclinée par le modèle");
     if (r.stop === "max_tokens") throw new Error("réponse trop longue (limite de jetons atteinte)");
@@ -186,8 +190,8 @@ function revisionsDemandees(prod) {
   const out = {};
   if (!prod.coordination) return out;
   for (const r of prod.coordination.revisions || []) {
-    if (!prod.contributions[r.agent]) continue;
-    out[r.agent] = out[r.agent] ? `${out[r.agent]}\n${r.consignes}` : r.consignes;
+    if (!aCle(prod.contributions, r.agent)) continue;
+    out[r.agent] = aCle(out, r.agent) ? `${out[r.agent]}\n${r.consignes}` : r.consignes;
   }
   return out;
 }
@@ -217,6 +221,18 @@ function aFaire(prod, cle, fait) {
 
 class ArretEtape extends Error {}
 
+/* exclusivité stricte entre onglets (navigator.locks, libéré automatiquement si l'onglet se ferme) */
+function prendreVerrouExclusif() {
+  if (!navigator.locks || !navigator.locks.request) return Promise.resolve({ ok: true, liberer: () => {} });
+  return new Promise(resolve => {
+    navigator.locks.request("atelier-roblox-production", { ifAvailable: true }, verrou => {
+      if (!verrou) { resolve({ ok: false }); return undefined; }
+      return new Promise(liberer => resolve({ ok: true, liberer }));
+    }).catch(() => resolve({ ok: true, liberer: () => {} }));
+  });
+}
+window.addEventListener("pagehide", () => { if (run && run.actif) leverVerrou(); });
+
 async function lancerProduction(prodId) {
   const trouve = trouverProduction(prodId);
   if (!trouve) return;
@@ -224,25 +240,42 @@ async function lancerProduction(prodId) {
   if (verrouAutreOnglet()) { toast("Une production tourne déjà dans un autre onglet : attendez qu'elle se termine."); return; }
   if (!state.settings.apiKey) { toast("Ajoutez d'abord votre clé API dans les Réglages."); return; }
   const { projet, prod } = trouve;
+  const nonSauveAvant = !!(run && run.nonSauve);
   // le modèle et la clé sont figés pour toute la durée de cette exécution
   run = {
     prodId, actif: true, ctrl: new AbortController(), statuts: {}, progres: {}, journal: [],
-    model: state.settings.model, apiKey: state.settings.apiKey, nonSauve: false, battement: null,
+    model: state.settings.model, apiKey: state.settings.apiKey, nonSauve: nonSauveAvant,
+    battement: null, libererVerrou: null,
   };
   const signal = run.ctrl.signal;
+  const exclusif = await prendreVerrouExclusif();
+  if (!exclusif.ok) {
+    run.actif = false;
+    toast("Une production tourne déjà dans un autre onglet : attendez qu'elle se termine.");
+    return;
+  }
+  run.libererVerrou = exclusif.liberer;
+  poserVerrou(prodId);
+  // on ne remet à zéro erreur et échecs que si l'état peut être enregistré
+  const avant = { statut: prod.statut, echecs: prod.echecs, erreur: prod.erreur };
   if (!prod.modele) prod.modele = run.model;
   prod.statut = "en_cours";
   prod.echecs = {};
   delete prod.erreur;
   if (!save()) {
-    prod.statut = "interrompu";
+    Object.assign(prod, { statut: avant.statut === "en_cours" ? "interrompu" : avant.statut, echecs: avant.echecs });
+    if (avant.erreur) prod.erreur = avant.erreur;
     run.actif = false;
-    toast("Stockage du navigateur plein : exportez puis supprimez d'anciennes productions avant de lancer.");
+    run.nonSauve = true;
+    run.libererVerrou();
+    leverVerrou();
+    toast("Stockage du navigateur plein : exportez cette production, puis supprimez d'anciennes productions.");
     rendreProduction();
     return;
   }
-  poserVerrou(prodId);
+  run.nonSauve = false;
   run.battement = setInterval(() => poserVerrou(prodId), 4000);
+  if (currentView === "production" && prodAffichee === prodId) rendreProduction();
   noter(`🚀 Production lancée avec ${nomModele(run.model)}`);
   const parallele = Math.max(1, Math.min(8, Number(state.settings.parallele) || 3));
   const A = id => agentById[id];
@@ -256,7 +289,7 @@ async function lancerProduction(prodId) {
     model: run.model, apiKey: run.apiKey,
     system: `${personaPrompt(a)}\n\n${REGLES_STUDIO}`,
     user: tache, schema, signal, compter,
-    onProgres: n => { run.progres[cle] = n; planifierProgres(); },
+    onProgres: n => { run.progres[cle] = n; battement(prodId); planifierProgres(); },
   });
 
   async function unite(cle, travail) {
@@ -278,6 +311,7 @@ async function lancerProduction(prodId) {
         run.ctrl.abort();
       }
     } finally {
+      battement(prodId);
       if (!save() && !run.nonSauve) {
         // plus rien ne peut être enregistré : on arrête de consommer l'API
         run.nonSauve = true;
@@ -388,6 +422,7 @@ async function lancerProduction(prodId) {
     run.actif = false;
     clearInterval(run.battement);
     leverVerrou();
+    if (run.libererVerrou) run.libererVerrou();
     if (!save() && !run.nonSauve) run.nonSauve = true;
     const titre = prod.vision.titre || projet.nom;
     logEvent(`🎬 Production « ${titre} » : ${libelleStatut(prod.statut).toLowerCase()} (<b>${projet.nom}</b>)`);
@@ -453,21 +488,22 @@ let ongletProd = "salle";
 let renduPlanifie = null;
 let progresPlanifie = null;
 let livresAuDernierRendu = -1;
+let expirationVerrouPlanifiee = null;
 
-/* rendu complet (changement d'état d'un agent) : au plus toutes les 1,2 s */
+/* changement d'état d'un agent : pendant une production, la page n'est pas
+   reconstruite (les boutons restent cliquables), seuls les indicateurs bougent */
 function planifierRendu() {
   if (renduPlanifie) return;
   renduPlanifie = setTimeout(() => {
     renduPlanifie = null;
     if (currentView !== "production") return;
     const t = prodAffichee && trouverProduction(prodAffichee);
-    // la bible n'est reconstruite que lorsqu'un nouveau livrable est arrivé
-    if (t && ongletProd === "bible" && run && run.actif) {
-      const livres = unitesProduction(t.prod).filter(u => u.etat === "fini").length;
-      if (livres === livresAuDernierRendu) { majEntete(t.prod); return; }
-    }
-    rendreProduction();
-  }, 1200);
+    const affichee = document.querySelector(`#prod-wrap [data-prod-id]`);
+    const surPlace = t && run && run.actif && run.prodId === t.prod.id && affichee && affichee.dataset.prodId === t.prod.id;
+    if (!surPlace) { rendreProduction(); return; }
+    if (ongletProd === "salle") majSalleSurPlace(t.prod);
+    else majBibleSurPlace(t.prod);
+  }, 1000);
 }
 /* progression du texte en streaming : on ne touche qu'aux étiquettes des tuiles */
 function planifierProgres() {
@@ -490,8 +526,8 @@ function ouvrirProduction(prodId, onglet) {
   showView("production");
 }
 
-function majEntete(prod) {
-  const unites = unitesProduction(prod);
+function majEntete(prod, unites) {
+  unites = unites || unitesProduction(prod);
   const finies = unites.filter(u => u.etat === "fini").length;
   const c = document.querySelector("#prod-compteur");
   if (c) c.textContent = `✅ ${finies}/${unites.length} étapes d'agents`;
@@ -531,8 +567,12 @@ function rendreProduction() {
   const echecs = unites.filter(u => u.etat === "echec").length;
   const cout = coutProduction(prod);
   const peutReprendre = !enCours && !ailleurs && statut !== "termine" && prod.source !== "claude-code";
+  clearTimeout(expirationVerrouPlanifiee);
+  if (ailleurs) expirationVerrouPlanifiee = setTimeout(() => { if (currentView === "production") rendreProduction(); },
+    Math.max(1000, FRAICHEUR_VERROU - ageVerrou() + 500));
 
   wrap.innerHTML = `
+    <span data-prod-id="${esc(prod.id)}" hidden></span>
     <button class="ghost-btn" id="btn-prod-retour">← ${esc(projet.nom)}</button>
     <div class="detail-head" style="margin-top:14px">
       <h1>🎬 ${esc(prod.vision.titre || "Production en préparation")}</h1>
@@ -579,6 +619,7 @@ function rendreProduction() {
     telecharger(`${slugProd(prod.vision.titre || projet.nom)}-production.json`, JSON.stringify(prod, null, 2), "application/json"));
   const del = wrap.querySelector("#btn-prod-del");
   if (del) del.addEventListener("click", () => {
+    if (verrouFrais(prod.id) || (run && run.actif && run.prodId === prod.id)) { toast("Cette production est en cours : interrompez-la d'abord."); return; }
     if (!confirm("Supprimer définitivement cette production ?")) return;
     projet.productions = projet.productions.filter(x => x.id !== prod.id);
     save();
@@ -598,59 +639,108 @@ function classeStatut(s) {
   return { termine: "termine", en_cours: "actif" }[s] || "pause";
 }
 
-function rendreSalle(el, prod, unites) {
-  const parEtape = id => unites.filter(u => u.etape === id);
-  const etatEtape = id => {
-    const us = parEtape(id);
-    if (!us.length) return id === "revisions" && prod.coordination ? "fini" : "attente";
-    if (us.some(u => u.etat === "travail")) return "travail";
-    if (us.some(u => u.etat === "echec")) return "echec";
-    if (us.every(u => u.etat === "fini" || u.etat === "ignore")) return "fini";
-    return us.some(u => u.etat === "fini") ? "partiel" : "attente";
-  };
-  const icone = { attente: "⏳", travail: "🔨", fini: "✅", echec: "⚠️", ignore: "⏭️", partiel: "◐" };
-  // état agrégé par agent : au travail > échec > fini > ignoré > en attente
-  const etatAgent = {};
+const ICONES_ETAT = { attente: "⏳", travail: "🔨", fini: "✅", echec: "⚠️", ignore: "⏭️", partiel: "◐" };
+
+function etatEtape(prod, unites, id) {
+  const us = unites.filter(u => u.etape === id);
+  if (!us.length) {
+    if (id !== "revisions") return "attente";
+    return prod.coordination ? "fini" : prod.ignores["coord:a03"] ? "ignore" : "attente";
+  }
+  if (us.some(u => u.etat === "travail")) return "travail";
+  if (us.some(u => u.etat === "echec")) return "echec";
+  if (us.every(u => u.etat === "fini" || u.etat === "ignore")) return "fini";
+  return us.some(u => u.etat === "fini") ? "partiel" : "attente";
+}
+/* état agrégé par agent : au travail > échec > fini > ignoré > en attente */
+function etatsAgents(unites) {
   const rang = { travail: 4, echec: 3, fini: 2, ignore: 1, attente: 0 };
+  const out = {};
   for (const u of unites) {
     const id = u.cle.split(":")[1];
-    if (etatAgent[id] === undefined || rang[u.etat] > rang[etatAgent[id]]) etatAgent[id] = u.etat;
+    if (out[id] === undefined || rang[u.etat] > rang[out[id]]) out[id] = u.etat;
   }
+  return out;
+}
+function libelleTuile(prod, id, st) {
   const vivant = run && run.prodId === prod.id ? run : null;
+  const cle = vivant ? Object.keys(vivant.statuts).find(k => k.endsWith(":" + id) && vivant.statuts[k] === "travail") : null;
+  const car = cle ? vivant.progres[cle] || 0 : 0;
+  return `${ICONES_ETAT[st]}${st === "travail" && car ? ` ${Math.round(car / 100) / 10}k` : ""}`;
+}
+function htmlTimeline(prod, unites) {
+  return ETAPES_PROD.map(e => {
+    const st = etatEtape(prod, unites, e.id);
+    const us = unites.filter(u => u.etape === e.id);
+    return `<div class="tl-step ${st}">
+      <div class="tl-emoji">${e.emoji}</div>
+      <div class="tl-nom">${e.nom}</div>
+      <div class="tl-etat">${ICONES_ETAT[st]} ${us.filter(u => u.etat === "fini").length}/${us.length || "—"}</div>
+    </div>`;
+  }).join("");
+}
+function htmlEchecs(prod) {
+  const e = Object.entries(prod.echecs || {});
+  return e.length ? `<div class="echecs"><b>Échecs :</b> ${e.map(([k, m]) =>
+    `${esc(k)}${prod.ignores[k] ? " (ignoré)" : ""} : ${esc(m)}`).join(" · ")}</div>` : "";
+}
+function htmlJournal(prod) {
+  const vivant = run && run.prodId === prod.id ? run : null;
+  return vivant && vivant.journal.length
+    ? vivant.journal.slice(0, 30).map(j => `<div class="log-item">${esc(j.msg)} <span class="log-time">· ${timeAgo(j.t)}</span></div>`).join("")
+    : `<p class="muted">${prod.statut === "prete" ? "Cliquez sur « 🚀 Lancer » pour mettre le studio au travail." : "Le journal détaillé s'affiche pendant l'exécution."}</p>`;
+}
 
+function rendreSalle(el, prod, unites) {
+  const etatAgent = etatsAgents(unites);
   el.innerHTML = `
-    <div class="timeline">${ETAPES_PROD.map(e => {
-      const st = etatEtape(e.id);
-      const us = parEtape(e.id);
-      return `<div class="tl-step ${st}">
-        <div class="tl-emoji">${e.emoji}</div>
-        <div class="tl-nom">${e.nom}</div>
-        <div class="tl-etat">${icone[st]} ${us.filter(u => u.etat === "fini").length}/${us.length || "—"}</div>
-      </div>`;
-    }).join("")}</div>
+    <div class="timeline" id="salle-timeline">${htmlTimeline(prod, unites)}</div>
     <div class="salle">${DEPTS.map(d => `
       <div class="salle-dept">
         <div class="salle-dept-nom" style="color:${d.color}">${d.emoji} ${d.nom}</div>
         <div class="salle-agents">${AGENTS.filter(a => a.dept === d.id).map(a => {
           const st = etatAgent[a.id] || "attente";
-          const cleVive = vivant ? Object.keys(vivant.statuts).find(k => k.endsWith(":" + a.id) && vivant.statuts[k] === "travail") : null;
-          const car = cleVive ? vivant.progres[cleVive] || 0 : 0;
           return `<div class="tuile ${st}" data-aid="${a.id}" title="${esc(a.nom)} — ${esc(a.role)}">
             <span class="tuile-emoji">${a.emoji}</span>
             <span class="tuile-nom">${esc(a.nom.split(" ")[0])}</span>
-            <span class="tuile-etat">${icone[st]}${st === "travail" && car ? ` ${Math.round(car / 100) / 10}k` : ""}</span>
+            <span class="tuile-etat">${libelleTuile(prod, a.id, st)}</span>
           </div>`;
         }).join("")}</div>
       </div>`).join("")}
     </div>
-    ${Object.keys(prod.echecs || {}).length ? `<div class="echecs"><b>Échecs :</b> ${Object.entries(prod.echecs).map(([k, m]) =>
-      `${esc(k)}${prod.ignores[k] ? " (ignoré)" : ""} : ${esc(m)}`).join(" · ")}</div>` : ""}
+    <div id="salle-echecs">${htmlEchecs(prod)}</div>
     <h2>Journal</h2>
-    <div class="log-list">${vivant && vivant.journal.length
-      ? vivant.journal.slice(0, 30).map(j => `<div class="log-item">${esc(j.msg)} <span class="log-time">· ${timeAgo(j.t)}</span></div>`).join("")
-      : `<p class="muted">${prod.statut === "prete" ? "Cliquez sur « 🚀 Lancer » pour mettre le studio au travail." : "Le journal détaillé s'affiche pendant l'exécution."}</p>`}
-    </div>`;
+    <div class="log-list" id="salle-journal">${htmlJournal(prod)}</div>`;
   el.querySelectorAll(".tuile").forEach(t => t.addEventListener("click", () => ouvrirLivrables(prod, t.dataset.aid)));
+}
+/* mise à jour sans recréer boutons ni tuiles (les clics en cours ne sont jamais perdus) */
+function majSalleSurPlace(prod) {
+  const unites = unitesProduction(prod);
+  majEntete(prod, unites);
+  const tl = document.getElementById("salle-timeline");
+  if (tl) tl.innerHTML = htmlTimeline(prod, unites);
+  const etatAgent = etatsAgents(unites);
+  document.querySelectorAll("#prod-contenu .tuile[data-aid]").forEach(t => {
+    const st = etatAgent[t.dataset.aid] || "attente";
+    t.className = `tuile ${st}`;
+    const lib = t.querySelector(".tuile-etat");
+    if (lib) lib.textContent = libelleTuile(prod, t.dataset.aid, st);
+  });
+  const ech = document.getElementById("salle-echecs");
+  if (ech) ech.innerHTML = htmlEchecs(prod);
+  const jr = document.getElementById("salle-journal");
+  if (jr) jr.innerHTML = htmlJournal(prod);
+}
+/* onglet Bible pendant une production : on signale les nouveaux livrables sans tout recharger */
+function majBibleSurPlace(prod) {
+  const unites = unitesProduction(prod);
+  majEntete(prod, unites);
+  const nouveaux = unites.filter(u => u.etat === "fini").length - livresAuDernierRendu;
+  const zone = document.getElementById("bible-maj");
+  if (!zone || nouveaux <= 0) return;
+  zone.innerHTML = `<div class="import-bar">🆕 ${nouveaux} nouveau${nouveaux > 1 ? "x" : ""} livrable${nouveaux > 1 ? "s" : ""} depuis l'affichage
+    <button class="ghost-btn" id="btn-bible-maj">🔄 Afficher</button></div>`;
+  zone.querySelector("#btn-bible-maj").addEventListener("click", rendreProduction);
 }
 
 /* ------- ce qu'un agent a produit dans cette production ------- */
@@ -723,7 +813,7 @@ function sectionsBible(prod) {
   }
   if (prod.plan) {
     const lignes = (prod.plan.taches || []).map(t =>
-      `| ${cellule(PHASES[t.phase] || t.phase)} | ${cellule(t.titre)} | ${cellule((t.agents || []).map(x => agentById[x] ? agentById[x].nom.split(" ")[0] : x).join(", "))} |`);
+      `| ${cellule(PHASES[t.phase] || t.phase)} | ${cellule(t.titre)} | ${cellule((t.agents || []).map(x => estAgentId(x) ? agentById[x].nom.split(" ")[0] : x).join(", "))} |`);
     s.push({ id: "plan", titre: "📋 Plan de production", md: (prod.plan.plan || "") +
       (lignes.length ? `\n\n## Tâches\n\n| Phase | Tâche | Agents |\n|---|---|---|\n${lignes.join("\n")}` : "") });
   }
@@ -738,9 +828,12 @@ function rendreBible(el, projet, prod) {
     return;
   }
   const nbTaches = prod.plan ? (prod.plan.taches || []).length : 0;
+  const ailleurs = verrouFrais(prod.id) && !(run && run.actif && run.prodId === prod.id);
   el.innerHTML = `
+    <div id="bible-maj"></div>
     ${nbTaches ? `<div class="import-bar">📋 Le plan contient ${nbTaches} tâches assignées aux agents.
       ${prod.tachesImportees ? `<span class="muted">✅ déjà ajoutées au tableau du projet</span>`
+        : ailleurs ? `<span class="muted">🔒 disponible quand la production sera terminée dans l'autre onglet</span>`
         : `<button class="primary-btn" id="btn-import-taches">➕ Ajouter au tableau de « ${esc(projet.nom)} »</button>`}</div>` : ""}
     <div class="bible">
       <nav class="bible-toc">${sections.map(s => `<a href="#" data-sec="${s.id}">${esc(s.titre)}</a>`).join("")}</nav>
@@ -759,11 +852,11 @@ function rendreBible(el, projet, prod) {
   if (imp) imp.addEventListener("click", () => importerTaches(projet, prod));
 }
 function importerTaches(projet, prod) {
-  if (prod.tachesImportees) return;
+  if (prod.tachesImportees || (verrouFrais(prod.id) && !(run && run.actif && run.prodId === prod.id))) return;
   for (const t of prod.plan.taches || []) {
     projet.tasks.push({
       id: uid(), titre: t.titre, statut: "todo",
-      agents: (t.agents || []).filter(x => agentById[x]),
+      agents: (t.agents || []).filter(estAgentId),
       note: `Phase : ${PHASES[t.phase] || t.phase}${t.note ? " — " + t.note : ""}`,
       created: Date.now(),
     });

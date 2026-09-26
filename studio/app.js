@@ -43,7 +43,7 @@ function normaliser(brut) {
   s.settings.model = MODELES.includes(r.model) ? r.model : s.settings.model;
   s.settings.parallele = [1, 2, 3, 4, 6, 8].includes(Number(r.parallele)) ? Number(r.parallele) : 3;
   s.log = liste(src.log).filter(e => objetSimple(e) && typeof e.msg === "string")
-    .map(e => ({ t: Number(e.t) || 0, msg: e.msg })).slice(0, 60);
+    .map(e => ({ t: Number(e.t) || 0, msg: e.v === 2 ? e.msg : decoderEntites(e.msg), v: 2 })).slice(0, 60);
   s.projects = liste(src.projects).filter(objetSimple).map(normaliserProjet);
   return s;
 }
@@ -59,7 +59,7 @@ function normaliserProjet(p) {
       id: ID_SUR.test(t.id) ? t.id : uid(),
       titre: texte(t.titre, "Tâche"),
       statut: STATUTS_TACHE.includes(t.statut) ? t.statut : "todo",
-      agents: liste(t.agents).filter(a => agentById[a]),
+      agents: liste(t.agents).filter(estAgentId),
       note: texte(t.note),
       created: Number(t.created) || 0,
     })),
@@ -71,7 +71,7 @@ function normaliserProjet(p) {
 function normaliserProduction(pr) {
   if (!objetSimple(pr) || !objetSimple(pr.vision) || !objetSimple(pr.contributions)) return null;
   const parAgent = (obj, fn) => Object.fromEntries(Object.entries(objetSimple(obj) ? obj : {})
-    .filter(([id, x]) => agentById[id] && objetSimple(x)).map(([id, x]) => [id, fn(x)]));
+    .filter(([id, x]) => estAgentId(id) && objetSimple(x)).map(([id, x]) => [id, fn(x)]));
   const cles = obj => Object.keys(objetSimple(obj) ? obj : {});
   const v = pr.vision;
   const usages = {};
@@ -115,12 +115,12 @@ function normaliserProduction(pr) {
       revisions: liste(pr.coordination.revisions).filter(objetSimple).map(r => ({
         agent: texte(r.agent), consignes: texte(r.consignes) })),
     } : null,
-    revisionsFaites: Object.fromEntries(cles(pr.revisionsFaites).filter(id => agentById[id]).map(id => [id, true])),
+    revisionsFaites: Object.fromEntries(cles(pr.revisionsFaites).filter(estAgentId).map(id => [id, true])),
     plan: objetSimple(pr.plan) ? {
       plan: texte(pr.plan.plan),
       taches: liste(pr.plan.taches).filter(objetSimple).map(t => ({
         titre: texte(t.titre), phase: entier(t.phase, 0, PHASES.length - 1, 0),
-        agents: liste(t.agents).filter(a => agentById[a]), note: texte(t.note) })).filter(t => t.titre),
+        agents: liste(t.agents).filter(estAgentId), note: texte(t.note) })).filter(t => t.titre),
     } : null,
     bible: objetSimple(pr.bible) ? { titre: texte(pr.bible.titre), pitch: texte(pr.bible.pitch), bible: texte(pr.bible.bible) } : null,
     scripts: Object.fromEntries(Object.entries(objetSimple(pr.scripts) ? pr.scripts : {}).filter(([, c]) => typeof c === "string")),
@@ -131,28 +131,47 @@ function normaliserProduction(pr) {
   };
 }
 
-/* ------- verrou entre onglets : un seul onglet fait tourner une production ------- */
+/* ------- verrou entre onglets : un seul onglet fait tourner une production -------
+   Le battement est renouvelé par le travail réseau de la production (que le
+   navigateur ne bride pas dans un onglet en arrière-plan) et par un minuteur ;
+   il reste valable 3 minutes et il est levé à la fermeture de l'onglet.
+   L'exclusivité stricte au lancement passe par navigator.locks quand il existe. */
+const FRAICHEUR_VERROU = 180000;
 const ONGLET_ID = uid();
+let dernierBattement = 0;
 function lireVerrou() {
   try {
     const v = JSON.parse(localStorage.getItem(VERROU_KEY) || "null");
     return objetSimple(v) ? v : null;
   } catch (e) { return null; }
 }
+function ageVerrou() {
+  const v = lireVerrou();
+  return v ? Date.now() - (Number(v.t) || 0) : Infinity;
+}
 function verrouFrais(prodId) {
   const v = lireVerrou();
-  return !!v && Date.now() - (Number(v.t) || 0) < 15000 && (!prodId || v.prodId === prodId);
+  return !!v && ageVerrou() < FRAICHEUR_VERROU && (!prodId || v.prodId === prodId);
 }
 function verrouAutreOnglet() {
   const v = lireVerrou();
   return verrouFrais() && v.onglet !== ONGLET_ID ? v : null;
 }
 function poserVerrou(prodId) {
-  try { localStorage.setItem(VERROU_KEY, JSON.stringify({ onglet: ONGLET_ID, prodId, t: Date.now() })); } catch (e) {}
+  dernierBattement = Date.now();
+  try { localStorage.setItem(VERROU_KEY, JSON.stringify({ onglet: ONGLET_ID, prodId, t: dernierBattement })); } catch (e) {}
+}
+function battement(prodId) {
+  if (Date.now() - dernierBattement > 5000) poserVerrou(prodId);
 }
 function leverVerrou() {
   const v = lireVerrou();
   if (v && v.onglet === ONGLET_ID) try { localStorage.removeItem(VERROU_KEY); } catch (e) {}
+}
+/* une production de ce projet tourne-t-elle dans un autre onglet ? */
+function projetOccupeAilleurs(p) {
+  const v = verrouAutreOnglet();
+  return !!v && (p.productions || []).some(pr => pr.id === v.prodId);
 }
 
 function load() {
@@ -183,8 +202,12 @@ function save() {
 }
 
 /* le journal contient du texte brut ; seul le gras <b>…</b> est interprété */
+/* les anciennes entrées du journal étaient stockées déjà échappées */
+function decoderEntites(s) {
+  return s.replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => ({ amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'" }[e]));
+}
 function logEvent(msg) {
-  state.log.unshift({ t: Date.now(), msg });
+  state.log.unshift({ t: Date.now(), msg, v: 2 });
   state.log = state.log.slice(0, 60);
   save();
 }
@@ -214,24 +237,39 @@ function agentTasks(agentId) {
 
 /* ------- un autre onglet a modifié les données : on suit ------- */
 window.addEventListener("storage", e => {
-  if (e.key !== STORE_KEY || !e.newValue) return;
+  if (e.key === VERROU_KEY) { planifierRafraichissement(); return; }
+  if (e.key !== null && e.key !== STORE_KEY) return;
   let autre;
-  try { autre = normaliser(JSON.parse(e.newValue)); } catch (err) { return; }
-  if (productionActive()) {
-    // la production qui tourne ici fait foi : on garde notre objet vivant
-    const vivant = trouverProduction(run.prodId);
-    if (vivant) {
-      let place = false;
-      for (const p of autre.projects) {
-        const i = p.productions.findIndex(x => x.id === run.prodId);
-        if (i >= 0) { p.productions[i] = vivant.prod; place = true; }
+  if (e.key === null || e.newValue === null) autre = defaultState();   // effacement fait ailleurs
+  else {
+    try { autre = normaliser(JSON.parse(e.newValue)); } catch (err) { return; }
+  }
+  // la production de cet onglet (en cours, ou pas encore enregistrée) fait foi
+  const vivant = run && (run.actif || run.nonSauve) ? trouverProduction(run.prodId) : null;
+  if (vivant) {
+    const projet = autre.projects.find(p => p.id === vivant.projet.id);
+    if (!projet) autre.projects.unshift(vivant.projet);
+    else {
+      const i = projet.productions.findIndex(x => x.id === run.prodId);
+      if (i < 0) projet.productions.unshift(vivant.prod);
+      else {
+        if (projet.productions[i].tachesImportees) vivant.prod.tachesImportees = true;
+        projet.productions[i] = vivant.prod;
       }
-      if (!place) autre.projects.unshift(vivant.projet);
     }
   }
   state = autre;
-  rafraichirVue();
+  if (vivant && run.nonSauve && save()) {
+    run.nonSauve = false;
+    toast("De la place s'est libérée : la production est enregistrée ✅");
+  }
+  planifierRafraichissement();
 });
+let rafraichissementPlanifie = null;
+function planifierRafraichissement() {
+  clearTimeout(rafraichissementPlanifie);
+  rafraichissementPlanifie = setTimeout(rafraichirVue, 250);
+}
 function rafraichirVue() {
   refreshApiStatus();
   if (currentView === "reglages") return;   // ne pas écraser une saisie en cours
@@ -365,7 +403,7 @@ function openProject(id) {
     save(); openProject(id);
   });
   d.querySelector("#btn-del-project").addEventListener("click", () => {
-    if (productionActive() && (p.productions || []).some(pr => pr.id === run.prodId)) {
+    if ((productionActive() && (p.productions || []).some(pr => pr.id === run.prodId)) || projetOccupeAilleurs(p)) {
       toast("Une production de ce projet est en cours : interrompez-la d'abord.");
       return;
     }
@@ -713,10 +751,13 @@ document.getElementById("import-file").addEventListener("change", e => {
       const s = JSON.parse(r.result);
       if (!s || !Array.isArray(s.projects)) throw new Error("format invalide");
       if (productionActive() || verrouAutreOnglet()) throw new Error("une production est en cours, interrompez-la d'abord");
-      const cle = state.settings.apiKey;
+      const ancien = state;
       state = normaliser(s);
-      state.settings.apiKey = cle;   // on garde la clé de ce navigateur, jamais celle du fichier
-      save();
+      state.settings.apiKey = ancien.settings.apiKey;   // on garde la clé de ce navigateur, jamais celle du fichier
+      if (!save()) {
+        state = ancien;
+        throw new Error("stockage du navigateur plein, rien n'a été modifié");
+      }
       toast("Sauvegarde importée ✅");
       showView("dash");
       refreshApiStatus();
@@ -728,8 +769,8 @@ document.getElementById("import-file").addEventListener("change", e => {
 document.getElementById("btn-wipe").addEventListener("click", () => {
   if (productionActive() || verrouAutreOnglet()) { toast("Une production est en cours : interrompez-la d'abord."); return; }
   if (!confirm("Effacer TOUTES les données du studio (projets, tâches, réglages) ?")) return;
-  localStorage.removeItem(STORE_KEY);
   state = defaultState();
+  save();
   showView("dash");
   refreshApiStatus();
   toast("Studio réinitialisé.");

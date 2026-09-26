@@ -860,6 +860,10 @@ const ROLES_PROD = {
   bible: "a01",
 };
 const DEPTS_CREATEURS = ["gd", "ld", "env", "build", "code", "ui", "fx", "ops"];
+/* appartenance stricte : « constructor » ou « __proto__ » ne sont pas des agents */
+const aCle = (obj, cle) => !!obj && Object.prototype.hasOwnProperty.call(obj, cle);
+const IDS_AGENTS = new Set(AGENTS.map(a => a.id));
+const estAgentId = id => typeof id === "string" && IDS_AGENTS.has(id);
 const CREATEURS = AGENTS.filter(a => DEPTS_CREATEURS.includes(a.dept)).map(a => a.id);
 const RELECTEURS_QA = AGENTS.filter(a => a.dept === "qa").map(a => a.id);
 
@@ -1309,7 +1313,7 @@ function normaliser(brut) {
   s.settings.model = MODELES.includes(r.model) ? r.model : s.settings.model;
   s.settings.parallele = [1, 2, 3, 4, 6, 8].includes(Number(r.parallele)) ? Number(r.parallele) : 3;
   s.log = liste(src.log).filter(e => objetSimple(e) && typeof e.msg === "string")
-    .map(e => ({ t: Number(e.t) || 0, msg: e.msg })).slice(0, 60);
+    .map(e => ({ t: Number(e.t) || 0, msg: e.v === 2 ? e.msg : decoderEntites(e.msg), v: 2 })).slice(0, 60);
   s.projects = liste(src.projects).filter(objetSimple).map(normaliserProjet);
   return s;
 }
@@ -1325,7 +1329,7 @@ function normaliserProjet(p) {
       id: ID_SUR.test(t.id) ? t.id : uid(),
       titre: texte(t.titre, "Tâche"),
       statut: STATUTS_TACHE.includes(t.statut) ? t.statut : "todo",
-      agents: liste(t.agents).filter(a => agentById[a]),
+      agents: liste(t.agents).filter(estAgentId),
       note: texte(t.note),
       created: Number(t.created) || 0,
     })),
@@ -1337,7 +1341,7 @@ function normaliserProjet(p) {
 function normaliserProduction(pr) {
   if (!objetSimple(pr) || !objetSimple(pr.vision) || !objetSimple(pr.contributions)) return null;
   const parAgent = (obj, fn) => Object.fromEntries(Object.entries(objetSimple(obj) ? obj : {})
-    .filter(([id, x]) => agentById[id] && objetSimple(x)).map(([id, x]) => [id, fn(x)]));
+    .filter(([id, x]) => estAgentId(id) && objetSimple(x)).map(([id, x]) => [id, fn(x)]));
   const cles = obj => Object.keys(objetSimple(obj) ? obj : {});
   const v = pr.vision;
   const usages = {};
@@ -1381,12 +1385,12 @@ function normaliserProduction(pr) {
       revisions: liste(pr.coordination.revisions).filter(objetSimple).map(r => ({
         agent: texte(r.agent), consignes: texte(r.consignes) })),
     } : null,
-    revisionsFaites: Object.fromEntries(cles(pr.revisionsFaites).filter(id => agentById[id]).map(id => [id, true])),
+    revisionsFaites: Object.fromEntries(cles(pr.revisionsFaites).filter(estAgentId).map(id => [id, true])),
     plan: objetSimple(pr.plan) ? {
       plan: texte(pr.plan.plan),
       taches: liste(pr.plan.taches).filter(objetSimple).map(t => ({
         titre: texte(t.titre), phase: entier(t.phase, 0, PHASES.length - 1, 0),
-        agents: liste(t.agents).filter(a => agentById[a]), note: texte(t.note) })).filter(t => t.titre),
+        agents: liste(t.agents).filter(estAgentId), note: texte(t.note) })).filter(t => t.titre),
     } : null,
     bible: objetSimple(pr.bible) ? { titre: texte(pr.bible.titre), pitch: texte(pr.bible.pitch), bible: texte(pr.bible.bible) } : null,
     scripts: Object.fromEntries(Object.entries(objetSimple(pr.scripts) ? pr.scripts : {}).filter(([, c]) => typeof c === "string")),
@@ -1397,28 +1401,47 @@ function normaliserProduction(pr) {
   };
 }
 
-/* ------- verrou entre onglets : un seul onglet fait tourner une production ------- */
+/* ------- verrou entre onglets : un seul onglet fait tourner une production -------
+   Le battement est renouvelé par le travail réseau de la production (que le
+   navigateur ne bride pas dans un onglet en arrière-plan) et par un minuteur ;
+   il reste valable 3 minutes et il est levé à la fermeture de l'onglet.
+   L'exclusivité stricte au lancement passe par navigator.locks quand il existe. */
+const FRAICHEUR_VERROU = 180000;
 const ONGLET_ID = uid();
+let dernierBattement = 0;
 function lireVerrou() {
   try {
     const v = JSON.parse(localStorage.getItem(VERROU_KEY) || "null");
     return objetSimple(v) ? v : null;
   } catch (e) { return null; }
 }
+function ageVerrou() {
+  const v = lireVerrou();
+  return v ? Date.now() - (Number(v.t) || 0) : Infinity;
+}
 function verrouFrais(prodId) {
   const v = lireVerrou();
-  return !!v && Date.now() - (Number(v.t) || 0) < 15000 && (!prodId || v.prodId === prodId);
+  return !!v && ageVerrou() < FRAICHEUR_VERROU && (!prodId || v.prodId === prodId);
 }
 function verrouAutreOnglet() {
   const v = lireVerrou();
   return verrouFrais() && v.onglet !== ONGLET_ID ? v : null;
 }
 function poserVerrou(prodId) {
-  try { localStorage.setItem(VERROU_KEY, JSON.stringify({ onglet: ONGLET_ID, prodId, t: Date.now() })); } catch (e) {}
+  dernierBattement = Date.now();
+  try { localStorage.setItem(VERROU_KEY, JSON.stringify({ onglet: ONGLET_ID, prodId, t: dernierBattement })); } catch (e) {}
+}
+function battement(prodId) {
+  if (Date.now() - dernierBattement > 5000) poserVerrou(prodId);
 }
 function leverVerrou() {
   const v = lireVerrou();
   if (v && v.onglet === ONGLET_ID) try { localStorage.removeItem(VERROU_KEY); } catch (e) {}
+}
+/* une production de ce projet tourne-t-elle dans un autre onglet ? */
+function projetOccupeAilleurs(p) {
+  const v = verrouAutreOnglet();
+  return !!v && (p.productions || []).some(pr => pr.id === v.prodId);
 }
 
 function load() {
@@ -1449,8 +1472,12 @@ function save() {
 }
 
 /* le journal contient du texte brut ; seul le gras <b>…</b> est interprété */
+/* les anciennes entrées du journal étaient stockées déjà échappées */
+function decoderEntites(s) {
+  return s.replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => ({ amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'" }[e]));
+}
 function logEvent(msg) {
-  state.log.unshift({ t: Date.now(), msg });
+  state.log.unshift({ t: Date.now(), msg, v: 2 });
   state.log = state.log.slice(0, 60);
   save();
 }
@@ -1480,24 +1507,39 @@ function agentTasks(agentId) {
 
 /* ------- un autre onglet a modifié les données : on suit ------- */
 window.addEventListener("storage", e => {
-  if (e.key !== STORE_KEY || !e.newValue) return;
+  if (e.key === VERROU_KEY) { planifierRafraichissement(); return; }
+  if (e.key !== null && e.key !== STORE_KEY) return;
   let autre;
-  try { autre = normaliser(JSON.parse(e.newValue)); } catch (err) { return; }
-  if (productionActive()) {
-    // la production qui tourne ici fait foi : on garde notre objet vivant
-    const vivant = trouverProduction(run.prodId);
-    if (vivant) {
-      let place = false;
-      for (const p of autre.projects) {
-        const i = p.productions.findIndex(x => x.id === run.prodId);
-        if (i >= 0) { p.productions[i] = vivant.prod; place = true; }
+  if (e.key === null || e.newValue === null) autre = defaultState();   // effacement fait ailleurs
+  else {
+    try { autre = normaliser(JSON.parse(e.newValue)); } catch (err) { return; }
+  }
+  // la production de cet onglet (en cours, ou pas encore enregistrée) fait foi
+  const vivant = run && (run.actif || run.nonSauve) ? trouverProduction(run.prodId) : null;
+  if (vivant) {
+    const projet = autre.projects.find(p => p.id === vivant.projet.id);
+    if (!projet) autre.projects.unshift(vivant.projet);
+    else {
+      const i = projet.productions.findIndex(x => x.id === run.prodId);
+      if (i < 0) projet.productions.unshift(vivant.prod);
+      else {
+        if (projet.productions[i].tachesImportees) vivant.prod.tachesImportees = true;
+        projet.productions[i] = vivant.prod;
       }
-      if (!place) autre.projects.unshift(vivant.projet);
     }
   }
   state = autre;
-  rafraichirVue();
+  if (vivant && run.nonSauve && save()) {
+    run.nonSauve = false;
+    toast("De la place s'est libérée : la production est enregistrée ✅");
+  }
+  planifierRafraichissement();
 });
+let rafraichissementPlanifie = null;
+function planifierRafraichissement() {
+  clearTimeout(rafraichissementPlanifie);
+  rafraichissementPlanifie = setTimeout(rafraichirVue, 250);
+}
 function rafraichirVue() {
   refreshApiStatus();
   if (currentView === "reglages") return;   // ne pas écraser une saisie en cours
@@ -1631,7 +1673,7 @@ function openProject(id) {
     save(); openProject(id);
   });
   d.querySelector("#btn-del-project").addEventListener("click", () => {
-    if (productionActive() && (p.productions || []).some(pr => pr.id === run.prodId)) {
+    if ((productionActive() && (p.productions || []).some(pr => pr.id === run.prodId)) || projetOccupeAilleurs(p)) {
       toast("Une production de ce projet est en cours : interrompez-la d'abord.");
       return;
     }
@@ -1979,10 +2021,13 @@ document.getElementById("import-file").addEventListener("change", e => {
       const s = JSON.parse(r.result);
       if (!s || !Array.isArray(s.projects)) throw new Error("format invalide");
       if (productionActive() || verrouAutreOnglet()) throw new Error("une production est en cours, interrompez-la d'abord");
-      const cle = state.settings.apiKey;
+      const ancien = state;
       state = normaliser(s);
-      state.settings.apiKey = cle;   // on garde la clé de ce navigateur, jamais celle du fichier
-      save();
+      state.settings.apiKey = ancien.settings.apiKey;   // on garde la clé de ce navigateur, jamais celle du fichier
+      if (!save()) {
+        state = ancien;
+        throw new Error("stockage du navigateur plein, rien n'a été modifié");
+      }
       toast("Sauvegarde importée ✅");
       showView("dash");
       refreshApiStatus();
@@ -1994,8 +2039,8 @@ document.getElementById("import-file").addEventListener("change", e => {
 document.getElementById("btn-wipe").addEventListener("click", () => {
   if (productionActive() || verrouAutreOnglet()) { toast("Une production est en cours : interrompez-la d'abord."); return; }
   if (!confirm("Effacer TOUTES les données du studio (projets, tâches, réglages) ?")) return;
-  localStorage.removeItem(STORE_KEY);
   state = defaultState();
+  save();
   showView("dash");
   refreshApiStatus();
   toast("Studio réinitialisé.");
@@ -2066,7 +2111,7 @@ function pause(ms, signal) {
 async function lireFlux(res, onProgres) {
   const lecteur = res.body.getReader();
   const dec = new TextDecoder();
-  const r = { texte: "", stop: null, erreur: null, entree: 0, sortie: 0 };
+  const r = { texte: "", caracteres: 0, stop: null, erreur: null, entree: 0, sortie: 0 };
   let tampon = "";
   const traiter = ev => {
     switch (ev.type) {
@@ -2083,6 +2128,7 @@ async function lireFlux(res, onProgres) {
       case "content_block_delta":
         if (ev.delta && ev.delta.type === "text_delta") {
           r.texte += ev.delta.text;
+          r.caracteres += ev.delta.text.length;   // compte aussi le texte abandonné lors d'un basculement
           if (onProgres) onProgres(r.texte.length);
         }
         break;
@@ -2110,14 +2156,17 @@ async function lireFlux(res, onProgres) {
       }
     }
   } catch (e) {
-    e.partiel = r;
-    throw e;
+    // l'erreur d'annulation est le même objet pour tous les flux d'un signal : on en crée une par flux
+    const err = new Error((e && e.message) || "flux interrompu");
+    err.name = (e && e.name) || "Error";
+    err.partiel = r;
+    throw err;
   }
   return r;
 }
 
 /* estimation des jetons de sortie d'un flux coupé avant son bilan */
-const jetonsEstimes = texte => Math.ceil(texte.length / 3.5);
+const jetonsEstimes = caracteres => Math.ceil(caracteres / 3.5);
 
 /* un appel complet, avec nouvelles tentatives sur les erreurs passagères */
 async function appelClaude({ model, apiKey, system, user, schema, signal, onProgres, compter }) {
@@ -2160,12 +2209,12 @@ async function appelClaude({ model, apiKey, system, user, schema, signal, onProg
     try {
       r = await lireFlux(res, onProgres);
     } catch (e) {
-      if (e.partiel) compter(e.partiel.entree, e.partiel.sortie || jetonsEstimes(e.partiel.texte));
-      if (signal && signal.aborted) throw e;
+      if (e.partiel) compter(e.partiel.entree, e.partiel.sortie || jetonsEstimes(e.partiel.caracteres));
+      if (signal && signal.aborted) throw new DOMException("Interrompu", "AbortError");
       derniere = new Error("flux interrompu");
       continue;
     }
-    compter(r.entree, r.sortie || jetonsEstimes(r.texte));
+    compter(r.entree, r.sortie || jetonsEstimes(r.caracteres));
     if (r.erreur) { derniere = new Error(r.erreur.message || r.erreur.type); continue; }
     if (r.stop === "refusal") throw new Error("demande déclinée par le modèle");
     if (r.stop === "max_tokens") throw new Error("réponse trop longue (limite de jetons atteinte)");
@@ -2219,8 +2268,8 @@ function revisionsDemandees(prod) {
   const out = {};
   if (!prod.coordination) return out;
   for (const r of prod.coordination.revisions || []) {
-    if (!prod.contributions[r.agent]) continue;
-    out[r.agent] = out[r.agent] ? `${out[r.agent]}\n${r.consignes}` : r.consignes;
+    if (!aCle(prod.contributions, r.agent)) continue;
+    out[r.agent] = aCle(out, r.agent) ? `${out[r.agent]}\n${r.consignes}` : r.consignes;
   }
   return out;
 }
@@ -2250,6 +2299,18 @@ function aFaire(prod, cle, fait) {
 
 class ArretEtape extends Error {}
 
+/* exclusivité stricte entre onglets (navigator.locks, libéré automatiquement si l'onglet se ferme) */
+function prendreVerrouExclusif() {
+  if (!navigator.locks || !navigator.locks.request) return Promise.resolve({ ok: true, liberer: () => {} });
+  return new Promise(resolve => {
+    navigator.locks.request("atelier-roblox-production", { ifAvailable: true }, verrou => {
+      if (!verrou) { resolve({ ok: false }); return undefined; }
+      return new Promise(liberer => resolve({ ok: true, liberer }));
+    }).catch(() => resolve({ ok: true, liberer: () => {} }));
+  });
+}
+window.addEventListener("pagehide", () => { if (run && run.actif) leverVerrou(); });
+
 async function lancerProduction(prodId) {
   const trouve = trouverProduction(prodId);
   if (!trouve) return;
@@ -2257,25 +2318,42 @@ async function lancerProduction(prodId) {
   if (verrouAutreOnglet()) { toast("Une production tourne déjà dans un autre onglet : attendez qu'elle se termine."); return; }
   if (!state.settings.apiKey) { toast("Ajoutez d'abord votre clé API dans les Réglages."); return; }
   const { projet, prod } = trouve;
+  const nonSauveAvant = !!(run && run.nonSauve);
   // le modèle et la clé sont figés pour toute la durée de cette exécution
   run = {
     prodId, actif: true, ctrl: new AbortController(), statuts: {}, progres: {}, journal: [],
-    model: state.settings.model, apiKey: state.settings.apiKey, nonSauve: false, battement: null,
+    model: state.settings.model, apiKey: state.settings.apiKey, nonSauve: nonSauveAvant,
+    battement: null, libererVerrou: null,
   };
   const signal = run.ctrl.signal;
+  const exclusif = await prendreVerrouExclusif();
+  if (!exclusif.ok) {
+    run.actif = false;
+    toast("Une production tourne déjà dans un autre onglet : attendez qu'elle se termine.");
+    return;
+  }
+  run.libererVerrou = exclusif.liberer;
+  poserVerrou(prodId);
+  // on ne remet à zéro erreur et échecs que si l'état peut être enregistré
+  const avant = { statut: prod.statut, echecs: prod.echecs, erreur: prod.erreur };
   if (!prod.modele) prod.modele = run.model;
   prod.statut = "en_cours";
   prod.echecs = {};
   delete prod.erreur;
   if (!save()) {
-    prod.statut = "interrompu";
+    Object.assign(prod, { statut: avant.statut === "en_cours" ? "interrompu" : avant.statut, echecs: avant.echecs });
+    if (avant.erreur) prod.erreur = avant.erreur;
     run.actif = false;
-    toast("Stockage du navigateur plein : exportez puis supprimez d'anciennes productions avant de lancer.");
+    run.nonSauve = true;
+    run.libererVerrou();
+    leverVerrou();
+    toast("Stockage du navigateur plein : exportez cette production, puis supprimez d'anciennes productions.");
     rendreProduction();
     return;
   }
-  poserVerrou(prodId);
+  run.nonSauve = false;
   run.battement = setInterval(() => poserVerrou(prodId), 4000);
+  if (currentView === "production" && prodAffichee === prodId) rendreProduction();
   noter(`🚀 Production lancée avec ${nomModele(run.model)}`);
   const parallele = Math.max(1, Math.min(8, Number(state.settings.parallele) || 3));
   const A = id => agentById[id];
@@ -2289,7 +2367,7 @@ async function lancerProduction(prodId) {
     model: run.model, apiKey: run.apiKey,
     system: `${personaPrompt(a)}\n\n${REGLES_STUDIO}`,
     user: tache, schema, signal, compter,
-    onProgres: n => { run.progres[cle] = n; planifierProgres(); },
+    onProgres: n => { run.progres[cle] = n; battement(prodId); planifierProgres(); },
   });
 
   async function unite(cle, travail) {
@@ -2311,6 +2389,7 @@ async function lancerProduction(prodId) {
         run.ctrl.abort();
       }
     } finally {
+      battement(prodId);
       if (!save() && !run.nonSauve) {
         // plus rien ne peut être enregistré : on arrête de consommer l'API
         run.nonSauve = true;
@@ -2421,6 +2500,7 @@ async function lancerProduction(prodId) {
     run.actif = false;
     clearInterval(run.battement);
     leverVerrou();
+    if (run.libererVerrou) run.libererVerrou();
     if (!save() && !run.nonSauve) run.nonSauve = true;
     const titre = prod.vision.titre || projet.nom;
     logEvent(`🎬 Production « ${titre} » : ${libelleStatut(prod.statut).toLowerCase()} (<b>${projet.nom}</b>)`);
@@ -2486,21 +2566,22 @@ let ongletProd = "salle";
 let renduPlanifie = null;
 let progresPlanifie = null;
 let livresAuDernierRendu = -1;
+let expirationVerrouPlanifiee = null;
 
-/* rendu complet (changement d'état d'un agent) : au plus toutes les 1,2 s */
+/* changement d'état d'un agent : pendant une production, la page n'est pas
+   reconstruite (les boutons restent cliquables), seuls les indicateurs bougent */
 function planifierRendu() {
   if (renduPlanifie) return;
   renduPlanifie = setTimeout(() => {
     renduPlanifie = null;
     if (currentView !== "production") return;
     const t = prodAffichee && trouverProduction(prodAffichee);
-    // la bible n'est reconstruite que lorsqu'un nouveau livrable est arrivé
-    if (t && ongletProd === "bible" && run && run.actif) {
-      const livres = unitesProduction(t.prod).filter(u => u.etat === "fini").length;
-      if (livres === livresAuDernierRendu) { majEntete(t.prod); return; }
-    }
-    rendreProduction();
-  }, 1200);
+    const affichee = document.querySelector(`#prod-wrap [data-prod-id]`);
+    const surPlace = t && run && run.actif && run.prodId === t.prod.id && affichee && affichee.dataset.prodId === t.prod.id;
+    if (!surPlace) { rendreProduction(); return; }
+    if (ongletProd === "salle") majSalleSurPlace(t.prod);
+    else majBibleSurPlace(t.prod);
+  }, 1000);
 }
 /* progression du texte en streaming : on ne touche qu'aux étiquettes des tuiles */
 function planifierProgres() {
@@ -2523,8 +2604,8 @@ function ouvrirProduction(prodId, onglet) {
   showView("production");
 }
 
-function majEntete(prod) {
-  const unites = unitesProduction(prod);
+function majEntete(prod, unites) {
+  unites = unites || unitesProduction(prod);
   const finies = unites.filter(u => u.etat === "fini").length;
   const c = document.querySelector("#prod-compteur");
   if (c) c.textContent = `✅ ${finies}/${unites.length} étapes d'agents`;
@@ -2564,8 +2645,12 @@ function rendreProduction() {
   const echecs = unites.filter(u => u.etat === "echec").length;
   const cout = coutProduction(prod);
   const peutReprendre = !enCours && !ailleurs && statut !== "termine" && prod.source !== "claude-code";
+  clearTimeout(expirationVerrouPlanifiee);
+  if (ailleurs) expirationVerrouPlanifiee = setTimeout(() => { if (currentView === "production") rendreProduction(); },
+    Math.max(1000, FRAICHEUR_VERROU - ageVerrou() + 500));
 
   wrap.innerHTML = `
+    <span data-prod-id="${esc(prod.id)}" hidden></span>
     <button class="ghost-btn" id="btn-prod-retour">← ${esc(projet.nom)}</button>
     <div class="detail-head" style="margin-top:14px">
       <h1>🎬 ${esc(prod.vision.titre || "Production en préparation")}</h1>
@@ -2612,6 +2697,7 @@ function rendreProduction() {
     telecharger(`${slugProd(prod.vision.titre || projet.nom)}-production.json`, JSON.stringify(prod, null, 2), "application/json"));
   const del = wrap.querySelector("#btn-prod-del");
   if (del) del.addEventListener("click", () => {
+    if (verrouFrais(prod.id) || (run && run.actif && run.prodId === prod.id)) { toast("Cette production est en cours : interrompez-la d'abord."); return; }
     if (!confirm("Supprimer définitivement cette production ?")) return;
     projet.productions = projet.productions.filter(x => x.id !== prod.id);
     save();
@@ -2631,59 +2717,108 @@ function classeStatut(s) {
   return { termine: "termine", en_cours: "actif" }[s] || "pause";
 }
 
-function rendreSalle(el, prod, unites) {
-  const parEtape = id => unites.filter(u => u.etape === id);
-  const etatEtape = id => {
-    const us = parEtape(id);
-    if (!us.length) return id === "revisions" && prod.coordination ? "fini" : "attente";
-    if (us.some(u => u.etat === "travail")) return "travail";
-    if (us.some(u => u.etat === "echec")) return "echec";
-    if (us.every(u => u.etat === "fini" || u.etat === "ignore")) return "fini";
-    return us.some(u => u.etat === "fini") ? "partiel" : "attente";
-  };
-  const icone = { attente: "⏳", travail: "🔨", fini: "✅", echec: "⚠️", ignore: "⏭️", partiel: "◐" };
-  // état agrégé par agent : au travail > échec > fini > ignoré > en attente
-  const etatAgent = {};
+const ICONES_ETAT = { attente: "⏳", travail: "🔨", fini: "✅", echec: "⚠️", ignore: "⏭️", partiel: "◐" };
+
+function etatEtape(prod, unites, id) {
+  const us = unites.filter(u => u.etape === id);
+  if (!us.length) {
+    if (id !== "revisions") return "attente";
+    return prod.coordination ? "fini" : prod.ignores["coord:a03"] ? "ignore" : "attente";
+  }
+  if (us.some(u => u.etat === "travail")) return "travail";
+  if (us.some(u => u.etat === "echec")) return "echec";
+  if (us.every(u => u.etat === "fini" || u.etat === "ignore")) return "fini";
+  return us.some(u => u.etat === "fini") ? "partiel" : "attente";
+}
+/* état agrégé par agent : au travail > échec > fini > ignoré > en attente */
+function etatsAgents(unites) {
   const rang = { travail: 4, echec: 3, fini: 2, ignore: 1, attente: 0 };
+  const out = {};
   for (const u of unites) {
     const id = u.cle.split(":")[1];
-    if (etatAgent[id] === undefined || rang[u.etat] > rang[etatAgent[id]]) etatAgent[id] = u.etat;
+    if (out[id] === undefined || rang[u.etat] > rang[out[id]]) out[id] = u.etat;
   }
+  return out;
+}
+function libelleTuile(prod, id, st) {
   const vivant = run && run.prodId === prod.id ? run : null;
+  const cle = vivant ? Object.keys(vivant.statuts).find(k => k.endsWith(":" + id) && vivant.statuts[k] === "travail") : null;
+  const car = cle ? vivant.progres[cle] || 0 : 0;
+  return `${ICONES_ETAT[st]}${st === "travail" && car ? ` ${Math.round(car / 100) / 10}k` : ""}`;
+}
+function htmlTimeline(prod, unites) {
+  return ETAPES_PROD.map(e => {
+    const st = etatEtape(prod, unites, e.id);
+    const us = unites.filter(u => u.etape === e.id);
+    return `<div class="tl-step ${st}">
+      <div class="tl-emoji">${e.emoji}</div>
+      <div class="tl-nom">${e.nom}</div>
+      <div class="tl-etat">${ICONES_ETAT[st]} ${us.filter(u => u.etat === "fini").length}/${us.length || "—"}</div>
+    </div>`;
+  }).join("");
+}
+function htmlEchecs(prod) {
+  const e = Object.entries(prod.echecs || {});
+  return e.length ? `<div class="echecs"><b>Échecs :</b> ${e.map(([k, m]) =>
+    `${esc(k)}${prod.ignores[k] ? " (ignoré)" : ""} : ${esc(m)}`).join(" · ")}</div>` : "";
+}
+function htmlJournal(prod) {
+  const vivant = run && run.prodId === prod.id ? run : null;
+  return vivant && vivant.journal.length
+    ? vivant.journal.slice(0, 30).map(j => `<div class="log-item">${esc(j.msg)} <span class="log-time">· ${timeAgo(j.t)}</span></div>`).join("")
+    : `<p class="muted">${prod.statut === "prete" ? "Cliquez sur « 🚀 Lancer » pour mettre le studio au travail." : "Le journal détaillé s'affiche pendant l'exécution."}</p>`;
+}
 
+function rendreSalle(el, prod, unites) {
+  const etatAgent = etatsAgents(unites);
   el.innerHTML = `
-    <div class="timeline">${ETAPES_PROD.map(e => {
-      const st = etatEtape(e.id);
-      const us = parEtape(e.id);
-      return `<div class="tl-step ${st}">
-        <div class="tl-emoji">${e.emoji}</div>
-        <div class="tl-nom">${e.nom}</div>
-        <div class="tl-etat">${icone[st]} ${us.filter(u => u.etat === "fini").length}/${us.length || "—"}</div>
-      </div>`;
-    }).join("")}</div>
+    <div class="timeline" id="salle-timeline">${htmlTimeline(prod, unites)}</div>
     <div class="salle">${DEPTS.map(d => `
       <div class="salle-dept">
         <div class="salle-dept-nom" style="color:${d.color}">${d.emoji} ${d.nom}</div>
         <div class="salle-agents">${AGENTS.filter(a => a.dept === d.id).map(a => {
           const st = etatAgent[a.id] || "attente";
-          const cleVive = vivant ? Object.keys(vivant.statuts).find(k => k.endsWith(":" + a.id) && vivant.statuts[k] === "travail") : null;
-          const car = cleVive ? vivant.progres[cleVive] || 0 : 0;
           return `<div class="tuile ${st}" data-aid="${a.id}" title="${esc(a.nom)} — ${esc(a.role)}">
             <span class="tuile-emoji">${a.emoji}</span>
             <span class="tuile-nom">${esc(a.nom.split(" ")[0])}</span>
-            <span class="tuile-etat">${icone[st]}${st === "travail" && car ? ` ${Math.round(car / 100) / 10}k` : ""}</span>
+            <span class="tuile-etat">${libelleTuile(prod, a.id, st)}</span>
           </div>`;
         }).join("")}</div>
       </div>`).join("")}
     </div>
-    ${Object.keys(prod.echecs || {}).length ? `<div class="echecs"><b>Échecs :</b> ${Object.entries(prod.echecs).map(([k, m]) =>
-      `${esc(k)}${prod.ignores[k] ? " (ignoré)" : ""} : ${esc(m)}`).join(" · ")}</div>` : ""}
+    <div id="salle-echecs">${htmlEchecs(prod)}</div>
     <h2>Journal</h2>
-    <div class="log-list">${vivant && vivant.journal.length
-      ? vivant.journal.slice(0, 30).map(j => `<div class="log-item">${esc(j.msg)} <span class="log-time">· ${timeAgo(j.t)}</span></div>`).join("")
-      : `<p class="muted">${prod.statut === "prete" ? "Cliquez sur « 🚀 Lancer » pour mettre le studio au travail." : "Le journal détaillé s'affiche pendant l'exécution."}</p>`}
-    </div>`;
+    <div class="log-list" id="salle-journal">${htmlJournal(prod)}</div>`;
   el.querySelectorAll(".tuile").forEach(t => t.addEventListener("click", () => ouvrirLivrables(prod, t.dataset.aid)));
+}
+/* mise à jour sans recréer boutons ni tuiles (les clics en cours ne sont jamais perdus) */
+function majSalleSurPlace(prod) {
+  const unites = unitesProduction(prod);
+  majEntete(prod, unites);
+  const tl = document.getElementById("salle-timeline");
+  if (tl) tl.innerHTML = htmlTimeline(prod, unites);
+  const etatAgent = etatsAgents(unites);
+  document.querySelectorAll("#prod-contenu .tuile[data-aid]").forEach(t => {
+    const st = etatAgent[t.dataset.aid] || "attente";
+    t.className = `tuile ${st}`;
+    const lib = t.querySelector(".tuile-etat");
+    if (lib) lib.textContent = libelleTuile(prod, t.dataset.aid, st);
+  });
+  const ech = document.getElementById("salle-echecs");
+  if (ech) ech.innerHTML = htmlEchecs(prod);
+  const jr = document.getElementById("salle-journal");
+  if (jr) jr.innerHTML = htmlJournal(prod);
+}
+/* onglet Bible pendant une production : on signale les nouveaux livrables sans tout recharger */
+function majBibleSurPlace(prod) {
+  const unites = unitesProduction(prod);
+  majEntete(prod, unites);
+  const nouveaux = unites.filter(u => u.etat === "fini").length - livresAuDernierRendu;
+  const zone = document.getElementById("bible-maj");
+  if (!zone || nouveaux <= 0) return;
+  zone.innerHTML = `<div class="import-bar">🆕 ${nouveaux} nouveau${nouveaux > 1 ? "x" : ""} livrable${nouveaux > 1 ? "s" : ""} depuis l'affichage
+    <button class="ghost-btn" id="btn-bible-maj">🔄 Afficher</button></div>`;
+  zone.querySelector("#btn-bible-maj").addEventListener("click", rendreProduction);
 }
 
 /* ------- ce qu'un agent a produit dans cette production ------- */
@@ -2756,7 +2891,7 @@ function sectionsBible(prod) {
   }
   if (prod.plan) {
     const lignes = (prod.plan.taches || []).map(t =>
-      `| ${cellule(PHASES[t.phase] || t.phase)} | ${cellule(t.titre)} | ${cellule((t.agents || []).map(x => agentById[x] ? agentById[x].nom.split(" ")[0] : x).join(", "))} |`);
+      `| ${cellule(PHASES[t.phase] || t.phase)} | ${cellule(t.titre)} | ${cellule((t.agents || []).map(x => estAgentId(x) ? agentById[x].nom.split(" ")[0] : x).join(", "))} |`);
     s.push({ id: "plan", titre: "📋 Plan de production", md: (prod.plan.plan || "") +
       (lignes.length ? `\n\n## Tâches\n\n| Phase | Tâche | Agents |\n|---|---|---|\n${lignes.join("\n")}` : "") });
   }
@@ -2771,9 +2906,12 @@ function rendreBible(el, projet, prod) {
     return;
   }
   const nbTaches = prod.plan ? (prod.plan.taches || []).length : 0;
+  const ailleurs = verrouFrais(prod.id) && !(run && run.actif && run.prodId === prod.id);
   el.innerHTML = `
+    <div id="bible-maj"></div>
     ${nbTaches ? `<div class="import-bar">📋 Le plan contient ${nbTaches} tâches assignées aux agents.
       ${prod.tachesImportees ? `<span class="muted">✅ déjà ajoutées au tableau du projet</span>`
+        : ailleurs ? `<span class="muted">🔒 disponible quand la production sera terminée dans l'autre onglet</span>`
         : `<button class="primary-btn" id="btn-import-taches">➕ Ajouter au tableau de « ${esc(projet.nom)} »</button>`}</div>` : ""}
     <div class="bible">
       <nav class="bible-toc">${sections.map(s => `<a href="#" data-sec="${s.id}">${esc(s.titre)}</a>`).join("")}</nav>
@@ -2792,11 +2930,11 @@ function rendreBible(el, projet, prod) {
   if (imp) imp.addEventListener("click", () => importerTaches(projet, prod));
 }
 function importerTaches(projet, prod) {
-  if (prod.tachesImportees) return;
+  if (prod.tachesImportees || (verrouFrais(prod.id) && !(run && run.actif && run.prodId === prod.id))) return;
   for (const t of prod.plan.taches || []) {
     projet.tasks.push({
       id: uid(), titre: t.titre, statut: "todo",
-      agents: (t.agents || []).filter(x => agentById[x]),
+      agents: (t.agents || []).filter(estAgentId),
       note: `Phase : ${PHASES[t.phase] || t.phase}${t.note ? " — " + t.note : ""}`,
       created: Date.now(),
     });

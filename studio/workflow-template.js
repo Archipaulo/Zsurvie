@@ -36,19 +36,30 @@ const prompt = (a, tache, liv) => `${personaPrompt(a)}\n\n${REGLES_STUDIO}\n\n${
 phase("Vision")
 /* un dossier neuf par lancement : jamais de mélange avec une production précédente */
 const BASE = `studio/productions/${slugProd(NOM)}`
-let RACINE = typeof entree.dossier === "string" && entree.dossier.startsWith("studio/productions/") ? entree.dossier : null
-if (!RACINE) {
+const FORME_DOSSIER = new RegExp(`^${BASE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(-\\d+)?$`)
+let RACINE = null
+if (typeof entree.dossier === "string") {
+  if (!/^studio\/productions\/[a-z0-9-]+$/.test(entree.dossier)) throw new Error(`Dossier invalide : ${entree.dossier} (attendu : studio/productions/<nom>)`)
+  RACINE = entree.dossier
+} else {
   const reserve = await agent(
-    `N'utilise pas l'outil Bash. Avec l'outil Glob, cherche les fichiers correspondant au motif \`${BASE}*/**/*\`, puis renvoie le premier dossier sans aucun fichier parmi : ${BASE}, ${BASE}-2, ${BASE}-3, ${BASE}-4… Ne crée rien.`,
+    `N'utilise pas l'outil Bash et ne crée rien. Trouve le premier dossier libre dans cette suite : ${BASE}, ${BASE}-2, ${BASE}-3, ${BASE}-4, ${BASE}-5…
+Pour chaque candidat, dans l'ordre, fais un appel séparé à l'outil Glob avec le motif « <candidat>/**/* » (par exemple ${BASE}-2/**/*) : si l'appel ne renvoie aucun fichier, ce candidat est libre, arrête-toi et renvoie-le. Ne te fie jamais à un seul Glob pour plusieurs dossiers : ses résultats sont tronqués à 100 fichiers.`,
     { label: "📁 Réservation du dossier", phase: "Vision", effort: "low",
-      schema: objet({ dossier: { type: "string", description: "Le premier dossier libre, par exemple studio/productions/mon-jeu-2" } }) })
-  const d = reserve && String(reserve.dossier || "").trim().replace(/\/+$/, "")
-  RACINE = d && d.startsWith(BASE) && !d.includes("..") ? d : BASE
+      schema: objet({ dossier: { type: "string", description: `Le premier dossier libre, de la forme ${BASE} ou ${BASE}-<n>` } }) })
+  const brut = reserve && String(reserve.dossier || "")
+  const d = brut && brut.replace(/[`'"]/g, "").trim().replace(/^.*?(studio\/productions\/)/, "$1").replace(/^\.\//, "").replace(/\/+$/, "")
+  if (!d || !FORME_DOSSIER.test(d)) {
+    throw new Error(`Réservation du dossier impossible (réponse : ${brut || "aucune"}). Relancez en précisant args.dossier, par exemple { dossier: "${BASE}-2" }.`)
+  }
+  RACINE = d
 }
 const echecs = []
 log(`Brief reçu pour « ${NOM} ». Livrables dans ${RACINE}/`)
 const bench = par(ROLES_PROD.benchmark), da = par(ROLES_PROD.da), directeur = par(ROLES_PROD.canon)
-const [okBench, okDa] = await parallel([
+const [okBrief, okBench, okDa] = await parallel([
+  () => agent(`N'utilise pas l'outil Bash. Avec l'outil Write, écris dans \`${RACINE}/brief.md\` exactement le texte suivant, caractère pour caractère, sans rien ajouter ni reformuler (il est entre les deux lignes de tirets) :\n-----\n${BRIEF}\n-----\nPuis réponds « livré ».`,
+    { label: "📝 Archivage du brief", phase: "Vision", effort: "low" }),
   () => agent(prompt(bench, TACHES.benchmark(BRIEF), livraison(CHEMINS_SPECIAUX.benchmark)),
     { label: etiquette(bench), phase: "Vision" }),
   () => agent(prompt(da, TACHES.da(BRIEF), livraison(CHEMINS_SPECIAUX.da)),
@@ -123,10 +134,10 @@ const arbitrages = coordination
 phase("Révisions")
 const aReviser = {}
 for (const r of (coordination ? coordination.revisions : [])) {
-  if (!contributions[r.agent]) continue
-  aReviser[r.agent] = aReviser[r.agent] ? `${aReviser[r.agent]}\n${r.consignes}` : r.consignes
+  if (!aCle(contributions, r.agent)) continue
+  aReviser[r.agent] = aCle(aReviser, r.agent) ? `${aReviser[r.agent]}\n${r.consignes}` : r.consignes
 }
-const ignorees = coordination ? coordination.revisions.filter(r => !contributions[r.agent]).length : 0
+const ignorees = coordination ? coordination.revisions.filter(r => !aCle(contributions, r.agent)).length : 0
 log(`${Object.keys(aReviser).length} agents révisent leur livrable` + (ignorees ? ` (${ignorees} demandes ignorées : agent inconnu ou sans livrable)` : ""))
 await parallel(Object.entries(aReviser).map(([id, consignes]) => () => {
   const a = par(id)
