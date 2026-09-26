@@ -41,12 +41,16 @@ const lireInfos = (texte, origine) => {
   }
   return null;
 };
-if (process.argv.includes("--infos-stdin")) infos = lireInfos(fs.readFileSync(0, "utf8"), "entrée standard") || {};
-let origineInfos = Object.keys(infos).length ? "entrée standard" : null;
-if (!Object.keys(infos).length && fs.existsSync(path.join(racine, "infos.json"))) {
-  infos = lireInfos(fs.readFileSync(path.join(racine, "infos.json"), "utf8"), "infos.json") || {};
-  if (Object.keys(infos).length) origineInfos = "infos.json";
-}
+/* la liste des échecs n'est connue que si une source finale la fournit (le infos.json écrit
+   en début de workflow est provisoire : il ne contient que le brief) */
+const finale = v => !!v && Array.isArray(v.echecs) && v.provisoire !== true;
+const depuisStdin = process.argv.includes("--infos-stdin") ? lireInfos(fs.readFileSync(0, "utf8"), "entrée standard") : null;
+const depuisFichier = fs.existsSync(path.join(racine, "infos.json"))
+  ? lireInfos(fs.readFileSync(path.join(racine, "infos.json"), "utf8"), "infos.json") : null;
+const sourceEchecs = finale(depuisStdin) ? depuisStdin : finale(depuisFichier) ? depuisFichier : null;
+const sourceBrief = [depuisStdin, depuisFichier].find(v => v && typeof v.brief === "string" && v.brief);
+infos = { brief: sourceBrief ? sourceBrief.brief : "", echecs: sourceEchecs ? sourceEchecs.echecs : [] };
+const origineInfos = sourceEchecs ? (sourceEchecs === depuisStdin ? "entrée standard" : "infos.json") : null;
 
 const lib = n => fs.readFileSync(path.join(__dirname, n), "utf8");
 const S = new Function(lib("agents.js") + "\n" + lib("production.js") + `

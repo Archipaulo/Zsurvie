@@ -431,7 +431,8 @@ async function lancerProduction(prodId) {
     if (!save() && !run.nonSauve) run.nonSauve = true;
     const titre = prod.vision.titre || projet.nom;
     logEvent(`🎬 Production « ${titre} » : ${libelleStatut(prod.statut).toLowerCase()} (<b>${projet.nom}</b>)`);
-    rendreProduction();
+    // la vue affichée (production, fiche projet, tableau de bord…) reflète le statut final
+    if (currentView === "production") rendreProduction(); else rafraichirVue();
   }
 }
 

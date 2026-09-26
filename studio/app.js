@@ -66,14 +66,14 @@ function normaliserProjet(p, i = 0) {
     statut: STATUTS_PROJET.includes(p.statut) ? p.statut : "actif",
     phases: PHASES.map((_, i) => !!liste(p.phases)[i]),
     tasks: liste(p.tasks).filter(objetSimple).map((t, j) => ({
-      id: idOu(t.id, `${pid}-t${j}`),
+      id: idOu(t.id, `r-p${i}-t${j}`),
       titre: texte(t.titre, "Tâche"),
       statut: STATUTS_TACHE.includes(t.statut) ? t.statut : "todo",
       agents: liste(t.agents).filter(estAgentId),
       note: texte(t.note),
       created: Number(t.created) || 0,
     })),
-    productions: liste(p.productions).map((pr, k) => normaliserProduction(pr, `${pid}-r${k}`)).filter(Boolean),
+    productions: liste(p.productions).map((pr, k) => normaliserProduction(pr, `r-p${i}-r${k}`)).filter(Boolean),
     created: Number(p.created) || 0,
   };
 }
@@ -193,8 +193,6 @@ function load() {
   } catch (e) { return defaultState(); }
 }
 let state = load();
-// identifiants réparés : on les enregistre tout de suite pour que tous les onglets les partagent
-if (idsRegeneres) { idsRegeneres = false; save(); }
 
 function productionActive() {
   return typeof run !== "undefined" && run && run.actif;
@@ -825,4 +823,9 @@ document.querySelectorAll(".overlay").forEach(o =>
 
 refreshApiStatus();
 showView("dash");
+// identifiants réparés au chargement : enregistrés pour que tous les onglets partagent les mêmes
+if (idsRegeneres) {
+  idsRegeneres = false;
+  try { save(); } catch (e) { /* le démarrage ne dépend jamais de cet enregistrement */ }
+}
 if (!state.log.length) logEvent("Le studio <b>Atelier Roblox</b> est ouvert : 50 agents prêts à travailler 🏗️");

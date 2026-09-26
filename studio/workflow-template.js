@@ -76,7 +76,7 @@ ${BRIEF}
 -----
 2. écris dans \`${RACINE}/infos.json\` exactement le texte suivant (entre les deux lignes de tirets) :
 -----
-${JSON.stringify({ brief: BRIEF, echecs: [] })}
+${JSON.stringify({ brief: BRIEF, provisoire: true })}
 -----
 Puis réponds « livré ».`,
     { label: "📝 Archivage du brief", phase: "Vision", effort: "low" }),
@@ -85,7 +85,11 @@ Puis réponds « livré ».`,
   () => agent(prompt(da, TACHES.da(BRIEF), livraison(CHEMINS_SPECIAUX.da)),
     { label: etiquette(da), phase: "Vision" }),
 ])
-if (!okBrief) log("brief.md n'a pas pu être écrit : la commande d'assemblage transmet de toute façon le brief exact.")
+if (!okBrief) {
+  // dans un dossier réutilisé, un ancien infos.json pourrait survivre et mélanger deux productions
+  if (entree.ecraser === true) throw new Error(`Le brief n'a pas pu être archivé dans ${RACINE}, dossier réutilisé : production arrêtée pour ne pas mélanger deux productions.`)
+  log("brief.md n'a pas pu être écrit : la commande d'assemblage transmet de toute façon le brief exact.")
+}
 if (!okBench) echecs.push("vision:a05")
 if (!okDa) echecs.push("vision:a04")
 const lire = chemin => `(lis en entier le fichier \`${RACINE}/${chemin}.md\` ; s'il n'existe pas, fais sans)`
