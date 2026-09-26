@@ -773,6 +773,7 @@ document.getElementById("import-file").addEventListener("change", e => {
       const s = JSON.parse(r.result);
       if (!s || !Array.isArray(s.projects)) throw new Error("format invalide");
       if (productionActive() || verrouAutreOnglet()) throw new Error("une production est en cours, interrompez-la d'abord");
+      if (typeof run !== "undefined" && run && run.nonSauve) throw new Error("une production n'est pas enregistrée : exportez-la d'abord");
       const ancien = state;
       state = normaliser(s);
       state.settings.apiKey = ancien.settings.apiKey;   // on garde la clé de ce navigateur, jamais celle du fichier

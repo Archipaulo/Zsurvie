@@ -230,6 +230,12 @@ function aFaire(prod, cle, fait) {
 
 class ArretEtape extends Error {}
 
+/* cette production est-elle tenue par un autre onglet ? (le verrou de cet onglet ne compte pas) */
+function tenueAilleurs(prodId) {
+  const v = verrouAutreOnglet();
+  return !!v && v.prodId === prodId;
+}
+
 /* fin de l'exclusivité : battement arrêté, verrous levés */
 function liberer() {
   if (!run) return;
@@ -240,7 +246,15 @@ function liberer() {
 }
 
 /* exclusivité stricte entre onglets (navigator.locks, libéré automatiquement si l'onglet se ferme) */
-function prendreVerrouExclusif() {
+async function prendreVerrouExclusif() {
+  for (let essai = 0; essai < 4; essai++) {
+    const r = await tenterVerrouExclusif();
+    if (r.ok) return r;
+    await new Promise(ok => setTimeout(ok, 120));
+  }
+  return { ok: false };
+}
+function tenterVerrouExclusif() {
   if (!navigator.locks || !navigator.locks.request) return Promise.resolve({ ok: true, liberer: () => {} });
   return new Promise(resolve => {
     navigator.locks.request("atelier-roblox-production", { ifAvailable: true }, verrou => {
@@ -263,22 +277,26 @@ async function lancerProduction(prodId) {
     toast(`La production « ${(autre && autre.prod.vision.titre) || "précédente"} » n'est pas enregistrée : exportez-la ou libérez de la place d'abord.`);
     return;
   }
-  const nonSauveAvant = !!(run && run.nonSauve);
-  if (nonSauveAvant) liberer();   // même production : on relâche l'ancien verrou avant de le reprendre
+  const ancien = run;
+  const nonSauveAvant = !!(ancien && ancien.nonSauve);
+  // même production non enregistrée : on garde le verrou qu'on tient déjà
+  const verrouTenu = nonSauveAvant && ancien.prodId === prodId ? { battement: ancien.battement, libererVerrou: ancien.libererVerrou } : null;
   // le modèle et la clé sont figés pour toute la durée de cette exécution
   run = {
     prodId, actif: true, ctrl: new AbortController(), statuts: {}, progres: {}, journal: [],
     model: state.settings.model, apiKey: state.settings.apiKey, nonSauve: nonSauveAvant,
-    battement: null, libererVerrou: null,
+    battement: verrouTenu ? verrouTenu.battement : null, libererVerrou: verrouTenu ? verrouTenu.libererVerrou : null,
   };
   const signal = run.ctrl.signal;
-  const exclusif = await prendreVerrouExclusif();
-  if (!exclusif.ok) {
-    run.actif = false;
-    toast("Une production tourne déjà dans un autre onglet : attendez qu'elle se termine.");
-    return;
+  if (!verrouTenu) {
+    const exclusif = await prendreVerrouExclusif();
+    if (!exclusif.ok) {
+      run.actif = false;
+      toast("Une production tourne déjà dans un autre onglet : attendez qu'elle se termine.");
+      return;
+    }
+    run.libererVerrou = exclusif.liberer;
   }
-  run.libererVerrou = exclusif.liberer;
   poserVerrou(prodId);
   // on ne remet à zéro erreur et échecs que si l'état peut être enregistré
   const avant = { statut: prod.statut, echecs: prod.echecs, erreur: prod.erreur };
@@ -292,14 +310,14 @@ async function lancerProduction(prodId) {
     run.actif = false;
     // des résultats de la tentative précédente restent-ils en mémoire seulement ? on les protège
     run.nonSauve = nonSauveAvant;
-    if (nonSauveAvant) run.battement = setInterval(() => poserVerrou(prodId), 4000);
+    if (nonSauveAvant) { if (!run.battement) run.battement = setInterval(() => poserVerrou(prodId), 4000); }
     else liberer();
     toast("Stockage du navigateur plein : exportez cette production, puis supprimez d'anciennes productions.");
     rendreProduction();
     return;
   }
   run.nonSauve = false;
-  run.battement = setInterval(() => poserVerrou(prodId), 4000);
+  if (!run.battement) run.battement = setInterval(() => poserVerrou(prodId), 4000);
   if (currentView === "production" && prodAffichee === prodId) rendreProduction();
   noter(`🚀 Production lancée avec ${nomModele(run.model)}`);
   const parallele = Math.max(1, Math.min(8, Number(state.settings.parallele) || 3));
@@ -593,7 +611,7 @@ function rendreProduction() {
   }
   const { projet, prod } = trouve;
   const enCours = !!(run && run.actif && run.prodId === prod.id);
-  const ailleurs = !enCours && verrouFrais(prod.id);
+  const ailleurs = !enCours && tenueAilleurs(prod.id);
   const statut = statutAffiche(prod);
   const unites = unitesProduction(prod);
   const finies = unites.filter(u => u.etat === "fini").length;
@@ -656,8 +674,11 @@ function rendreProduction() {
     telecharger(`${slugProd(prod.vision.titre || projet.nom)}-production.json`, JSON.stringify(prod, null, 2), "application/json"));
   const del = wrap.querySelector("#btn-prod-del");
   if (del) del.addEventListener("click", () => {
-    if (verrouFrais(prod.id) || (run && run.actif && run.prodId === prod.id)) { toast("Cette production est en cours : interrompez-la d'abord."); return; }
-    if (!confirm("Supprimer définitivement cette production ?")) return;
+    if (tenueAilleurs(prod.id) || (run && run.actif && run.prodId === prod.id)) { toast("Cette production est en cours : interrompez-la d'abord."); return; }
+    const nonEnregistree = !!(run && run.nonSauve && run.prodId === prod.id);
+    if (!confirm(nonEnregistree
+      ? "Cette production n'est pas enregistrée dans le navigateur. Si vous l'avez exportée, la supprimer libère de la place ; sinon ses résultats seront perdus. Supprimer ?"
+      : "Supprimer définitivement cette production ?")) return;
     projet.productions = projet.productions.filter(x => x.id !== prod.id);
     save();
     openProject(projet.id);
@@ -867,7 +888,7 @@ function rendreBible(el, projet, prod) {
     return;
   }
   const nbTaches = prod.plan ? (prod.plan.taches || []).length : 0;
-  const ailleurs = verrouFrais(prod.id) && !(run && run.actif && run.prodId === prod.id);
+  const ailleurs = tenueAilleurs(prod.id);
   el.innerHTML = `
     <div id="bible-maj"></div>
     ${nbTaches ? `<div class="import-bar">📋 Le plan contient ${nbTaches} tâches assignées aux agents.
@@ -891,7 +912,7 @@ function rendreBible(el, projet, prod) {
   if (imp) imp.addEventListener("click", () => importerTaches(projet, prod));
 }
 function importerTaches(projet, prod) {
-  if (prod.tachesImportees || (verrouFrais(prod.id) && !(run && run.actif && run.prodId === prod.id))) return;
+  if (prod.tachesImportees || tenueAilleurs(prod.id)) return;
   for (const t of prod.plan.taches || []) {
     projet.tasks.push({
       id: uid(), titre: t.titre, statut: "todo",

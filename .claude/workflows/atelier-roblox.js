@@ -726,6 +726,15 @@ Pour chaque candidat, dans l'ordre, fais un appel séparé à l'outil Glob avec 
     throw new Error(`${RACINE} contient déjà ${controle.fichiers} fichier(s) : une production s'écrit toujours dans un dossier vide. Relancez sans args.dossier, ou avec un dossier vide.`)
   }
 }
+/* réservation exclusive : Write refuse de remplacer un fichier que l'agent n'a pas lu,
+   donc un seul lancement peut créer le marqueur (deux lancements simultanés du même nom) */
+const marqueur = await agent(
+  `N'utilise pas l'outil Bash et surtout ne lis PAS le fichier avant. Avec l'outil Write, crée le fichier \`${RACINE}/.reservation\` contenant exactement : ${JSON.stringify(NOM)}
+Si l'outil Write échoue (par exemple parce que le fichier existe déjà), n'insiste pas et réponds cree = false ; s'il réussit, réponds cree = true.`,
+  { label: "🔐 Réservation exclusive", phase: "Vision", effort: "low", schema: objet({ cree: { type: "boolean" } }) })
+if (!marqueur || marqueur.cree !== true) {
+  throw new Error(`${RACINE} vient d'être pris par un autre lancement : relancez, un nouveau dossier sera réservé.`)
+}
 const echecs = []
 log(`Brief reçu pour « ${NOM} ». Livrables dans ${RACINE}/`)
 const bench = par(ROLES_PROD.benchmark), da = par(ROLES_PROD.da), directeur = par(ROLES_PROD.canon)
