@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atelier Roblox — Studio de 50 agents IA</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<aside id="sidebar">
+  <div class="logo">
+    <span class="logo-emoji">🏗️</span>
+    <div>
+      <div class="logo-title">Atelier Roblox</div>
+      <div class="logo-sub">Studio de 50 agents IA</div>
+    </div>
+  </div>
+  <nav id="nav">
+    <button class="nav-btn active" data-view="dash">📊 Tableau de bord</button>
+    <button class="nav-btn" data-view="projets">🗂️ Projets</button>
+    <button class="nav-btn" data-view="equipe">👥 Équipe (50)</button>
+    <button class="nav-btn" data-view="reglages">⚙️ Réglages</button>
+  </nav>
+  <div id="sidebar-foot">
+    <div id="api-status" class="api-status off">🔌 IA non connectée</div>
+    <button id="btn-new-project" class="primary-btn">＋ Nouveau projet</button>
+  </div>
+</aside>
+
+<main id="main">
+  <!-- ===== Tableau de bord ===== -->
+  <section id="view-dash" class="view">
+    <h1>📊 Tableau de bord</h1>
+    <div id="kpis" class="kpi-row"></div>
+    <div class="dash-cols">
+      <div>
+        <h2>Projets en cours</h2>
+        <div id="dash-projects" class="card-list"></div>
+      </div>
+      <div>
+        <h2>Activité récente</h2>
+        <div id="dash-log" class="log-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Projets ===== -->
+  <section id="view-projets" class="view hidden">
+    <div id="projets-list-wrap">
+      <h1>🗂️ Projets</h1>
+      <div id="projects-grid" class="projects-grid"></div>
+    </div>
+    <div id="projet-detail" class="hidden"></div>
+  </section>
+
+  <!-- ===== Équipe ===== -->
+  <section id="view-equipe" class="view hidden">
+    <h1>👥 L'équipe du studio</h1>
+    <p class="muted">50 experts répartis en 10 départements. Cliquez sur un agent pour voir sa fiche,
+    lui assigner du travail ou le consulter.</p>
+    <div id="team-wrap"></div>
+  </section>
+
+  <!-- ===== Réglages ===== -->
+  <section id="view-reglages" class="view hidden">
+    <h1>⚙️ Réglages</h1>
+    <div class="settings-card">
+      <h2>🤖 Consultation IA (optionnel)</h2>
+      <p class="muted">Avec une clé API Anthropic, chaque agent devient réellement consultable dans
+      l'application. Sans clé, le bouton « Copier le prompt » reste disponible pour interroger
+      l'agent dans n'importe quel chat IA. La clé est stockée uniquement dans ce navigateur.</p>
+      <label>Clé API Anthropic
+        <input type="password" id="set-apikey" placeholder="sk-ant-...">
+      </label>
+      <label>Modèle
+        <select id="set-model">
+          <option value="claude-opus-5">Claude Opus 5 (recommandé)</option>
+          <option value="claude-sonnet-5">Claude Sonnet 5 (plus rapide)</option>
+          <option value="claude-haiku-4-5">Claude Haiku 4.5 (économique)</option>
+        </select>
+      </label>
+      <button id="btn-save-settings" class="primary-btn">💾 Enregistrer</button>
+    </div>
+    <div class="settings-card">
+      <h2>📦 Données</h2>
+      <p class="muted">Tout est sauvegardé automatiquement dans ce navigateur (localStorage).</p>
+      <div class="btn-row">
+        <button id="btn-export" class="ghost-btn">⬇️ Exporter (JSON)</button>
+        <button id="btn-import" class="ghost-btn">⬆️ Importer</button>
+        <button id="btn-wipe" class="danger-btn">🗑️ Tout effacer</button>
+      </div>
+      <input type="file" id="import-file" accept=".json" class="hidden">
+    </div>
+  </section>
+</main>
+
+<!-- ===== Modale : nouveau projet ===== -->
+<div id="modal-project" class="overlay hidden">
+  <div class="modal">
+    <h2 id="modal-project-title">＋ Nouveau projet de map</h2>
+    <label>Nom du projet
+      <input type="text" id="p-nom" placeholder="Ex. : Île du Volcan Perdu" maxlength="60">
+    </label>
+    <label>Type de map
+      <select id="p-type"></select>
+    </label>
+    <label>Description / intention
+      <textarea id="p-desc" rows="3" placeholder="L'idée en quelques phrases : ambiance, mécanique phare, public visé…"></textarea>
+    </label>
+    <div class="btn-row right">
+      <button class="ghost-btn modal-close">Annuler</button>
+      <button id="btn-project-save" class="primary-btn">Créer le projet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modale : nouvelle tâche ===== -->
+<div id="modal-task" class="overlay hidden">
+  <div class="modal">
+    <h2>＋ Nouvelle tâche</h2>
+    <label>Titre de la tâche
+      <input type="text" id="t-titre" placeholder="Ex. : Sculpter la montagne centrale" maxlength="90">
+    </label>
+    <label>Département
+      <select id="t-dept"></select>
+    </label>
+    <label>Agents assignés
+      <div id="t-agents" class="agent-picker"></div>
+    </label>
+    <label>Note (optionnel)
+      <textarea id="t-note" rows="2" placeholder="Détails, contraintes, références…"></textarea>
+    </label>
+    <div class="btn-row right">
+      <button class="ghost-btn modal-close">Annuler</button>
+      <button id="btn-task-save" class="primary-btn">Ajouter la tâche</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modale : fiche agent + consultation ===== -->
+<div id="modal-agent" class="overlay hidden">
+  <div class="modal modal-agent">
+    <div id="agent-head"></div>
+    <div id="agent-body"></div>
+    <div id="agent-chat" class="hidden">
+      <div id="chat-messages"></div>
+      <div class="chat-input-row">
+        <textarea id="chat-input" rows="2" placeholder="Posez votre question à cet expert…"></textarea>
+        <button id="btn-chat-send" class="primary-btn">Envoyer</button>
+      </div>
+    </div>
+    <div class="btn-row right">
+      <button class="ghost-btn modal-close">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="hidden"></div>
+
+<script src="agents.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
