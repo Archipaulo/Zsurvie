@@ -388,7 +388,7 @@ local arrivee = instantane("joueurs arrivés")
 controle("bases attribuées", A:GetAttribute("Base") and B:GetAttribute("Base") and A:GetAttribute("Base") ~= B:GetAttribute("Base"),
 	tostring(A:GetAttribute("Base")) .. " / " .. tostring(B:GetAttribute("Base")))
 controle("données chargées", A:GetAttribute("DonneesChargees") == true and B:GetAttribute("DonneesChargees") == true, "")
-controle("argent de départ", A:GetAttribute("Argent") == E.argentDepart, tostring(A:GetAttribute("Argent")))
+controle("argent de départ (+ bonus de connexion)", (A:GetAttribute("Argent") or 0) >= E.argentDepart, tostring(A:GetAttribute("Argent")))
 controle("batte dans le sac", A.Backpack:FindFirstChild("Batte") ~= nil or A.Character:FindFirstChild("Batte") ~= nil, "")
 local bA, bB = baseModele(A), baseModele(B)
 controle("apparition dans sa base", bA and bA:FindFirstChild("Apparition") and (A.Character:GetPivot().Position - bA.Apparition.Position).Magnitude < 12,

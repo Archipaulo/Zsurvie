@@ -1,0 +1,212 @@
+-- Interface/Mobile : boutons tactiles (frapper, collecter) en bas à droite, au-dessus du bouton de saut.
+-- Rien n'est créé sur ordinateur ou console sans écran tactile.
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local M = {}
+
+-- tailles de référence (avant UIScale), toujours >= 64 px à l'écran
+local TAILLE_FRAPPER = 104
+local TAILLE_COLLECTER = 76
+local ECART = 14
+local ECHELLE_MIN = 0.9
+local ECHELLE_MAX = 1.45
+local ANTI_REBOND_FRAPPER = 0.25
+local ANTI_REBOND_COLLECTER = 0.5
+
+local function arrondir(inst)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0.5, 0)
+	c.Parent = inst
+end
+
+local function contour(inst, couleur, epaisseur)
+	local s = Instance.new("UIStroke")
+	s.Color = couleur
+	s.Thickness = epaisseur
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.Parent = inst
+	return s
+end
+
+function M.demarrer(ctx)
+	local ok, tactile = pcall(function() return UserInputService.TouchEnabled end)
+	if not ok or not tactile then return end
+
+	local Charte = ctx.Charte
+	local Outils = ctx.Outils
+	local Bus = ctx.Bus
+	local Reseau = ctx.Reseau
+	local joueur = ctx.joueur
+
+	-- conteneur ancré en bas à droite : l'UIScale le grossit autour de son coin
+	local largeur = TAILLE_FRAPPER + ECART + TAILLE_COLLECTER
+	local hauteur = TAILLE_FRAPPER
+	local zone = Instance.new("Frame")
+	zone.Name = "Mobile"
+	zone.AnchorPoint = Vector2.new(1, 1)
+	zone.Size = UDim2.fromOffset(largeur, hauteur)
+	zone.BackgroundTransparency = 1
+	zone.Parent = ctx.gui
+	local echelle = Instance.new("UIScale")
+	echelle.Parent = zone
+
+	local function fabriquerBouton(nom, taille, couleur, symbole, legende, position, rappel)
+		local b = Outils.bouton(zone, {
+			Name = nom,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = position,
+			Size = UDim2.fromOffset(taille, taille),
+			BackgroundColor3 = couleur,
+			BackgroundTransparency = 0.1,
+			Text = "",
+			AutoButtonColor = false,
+		}, nil)
+		arrondir(b)
+		contour(b, Charte.ombre(couleur), 4)
+		Outils.etiquette(b, {
+			Name = "Symbole",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.42),
+			Size = UDim2.fromScale(0.58, 0.58),
+			Text = symbole,
+			TextColor3 = Charte.creme,
+		})
+		local texte = Outils.etiquette(b, {
+			Name = "Legende",
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -6),
+			Size = UDim2.fromScale(0.8, 0.2),
+			Text = legende,
+			TextColor3 = Charte.creme,
+		})
+		contour(texte, Charte.encre, 1.5)
+
+		-- petit rebond au toucher
+		local origine = b.Size
+		local enfonce = UDim2.fromOffset(math.floor(taille * 0.9), math.floor(taille * 0.9))
+		local infos = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		b.InputBegan:Connect(function(entree)
+			if entree.UserInputType == Enum.UserInputType.Touch or entree.UserInputType == Enum.UserInputType.MouseButton1 then
+				pcall(function() TweenService:Create(b, infos, { Size = enfonce }):Play() end)
+			end
+		end)
+		b.InputEnded:Connect(function(entree)
+			if entree.UserInputType == Enum.UserInputType.Touch or entree.UserInputType == Enum.UserInputType.MouseButton1 then
+				pcall(function() TweenService:Create(b, infos, { Size = origine }):Play() end)
+			end
+		end)
+		b.Activated:Connect(function()
+			local okRappel = pcall(rappel)
+			if not okRappel then
+				pcall(function() b.Size = origine end)
+			end
+		end)
+		return b
+	end
+
+	-- gros bouton rond de frappe, dans le coin
+	local dernierCoup = 0
+	local boutonFrapper = fabriquerBouton("Frapper", TAILLE_FRAPPER, Charte.lave, "🏏", "Frapper",
+		UDim2.new(1, -TAILLE_FRAPPER / 2, 1, -TAILLE_FRAPPER / 2),
+		function()
+			local maintenant = os.clock()
+			if maintenant - dernierCoup < ANTI_REBOND_FRAPPER then return end
+			dernierCoup = maintenant
+			Bus.emettre("Frapper")
+		end)
+
+	-- bouton de collecte, à gauche du bouton de frappe (loin du joystick)
+	local derniereCollecte = 0
+	local boutonCollecter = fabriquerBouton("Collecter", TAILLE_COLLECTER, Charte.dore, "💰", "Collecter",
+		UDim2.new(1, -(TAILLE_FRAPPER + ECART + TAILLE_COLLECTER / 2), 1, -TAILLE_COLLECTER / 2),
+		function()
+			local maintenant = os.clock()
+			if maintenant - derniereCollecte < ANTI_REBOND_COLLECTER then return end
+			derniereCollecte = maintenant
+			Bus.emettre("Son", "clic")
+			if Reseau and Reseau.Collecter then
+				Reseau.Collecter:FireServer()
+			end
+		end)
+	local legendeCollecte = boutonCollecter:FindFirstChild("Legende")
+	if legendeCollecte then
+		legendeCollecte.TextColor3 = Charte.encre
+		local bord = legendeCollecte:FindFirstChildOfClass("UIStroke")
+		if bord then bord.Color = Charte.creme end
+	end
+
+	-- adaptation à la taille de l'écran : échelle et place au-dessus du bouton de saut
+	local function adapter()
+		local camera = workspace.CurrentCamera
+		if not camera then return end
+		local vue = camera.ViewportSize
+		local cote = math.min(vue.X, vue.Y)
+		if cote <= 0 then return end
+		local e = math.clamp(cote / 420, ECHELLE_MIN, ECHELLE_MAX)
+		echelle.Scale = e
+		-- le bouton de saut Roblox occupe ~95 x 90 px sur petit écran, ~180 x 160 px sinon
+		local margeDroite = 16
+		local margeBas = 104
+		if cote > 500 then
+			margeDroite = 28
+			margeBas = 176
+		end
+		zone.Position = UDim2.new(1, -margeDroite, 1, -margeBas)
+	end
+
+	local connexionVue
+	local function suivreCamera()
+		if connexionVue then
+			connexionVue:Disconnect()
+			connexionVue = nil
+		end
+		local camera = workspace.CurrentCamera
+		if camera then
+			connexionVue = camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+				pcall(adapter)
+			end)
+		end
+		pcall(adapter)
+	end
+	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(suivreCamera)
+	suivreCamera()
+
+	-- état visuel : frappe grisée quand étourdi, collecte grisée sans Base
+	local function rafraichir()
+		local etourdi = joueur:GetAttribute("Etourdi") == true
+		if etourdi then
+			boutonFrapper.BackgroundColor3 = Charte.pierre
+		else
+			boutonFrapper.BackgroundColor3 = Charte.lave
+		end
+		local base = tonumber(joueur:GetAttribute("Base"))
+		if base and base > 0 then
+			boutonCollecter.BackgroundColor3 = Charte.dore
+			boutonCollecter.BackgroundTransparency = 0.1
+		else
+			boutonCollecter.BackgroundColor3 = Charte.pierre
+			boutonCollecter.BackgroundTransparency = 0.35
+		end
+	end
+	joueur:GetAttributeChangedSignal("Etourdi"):Connect(function() pcall(rafraichir) end)
+	joueur:GetAttributeChangedSignal("Base"):Connect(function() pcall(rafraichir) end)
+	pcall(rafraichir)
+
+	-- boutons cachés quand le personnage n'est pas là (mort, réapparition)
+	local function surPersonnage(perso)
+		zone.Visible = true
+		local humanoid = perso:FindFirstChildOfClass("Humanoid") or perso:WaitForChild("Humanoid", 10)
+		if humanoid then
+			humanoid.Died:Connect(function()
+				zone.Visible = false
+			end)
+		end
+	end
+	joueur.CharacterAdded:Connect(function(perso) pcall(surPersonnage, perso) end)
+	if joueur.Character then
+		task.spawn(function() pcall(surPersonnage, joueur.Character) end)
+	end
+end
+
+return M
