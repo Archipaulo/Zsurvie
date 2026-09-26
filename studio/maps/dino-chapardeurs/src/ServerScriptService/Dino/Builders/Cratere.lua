@@ -413,7 +413,8 @@ function M.construire(ctx)
 		compteur = compteur + 2
 		local plaque = bloc(panneau, {
 			Name = "Plaque",
-			Size = Vector3.new(7, 0.9, 0.3),
+			-- plus épaisse que le poteau (0,6) : sinon il traverse la plaque et masque le milieu du texte
+			Size = Vector3.new(7, 0.9, 0.8),
 			CFrame = CFrame.new(posPanneau.X, 3.45, posPanneau.Z),
 			Color = Charte.encre,
 			CanCollide = false,

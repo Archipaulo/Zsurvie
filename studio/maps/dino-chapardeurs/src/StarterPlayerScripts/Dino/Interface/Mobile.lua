@@ -145,12 +145,12 @@ function M.demarrer(ctx)
 		if cote <= 0 then return end
 		local e = math.clamp(cote / 420, ECHELLE_MIN, ECHELLE_MAX)
 		echelle.Scale = e
-		-- le bouton de saut Roblox occupe ~95 x 90 px sur petit écran, ~180 x 160 px sinon
+		-- le bouton de saut Roblox monte à 90 px du bas sur petit écran, à 210 px sinon (120 px posé à 1,75 x sa taille)
 		local margeDroite = 16
 		local margeBas = 104
 		if cote > 500 then
 			margeDroite = 28
-			margeBas = 176
+			margeBas = 222
 		end
 		zone.Position = UDim2.new(1, -margeDroite, 1, -margeBas)
 	end

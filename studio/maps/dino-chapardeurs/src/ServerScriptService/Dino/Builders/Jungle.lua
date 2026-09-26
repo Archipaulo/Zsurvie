@@ -122,7 +122,13 @@ function M.construire(ctx)
 	local interdits = {}
 	if Plan.coffre then
 		local c = Plan.coffre
-		table.insert(interdits, { x0 = c.X - 16, x1 = c.X + 16, z0 = c.Z - 12, z1 = c.Z + 24 })
+		-- le sentier part de la plateforme vers le centre du monde (en z) sur ~48 studs, panneau compris
+		local versCentre = 1
+		if c.Z > 0 then
+			versCentre = -1
+		end
+		local zA, zB = c.Z - versCentre * 12, c.Z + versCentre * 56
+		table.insert(interdits, { x0 = c.X - 16, x1 = c.X + 16, z0 = math.min(zA, zB), z1 = math.max(zA, zB) })
 	end
 
 	-- chemins libres (rien ne pousse dessus au sol)

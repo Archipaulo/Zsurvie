@@ -77,15 +77,17 @@ function M.demarrer(ctx)
 	end
 
 	-- ===== lecture des dinos d'un joueur =====
-	-- Enclos ou EnRoute ; un dino porté par un voleur appartient encore à sa victime.
-	local function releverDinos(uid)
+	-- Enclos ou EnRoute ; un dino porté par un voleur appartient encore à sa victime,
+	-- sauf au départ de la victime (avecPortes faux) : Vol laisse alors le voleur le livrer,
+	-- le garder dans la sauvegarde le dupliquerait.
+	local function releverDinos(uid, avecPortes)
 		local liste = {}
 		local ok = pcall(function()
 			for _, dino in ipairs(ctx.dinos:GetChildren()) do
 				if #liste >= maxDinos then break end
 				if dino:IsA("Model") and dino:GetAttribute("Proprietaire") == uid then
 					local etat = dino:GetAttribute("Etat")
-					if etat == "Enclos" or etat == "EnRoute" or etat == "Porte" then
+					if etat == "Enclos" or etat == "EnRoute" or (etat == "Porte" and avecPortes) then
 						local espece = dino:GetAttribute("Espece")
 						local mutation = dino:GetAttribute("Mutation")
 						if type(espece) == "string" and E.especes[espece] then
@@ -108,7 +110,7 @@ function M.demarrer(ctx)
 		if typeof(joueur) ~= "Instance" or not joueur:IsA("Player") then return end
 		local uid = joueur.UserId
 		if charges[uid] then
-			local liste = releverDinos(uid)
+			local liste = releverDinos(uid, false)
 			if liste then captures[uid] = liste end
 		end
 	end)
@@ -269,6 +271,17 @@ function M.demarrer(ctx)
 		charges[uid] = nil
 		captures[uid] = nil
 
+		-- retour rapide sur le même serveur : on attend la fin de la sauvegarde de départ
+		-- (sinon on relirait l'ancienne fiche, et la fin du départ effacerait charges[uid])
+		local debutAttente = os.clock()
+		while sauvegardes[uid] and os.clock() - debutAttente < ATTENTE_FERMETURE do
+			task.wait(0.2)
+		end
+		if joueur.Parent ~= Players then
+			traites[joueur] = nil
+			return
+		end
+
 		local ok, donnees = lire(uid)
 		if joueur.Parent ~= Players then
 			traites[joueur] = nil
@@ -310,7 +323,7 @@ function M.demarrer(ctx)
 		-- relevé immédiat (avant que la Base soit vidée), sinon la capture faite à BaseLiberee
 		local liste = captures[uid]
 		if not liste then
-			liste = releverDinos(uid)
+			liste = releverDinos(uid, false)
 		end
 		if not liste then liste = {} end
 		sauvegarder(joueur, liste)
@@ -334,7 +347,7 @@ function M.demarrer(ctx)
 				if fermeture then break end
 				local uid = joueur.UserId
 				if joueur.Parent == Players and charges[uid] and not sauvegardes[uid] then
-					local dinos = releverDinos(uid)
+					local dinos = releverDinos(uid, true)
 					if dinos then
 						sauvegarder(joueur, dinos)
 					end
@@ -352,7 +365,7 @@ function M.demarrer(ctx)
 		for _, joueur in ipairs(Players:GetPlayers()) do
 			local uid = joueur.UserId
 			if charges[uid] and not sauvegardes[uid] then
-				local dinos = captures[uid] or releverDinos(uid) or {}
+				local dinos = captures[uid] or releverDinos(uid, true) or {}
 				task.spawn(function()
 					sauvegarder(joueur, dinos)
 					charges[uid] = nil

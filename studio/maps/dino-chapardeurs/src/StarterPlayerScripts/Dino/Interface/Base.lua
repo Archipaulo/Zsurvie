@@ -223,7 +223,7 @@ function M.demarrer(ctx)
 	local barre = Outils.cadre(ctx.gui, {
 		Name = "BarreVerrou",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 86),
+		Position = UDim2.new(0.5, 0, 0, 144), -- sous l'argent (10..88) et le bandeau d'événement du HUD (96..136)
 		Size = UDim2.fromOffset(300, 46),
 		BackgroundColor3 = Charte.encre,
 		BackgroundTransparency = 0.15,

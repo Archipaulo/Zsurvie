@@ -326,7 +326,7 @@ function M.demarrer(ctx)
 	local pile = Instance.new("Frame")
 	pile.Name = "Toasts"
 	pile.AnchorPoint = Vector2.new(0.5, 0)
-	pile.Position = UDim2.new(0.5, 0, 0, 146)
+	pile.Position = UDim2.new(0.5, 0, 0, 270) -- sous la barre de verrou (144..190) et le bandeau de vol (198..262)
 	pile.Size = UDim2.new(0, 420, 0, TOASTS_MAX * 50)
 	pile.BackgroundTransparency = 1
 	pile.Parent = ecran

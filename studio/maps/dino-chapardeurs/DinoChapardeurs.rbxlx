@@ -1269,11 +1269,12 @@ function M.construire(ctx)
 		modele.PrimaryPart = sol
 		local zAvant = -demiP + longueurSol -- bord avant du sol (début de la rampe)
 
-		-- la rampe descend vers le Tapis (le côté haut d'un coin est vers -Z local)
+		-- la rampe descend vers le Tapis : le côté haut d'un coin est vers +Z local (face Back),
+		-- on le retourne d'un demi-tour pour que le haut touche le sol de la base et la pente regarde le Tapis
 		part(Outils.coin, modele, {
 			Name = "Rampe",
 			Size = Vector3.new(LARGEUR_ENTREE, H, demiP - zAvant),
-			CFrame = ici(0, H / 2, (zAvant + demiP) / 2),
+			CFrame = ici(0, H / 2, (zAvant + demiP) / 2, CFrame.Angles(0, math.pi, 0)),
 			Color = couleurSol,
 		})
 		local largeurJardin = demiL - LARGEUR_ENTREE / 2
@@ -2922,7 +2923,8 @@ function M.construire(ctx)
 		compteur = compteur + 2
 		local plaque = bloc(panneau, {
 			Name = "Plaque",
-			Size = Vector3.new(7, 0.9, 0.3),
+			-- plus épaisse que le poteau (0,6) : sinon il traverse la plaque et masque le milieu du texte
+			Size = Vector3.new(7, 0.9, 0.8),
 			CFrame = CFrame.new(posPanneau.X, 3.45, posPanneau.Z),
 			Color = Charte.encre,
 			CanCollide = false,
@@ -5653,7 +5655,13 @@ function M.construire(ctx)
 	local interdits = {}
 	if Plan.coffre then
 		local c = Plan.coffre
-		table.insert(interdits, { x0 = c.X - 16, x1 = c.X + 16, z0 = c.Z - 12, z1 = c.Z + 24 })
+		-- le sentier part de la plateforme vers le centre du monde (en z) sur ~48 studs, panneau compris
+		local versCentre = 1
+		if c.Z > 0 then
+			versCentre = -1
+		end
+		local zA, zB = c.Z - versCentre * 12, c.Z + versCentre * 56
+		table.insert(interdits, { x0 = c.X - 16, x1 = c.X + 16, z0 = math.min(zA, zB), z1 = math.max(zA, zB) })
 	end
 
 	-- chemins libres (rien ne pousse dessus au sol)
@@ -8245,7 +8253,7 @@ local DEFAUTS = {
 	largeurFleche = 9,      -- largeur d'une planche indicatrice
 	reculBoutPlace = 17,    -- distance des panneaux Boutique / Renaissance au centre (sur l'axe est-ouest)
 	decalageAllee = 3.5,    -- décalage vers le sud pour laisser les allées libres
-	tapisX = 4.5,           -- panneau vers le Tapis : décalage est
+	tapisX = 6.5,           -- panneau vers le Tapis : décalage est (hors de la margelle de la fontaine, rayon 5,45)
 	tapisRecul = 17.5,      -- ... et distance au nord du centre
 	dinodexX = -4.5,        -- panneau vers le Dinodex : décalage ouest
 	dinodexRecul = 8.5,     -- ... et distance au sud du centre
@@ -11453,7 +11461,7 @@ function M.demarrer(ctx)
 			notifier(joueur, "Tu possèdes déjà : " .. libelle, "info")
 			return
 		end
-		if joueur:GetAttribute("DonneesChargees") == false then
+		if joueur:GetAttribute("DonneesChargees") ~= true then
 			notifier(joueur, "Tes données se chargent encore, réessaie dans un instant.", "alerte")
 			return
 		end
@@ -12010,15 +12018,17 @@ function M.demarrer(ctx)
 	end
 
 	-- ===== lecture des dinos d'un joueur =====
-	-- Enclos ou EnRoute ; un dino porté par un voleur appartient encore à sa victime.
-	local function releverDinos(uid)
+	-- Enclos ou EnRoute ; un dino porté par un voleur appartient encore à sa victime,
+	-- sauf au départ de la victime (avecPortes faux) : Vol laisse alors le voleur le livrer,
+	-- le garder dans la sauvegarde le dupliquerait.
+	local function releverDinos(uid, avecPortes)
 		local liste = {}
 		local ok = pcall(function()
 			for _, dino in ipairs(ctx.dinos:GetChildren()) do
 				if #liste >= maxDinos then break end
 				if dino:IsA("Model") and dino:GetAttribute("Proprietaire") == uid then
 					local etat = dino:GetAttribute("Etat")
-					if etat == "Enclos" or etat == "EnRoute" or etat == "Porte" then
+					if etat == "Enclos" or etat == "EnRoute" or (etat == "Porte" and avecPortes) then
 						local espece = dino:GetAttribute("Espece")
 						local mutation = dino:GetAttribute("Mutation")
 						if type(espece) == "string" and E.especes[espece] then
@@ -12041,7 +12051,7 @@ function M.demarrer(ctx)
 		if typeof(joueur) ~= "Instance" or not joueur:IsA("Player") then return end
 		local uid = joueur.UserId
 		if charges[uid] then
-			local liste = releverDinos(uid)
+			local liste = releverDinos(uid, false)
 			if liste then captures[uid] = liste end
 		end
 	end)
@@ -12202,6 +12212,17 @@ function M.demarrer(ctx)
 		charges[uid] = nil
 		captures[uid] = nil
 
+		-- retour rapide sur le même serveur : on attend la fin de la sauvegarde de départ
+		-- (sinon on relirait l'ancienne fiche, et la fin du départ effacerait charges[uid])
+		local debutAttente = os.clock()
+		while sauvegardes[uid] and os.clock() - debutAttente < ATTENTE_FERMETURE do
+			task.wait(0.2)
+		end
+		if joueur.Parent ~= Players then
+			traites[joueur] = nil
+			return
+		end
+
 		local ok, donnees = lire(uid)
 		if joueur.Parent ~= Players then
 			traites[joueur] = nil
@@ -12243,7 +12264,7 @@ function M.demarrer(ctx)
 		-- relevé immédiat (avant que la Base soit vidée), sinon la capture faite à BaseLiberee
 		local liste = captures[uid]
 		if not liste then
-			liste = releverDinos(uid)
+			liste = releverDinos(uid, false)
 		end
 		if not liste then liste = {} end
 		sauvegarder(joueur, liste)
@@ -12267,7 +12288,7 @@ function M.demarrer(ctx)
 				if fermeture then break end
 				local uid = joueur.UserId
 				if joueur.Parent == Players and charges[uid] and not sauvegardes[uid] then
-					local dinos = releverDinos(uid)
+					local dinos = releverDinos(uid, true)
 					if dinos then
 						sauvegarder(joueur, dinos)
 					end
@@ -12285,7 +12306,7 @@ function M.demarrer(ctx)
 		for _, joueur in ipairs(Players:GetPlayers()) do
 			local uid = joueur.UserId
 			if charges[uid] and not sauvegardes[uid] then
-				local dinos = captures[uid] or releverDinos(uid) or {}
+				local dinos = captures[uid] or releverDinos(uid, true) or {}
 				task.spawn(function()
 					sauvegarder(joueur, dinos)
 					charges[uid] = nil
@@ -13879,13 +13900,17 @@ function M.demarrer(ctx)
 	end)
 
 	-- remise en cohérence du bonus dès que les données sont chargées
+	local connexions = {} -- [joueur] = connexion sur DonneesChargees
 	local function suivre(joueur)
+		if connexions[joueur] then
+			return
+		end
 		local function verifier()
 			if estJoueur(joueur) and joueur:GetAttribute("DonneesChargees") == true then
 				pcall(recalculerBonus, joueur)
 			end
 		end
-		joueur:GetAttributeChangedSignal("DonneesChargees"):Connect(verifier)
+		connexions[joueur] = joueur:GetAttributeChangedSignal("DonneesChargees"):Connect(verifier)
 		verifier()
 	end
 
@@ -13893,7 +13918,16 @@ function M.demarrer(ctx)
 		task.spawn(suivre, joueur)
 	end
 	Players.PlayerAdded:Connect(suivre)
-	-- aucun état par joueur n'est conservé ici : rien à nettoyer au départ (PlayerRemoving inutile)
+	-- le Player n'est pas détruit à son départ : on coupe la connexion pour ne pas le retenir en mémoire
+	Players.PlayerRemoving:Connect(function(joueur)
+		local c = connexions[joueur]
+		connexions[joueur] = nil
+		if c then
+			pcall(function()
+				c:Disconnect()
+			end)
+		end
+	end)
 end
 
 return M
@@ -15089,11 +15123,13 @@ function M.demarrer(ctx)
 	end
 
 	-- ===== joueurs =====
+	local connexions = {}         -- [joueur] = connexion CharacterAdded
 	local function surJoueur(joueur)
+		if connexions[joueur] then return end
 		if joueur:GetAttribute("Suspect") == nil then
 			pcall(function() joueur:SetAttribute("Suspect", false) end)
 		end
-		joueur.CharacterAdded:Connect(function()
+		connexions[joueur] = joueur.CharacterAdded:Connect(function()
 			-- nouveau personnage : on repart de zéro, le suivi sera recréé à la prochaine vérification
 			suivis[joueur] = nil
 		end)
@@ -15109,6 +15145,9 @@ function M.demarrer(ctx)
 		secondesTrop[joueur] = nil
 		suivis[joueur] = nil
 		derniersAvis[joueur] = nil
+		local c = connexions[joueur]
+		connexions[joueur] = nil
+		if c then pcall(function() c:Disconnect() end) end
 	end)
 
 	-- la Base attribuée replace le joueur : on oublie sa position de référence
@@ -15780,15 +15819,21 @@ function M.demarrer(ctx)
 
 		if vivant(dino) then
 			pcall(function() dino:SetAttribute("Voleur", 0) end)
-			if joueurPresent(v.victime) then
+			-- après une renaissance de la victime, sa Base a été vidée : le dino ne revient pas
+			if joueurPresent(v.victime) and not v.victimeRenee then
 				local place = Bus.demander("PlacerDino", dino, v.victime, v.ancienEmplacement)
 				if place ~= true and vivant(dino) then
-					-- pose impossible : on remet le dino sur son podium tel quel
-					local cf = Bus.demander("CFrameEmplacement", v.ancienneBase, v.ancienEmplacement)
-					if typeof(cf) == "CFrame" then
-						pcall(function() dino:PivotTo(cf) end)
+					if v.victimePartie then
+						-- la victime s'en va et sa Base est déjà libérée (dino déjà relevé pour la sauvegarde)
+						pcall(function() dino:Destroy() end)
+					else
+						-- pose impossible : on remet le dino sur son podium tel quel
+						local cf = Bus.demander("CFrameEmplacement", v.ancienneBase, v.ancienEmplacement)
+						if typeof(cf) == "CFrame" then
+							pcall(function() dino:PivotTo(cf) end)
+						end
+						pcall(function() dino:SetAttribute("Etat", "Enclos") end)
 					end
-					pcall(function() dino:SetAttribute("Etat", "Enclos") end)
 				end
 			else
 				pcall(function() dino:Destroy() end)
@@ -15802,10 +15847,12 @@ function M.demarrer(ctx)
 			notifier(v.voleur, "Assommé ! Le " .. v.nom .. " t'a échappé.", "alerte")
 		elseif raison == "delai" then
 			notifier(v.voleur, "Trop lent ! Le " .. v.nom .. " rentre chez lui.", "alerte")
+		elseif raison == "victime" then
+			notifier(v.voleur, "Son propriétaire est parti : le " .. v.nom .. " t'a échappé.", "alerte")
 		elseif raison ~= "depart" then
 			notifier(v.voleur, "Vol raté : le " .. v.nom .. " rentre chez lui.", "alerte")
 		end
-		if vivant(dino) then
+		if vivant(dino) and not v.victimePartie then
 			notifier(v.victime, "Ton " .. v.nom .. " est revenu dans ta base !", "succes")
 		end
 	end
@@ -15873,6 +15920,9 @@ function M.demarrer(ctx)
 		local rayon = 0
 		pcall(function() rayon = dino:GetExtentsSize().Magnitude / 2 end)
 		if (racine.Position - pos.Position).Magnitude > portee + MARGE_DISTANCE + rayon then return end
+		-- il faut être entré dans la Base de la victime : sinon, avec la marge, un gros dino se vole
+		-- depuis la Base voisine (12 studs d'allée) et la livraison est immédiate
+		if Bus.demander("DansBase", racine.Position, baseDino) ~= true then return end
 
 		if Bus.demander("AutoriserAction", voleur, "Vol", 0.5) == false then return end
 
@@ -16021,6 +16071,15 @@ function M.demarrer(ctx)
 		if v then echouer(v, "frappe") end
 	end)
 
+	-- renaissance de la victime : sa Base est vidée, un dino porté ne doit pas y revenir
+	Bus.ecouter("Renaissance", function(joueur)
+		for _, v in pairs(vols) do
+			if v.victime == joueur and not v.fini then
+				v.victimeRenee = true
+			end
+		end
+	end)
+
 	local function preparer(joueur)
 		pcall(function() joueur:SetAttribute("Porte", "") end)
 		if joueur:GetAttribute("Vols") == nil then
@@ -16038,9 +16097,13 @@ function M.demarrer(ctx)
 		for _, v in pairs(vols) do table.insert(liste, v) end
 		for _, v in ipairs(liste) do
 			if not v.fini then
-				-- si c'est la victime qui part, le voleur peut encore livrer le dino
 				if v.voleur == joueur then
 					pcall(echouer, v, "depart")
+				elseif v.victime == joueur then
+					-- la sauvegarde de la victime compte encore ce dino (porté = toujours à elle) :
+					-- le laisser livrer le dupliquerait, il repart donc avec sa victime
+					v.victimePartie = true
+					pcall(echouer, v, "victime")
 				end
 			end
 		end
@@ -16645,7 +16708,7 @@ function M.demarrer(ctx)
 	local barre = Outils.cadre(ctx.gui, {
 		Name = "BarreVerrou",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 86),
+		Position = UDim2.new(0.5, 0, 0, 144), -- sous l'argent (10..88) et le bandeau d'événement du HUD (96..136)
 		Size = UDim2.fromOffset(300, 46),
 		BackgroundColor3 = Charte.encre,
 		BackgroundTransparency = 0.15,
@@ -17132,7 +17195,8 @@ function M.demarrer(ctx)
 			contour.Parent = etoile
 			table.insert(liste, etoile)
 		end
-		bb.Parent = ctx.gui
+		-- dans PlayerGui : un BillboardGui n'est pas rendu à l'intérieur d'un ScreenGui
+		bb.Parent = ctx.gui.Parent
 		etoiles = bb
 		-- les étoiles tournent en ellipse autour de la tête
 		local debut = os.clock()
@@ -18965,7 +19029,7 @@ function M.demarrer(ctx)
 	local pile = Instance.new("Frame")
 	pile.Name = "Toasts"
 	pile.AnchorPoint = Vector2.new(0.5, 0)
-	pile.Position = UDim2.new(0.5, 0, 0, 146)
+	pile.Position = UDim2.new(0.5, 0, 0, 270) -- sous la barre de verrou (144..190) et le bandeau de vol (198..262)
 	pile.Size = UDim2.new(0, 420, 0, TOASTS_MAX * 50)
 	pile.BackgroundTransparency = 1
 	pile.Parent = ecran
@@ -19847,12 +19911,12 @@ function M.demarrer(ctx)
 		if cote <= 0 then return end
 		local e = math.clamp(cote / 420, ECHELLE_MIN, ECHELLE_MAX)
 		echelle.Scale = e
-		-- le bouton de saut Roblox occupe ~95 x 90 px sur petit écran, ~180 x 160 px sinon
+		-- le bouton de saut Roblox monte à 90 px du bas sur petit écran, à 210 px sinon (120 px posé à 1,75 x sa taille)
 		local margeDroite = 16
 		local margeBas = 104
 		if cote > 500 then
 			margeDroite = 28
-			margeBas = 176
+			margeBas = 222
 		end
 		zone.Position = UDim2.new(1, -margeDroite, 1, -margeBas)
 	end
@@ -21370,7 +21434,7 @@ function M.demarrer(ctx)
 	local bandeau = Outils.cadre(ecran, {
 		Name = "Bandeau",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 70),
+		Position = UDim2.new(0.5, 0, 0, 198), -- sous l'argent, le bandeau d'événement et la barre de verrou
 		Size = UDim2.new(0.5, 0, 0, 64),
 		BackgroundColor3 = ENCRE,
 		BackgroundTransparency = 0.1,

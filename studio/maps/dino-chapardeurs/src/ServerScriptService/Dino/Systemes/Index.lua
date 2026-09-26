@@ -183,13 +183,17 @@ function M.demarrer(ctx)
 	end)
 
 	-- remise en cohérence du bonus dès que les données sont chargées
+	local connexions = {} -- [joueur] = connexion sur DonneesChargees
 	local function suivre(joueur)
+		if connexions[joueur] then
+			return
+		end
 		local function verifier()
 			if estJoueur(joueur) and joueur:GetAttribute("DonneesChargees") == true then
 				pcall(recalculerBonus, joueur)
 			end
 		end
-		joueur:GetAttributeChangedSignal("DonneesChargees"):Connect(verifier)
+		connexions[joueur] = joueur:GetAttributeChangedSignal("DonneesChargees"):Connect(verifier)
 		verifier()
 	end
 
@@ -197,7 +201,16 @@ function M.demarrer(ctx)
 		task.spawn(suivre, joueur)
 	end
 	Players.PlayerAdded:Connect(suivre)
-	-- aucun état par joueur n'est conservé ici : rien à nettoyer au départ (PlayerRemoving inutile)
+	-- le Player n'est pas détruit à son départ : on coupe la connexion pour ne pas le retenir en mémoire
+	Players.PlayerRemoving:Connect(function(joueur)
+		local c = connexions[joueur]
+		connexions[joueur] = nil
+		if c then
+			pcall(function()
+				c:Disconnect()
+			end)
+		end
+	end)
 end
 
 return M

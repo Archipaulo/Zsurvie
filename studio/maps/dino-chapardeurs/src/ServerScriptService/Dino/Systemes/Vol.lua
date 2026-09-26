@@ -136,15 +136,21 @@ function M.demarrer(ctx)
 
 		if vivant(dino) then
 			pcall(function() dino:SetAttribute("Voleur", 0) end)
-			if joueurPresent(v.victime) then
+			-- après une renaissance de la victime, sa Base a été vidée : le dino ne revient pas
+			if joueurPresent(v.victime) and not v.victimeRenee then
 				local place = Bus.demander("PlacerDino", dino, v.victime, v.ancienEmplacement)
 				if place ~= true and vivant(dino) then
-					-- pose impossible : on remet le dino sur son podium tel quel
-					local cf = Bus.demander("CFrameEmplacement", v.ancienneBase, v.ancienEmplacement)
-					if typeof(cf) == "CFrame" then
-						pcall(function() dino:PivotTo(cf) end)
+					if v.victimePartie then
+						-- la victime s'en va et sa Base est déjà libérée (dino déjà relevé pour la sauvegarde)
+						pcall(function() dino:Destroy() end)
+					else
+						-- pose impossible : on remet le dino sur son podium tel quel
+						local cf = Bus.demander("CFrameEmplacement", v.ancienneBase, v.ancienEmplacement)
+						if typeof(cf) == "CFrame" then
+							pcall(function() dino:PivotTo(cf) end)
+						end
+						pcall(function() dino:SetAttribute("Etat", "Enclos") end)
 					end
-					pcall(function() dino:SetAttribute("Etat", "Enclos") end)
 				end
 			else
 				pcall(function() dino:Destroy() end)
@@ -158,10 +164,12 @@ function M.demarrer(ctx)
 			notifier(v.voleur, "Assommé ! Le " .. v.nom .. " t'a échappé.", "alerte")
 		elseif raison == "delai" then
 			notifier(v.voleur, "Trop lent ! Le " .. v.nom .. " rentre chez lui.", "alerte")
+		elseif raison == "victime" then
+			notifier(v.voleur, "Son propriétaire est parti : le " .. v.nom .. " t'a échappé.", "alerte")
 		elseif raison ~= "depart" then
 			notifier(v.voleur, "Vol raté : le " .. v.nom .. " rentre chez lui.", "alerte")
 		end
-		if vivant(dino) then
+		if vivant(dino) and not v.victimePartie then
 			notifier(v.victime, "Ton " .. v.nom .. " est revenu dans ta base !", "succes")
 		end
 	end
@@ -229,6 +237,9 @@ function M.demarrer(ctx)
 		local rayon = 0
 		pcall(function() rayon = dino:GetExtentsSize().Magnitude / 2 end)
 		if (racine.Position - pos.Position).Magnitude > portee + MARGE_DISTANCE + rayon then return end
+		-- il faut être entré dans la Base de la victime : sinon, avec la marge, un gros dino se vole
+		-- depuis la Base voisine (12 studs d'allée) et la livraison est immédiate
+		if Bus.demander("DansBase", racine.Position, baseDino) ~= true then return end
 
 		if Bus.demander("AutoriserAction", voleur, "Vol", 0.5) == false then return end
 
@@ -377,6 +388,15 @@ function M.demarrer(ctx)
 		if v then echouer(v, "frappe") end
 	end)
 
+	-- renaissance de la victime : sa Base est vidée, un dino porté ne doit pas y revenir
+	Bus.ecouter("Renaissance", function(joueur)
+		for _, v in pairs(vols) do
+			if v.victime == joueur and not v.fini then
+				v.victimeRenee = true
+			end
+		end
+	end)
+
 	local function preparer(joueur)
 		pcall(function() joueur:SetAttribute("Porte", "") end)
 		if joueur:GetAttribute("Vols") == nil then
@@ -394,9 +414,13 @@ function M.demarrer(ctx)
 		for _, v in pairs(vols) do table.insert(liste, v) end
 		for _, v in ipairs(liste) do
 			if not v.fini then
-				-- si c'est la victime qui part, le voleur peut encore livrer le dino
 				if v.voleur == joueur then
 					pcall(echouer, v, "depart")
+				elseif v.victime == joueur then
+					-- la sauvegarde de la victime compte encore ce dino (porté = toujours à elle) :
+					-- le laisser livrer le dupliquerait, il repart donc avec sa victime
+					v.victimePartie = true
+					pcall(echouer, v, "victime")
 				end
 			end
 		end

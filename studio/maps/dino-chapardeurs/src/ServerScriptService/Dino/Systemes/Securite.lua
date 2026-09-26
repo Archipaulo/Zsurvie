@@ -196,11 +196,13 @@ function M.demarrer(ctx)
 	end
 
 	-- ===== joueurs =====
+	local connexions = {}         -- [joueur] = connexion CharacterAdded
 	local function surJoueur(joueur)
+		if connexions[joueur] then return end
 		if joueur:GetAttribute("Suspect") == nil then
 			pcall(function() joueur:SetAttribute("Suspect", false) end)
 		end
-		joueur.CharacterAdded:Connect(function()
+		connexions[joueur] = joueur.CharacterAdded:Connect(function()
 			-- nouveau personnage : on repart de zéro, le suivi sera recréé à la prochaine vérification
 			suivis[joueur] = nil
 		end)
@@ -216,6 +218,9 @@ function M.demarrer(ctx)
 		secondesTrop[joueur] = nil
 		suivis[joueur] = nil
 		derniersAvis[joueur] = nil
+		local c = connexions[joueur]
+		connexions[joueur] = nil
+		if c then pcall(function() c:Disconnect() end) end
 	end)
 
 	-- la Base attribuée replace le joueur : on oublie sa position de référence

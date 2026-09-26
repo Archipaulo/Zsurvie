@@ -171,7 +171,7 @@ function M.demarrer(ctx)
 			notifier(joueur, "Tu possèdes déjà : " .. libelle, "info")
 			return
 		end
-		if joueur:GetAttribute("DonneesChargees") == false then
+		if joueur:GetAttribute("DonneesChargees") ~= true then
 			notifier(joueur, "Tes données se chargent encore, réessaie dans un instant.", "alerte")
 			return
 		end

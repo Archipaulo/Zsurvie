@@ -288,7 +288,8 @@ function M.demarrer(ctx)
 			contour.Parent = etoile
 			table.insert(liste, etoile)
 		end
-		bb.Parent = ctx.gui
+		-- dans PlayerGui : un BillboardGui n'est pas rendu à l'intérieur d'un ScreenGui
+		bb.Parent = ctx.gui.Parent
 		etoiles = bb
 		-- les étoiles tournent en ellipse autour de la tête
 		local debut = os.clock()

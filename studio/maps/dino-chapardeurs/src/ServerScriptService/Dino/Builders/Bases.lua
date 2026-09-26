@@ -85,11 +85,12 @@ function M.construire(ctx)
 		modele.PrimaryPart = sol
 		local zAvant = -demiP + longueurSol -- bord avant du sol (début de la rampe)
 
-		-- la rampe descend vers le Tapis (le côté haut d'un coin est vers -Z local)
+		-- la rampe descend vers le Tapis : le côté haut d'un coin est vers +Z local (face Back),
+		-- on le retourne d'un demi-tour pour que le haut touche le sol de la base et la pente regarde le Tapis
 		part(Outils.coin, modele, {
 			Name = "Rampe",
 			Size = Vector3.new(LARGEUR_ENTREE, H, demiP - zAvant),
-			CFrame = ici(0, H / 2, (zAvant + demiP) / 2),
+			CFrame = ici(0, H / 2, (zAvant + demiP) / 2, CFrame.Angles(0, math.pi, 0)),
 			Color = couleurSol,
 		})
 		local largeurJardin = demiL - LARGEUR_ENTREE / 2

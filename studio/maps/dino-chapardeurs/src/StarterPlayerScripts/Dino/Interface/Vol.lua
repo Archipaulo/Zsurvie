@@ -78,7 +78,7 @@ function M.demarrer(ctx)
 	local bandeau = Outils.cadre(ecran, {
 		Name = "Bandeau",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 70),
+		Position = UDim2.new(0.5, 0, 0, 198), -- sous l'argent, le bandeau d'événement et la barre de verrou
 		Size = UDim2.new(0.5, 0, 0, 64),
 		BackgroundColor3 = ENCRE,
 		BackgroundTransparency = 0.1,
