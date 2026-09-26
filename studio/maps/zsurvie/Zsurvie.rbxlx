@@ -1121,11 +1121,11 @@ function M.construire(ctx)
 			Color = boisSombre,
 		})
 	end
-	-- petite marche d'accès côté berge
+	-- petite marche d'accès côté berge (le coin monte vers +Z local, donc vers le ponton)
 	coin(ponton, {
 		Name = "Marche",
 		Size = Vector3.new(2.4, 0.7, 0.8),
-		CFrame = repere * CFrame.new(0, 0.35, -7.6) * CFrame.Angles(0, math.pi, 0),
+		CFrame = repere * CFrame.new(0, 0.35, -7.6),
 		Color = boisSombre,
 	})
 
@@ -1573,7 +1573,7 @@ local M = {}
 local BUDGET = 500
 
 -- réglages visuels (décor, pas des chiffres de jeu)
-local MARGE_PARVIS = 1.5       -- écart entre le bord du parvis et les mâts
+local MARGE_PARVIS = 3.5       -- écart entre le bord du parvis et les mâts (laisse la place aux panneaux et au réverbère Sud)
 local DEMI_TROUEE = 4.5        -- demi-largeur laissée libre autour du chemin (axe X = 0)
 local RAYON_ILE = 66
 local PAS_ANGLE_ILE = 20
@@ -2797,7 +2797,8 @@ function M.construire(ctx)
 	for k = 0, 23 do
 		local a = math.rad(k * 15)
 		local pos = Vector3.new(C.X + math.sin(a) * 21.2, 0.45, C.Z + math.cos(a) * 21.2)
-		libre(sol, CFrame.lookAt(pos, Vector3.new(C.X, 0.45, C.Z)) * CFrame.Angles(0, math.rad(90), 0),
+		-- lookAt vers le centre : l'axe X local est déjà tangent au cercle
+		libre(sol, CFrame.lookAt(pos, Vector3.new(C.X, 0.45, C.Z)),
 			Vector3.new(5.4, 0.3, 0.5), Charte.gemme, NEON)
 	end
 
@@ -5365,7 +5366,7 @@ function M.construire(ctx)
 
 		-- mousse et lierre
 		f.bloc("Lierre", Vector3.new(0.06, 2.2, 0.8), cf(3.02, SOL + 3.6, -1.7), mousse)
-		f.bloc("Mousse", Vector3.new(1.2, 0.08, 0.8), cf(-2.4, SOL + 5.24, 2.6), mousse)
+		f.bloc("Mousse", Vector3.new(1.2, 0.08, 0.8), cf(-2.4, SOL + 5.24, -2.6), mousse)
 		f.bloc("Mousse", Vector3.new(0.8, 0.08, 1.1), cf(-2.6, SOL + 4.04, 0.55), mousse)
 
 		-- poutres tombées dehors
@@ -5973,7 +5974,8 @@ function M.construire(ctx)
 	local ecart = largeurChemin / 2 + 0.6
 	local rang = 0
 	for _, d in ipairs(directions) do
-		local t = DEBUT_CHEMIN + 1
+		-- premiers pavés au-delà des sacs de sable et du perron de la Maison (jusqu'à ~11,6)
+		local t = DEBUT_CHEMIN + 4
 		while t <= FIN_CHEMIN - 1 and place() do
 			rang = rang + 1
 			local couleur = couleurCreme
@@ -10311,6 +10313,8 @@ function M.demarrer(ctx)
 	local etats = {}
 	-- gemmes gagnées avant la fin du chargement (ajoutées ensuite)
 	local gemmesEnAttente = {}
+	-- sauvegardes de départ encore en cours (attendues par BindToClose)
+	local departsEnCours = 0
 
 	local function estJoueur(j)
 		return typeof(j) == "Instance" and j:IsA("Player")
@@ -10507,6 +10511,7 @@ function M.demarrer(ctx)
 	end
 
 	Players.PlayerRemoving:Connect(function(joueur)
+		departsEnCours = departsEnCours + 1
 		task.spawn(function()
 			local ok, err = pcall(sauvegarder, joueur)
 			if not ok then
@@ -10514,6 +10519,7 @@ function M.demarrer(ctx)
 			end
 			etats[joueur] = nil
 			gemmesEnAttente[joueur] = nil
+			departsEnCours = departsEnCours - 1
 		end)
 	end)
 
@@ -10544,7 +10550,8 @@ function M.demarrer(ctx)
 				end)
 			end
 			local attente = 0
-			while restants > 0 and attente < DELAI_FERMETURE do
+			-- on attend aussi les sauvegardes lancées par PlayerRemoving (dernier joueur parti)
+			while (restants > 0 or departsEnCours > 0) and attente < DELAI_FERMETURE do
 				task.wait(0.5)
 				attente = attente + 0.5
 			end
@@ -11857,6 +11864,30 @@ function M.demarrer(ctx)
 		Etat:SetAttribute("PVMaisonMax", nouveauMax)
 		fixerPV(nombre("PVMaison", 0) + (nouveauMax - ancienMax))
 	end)
+
+	-- ===== réapparition pendant une run =====
+	-- l'unique SpawnLocation est au lobby : un Survivant qui réapparaît (reset) est renvoyé sur le parvis
+	local function surPersonnage(joueur, personnage)
+		if not estEnRun(joueur) then return end
+		local racineHumanoide = personnage:WaitForChild("HumanoidRootPart", 5)
+		task.wait()
+		if not racineHumanoide or joueur.Character ~= personnage then return end
+		if not estEnRun(joueur) then return end
+		local p = phase()
+		if p ~= "Horde" and p ~= "Repit" then return end
+		local cible = CFrame.new(Plan.parvis.centre + Vector3.new(0, 4, 0))
+		pcall(function() personnage:PivotTo(cible) end)
+	end
+
+	local function suivreJoueur(joueur)
+		joueur.CharacterAdded:Connect(function(personnage)
+			surPersonnage(joueur, personnage)
+		end)
+	end
+	for _, joueur in ipairs(Players:GetPlayers()) do
+		suivreJoueur(joueur)
+	end
+	Players.PlayerAdded:Connect(suivreJoueur)
 
 	-- ===== départ des joueurs =====
 	Players.PlayerRemoving:Connect(function(joueur)
@@ -14031,6 +14062,8 @@ function M.demarrer(ctx)
 		BackgroundTransparency = 0.05,
 		Visible = false,
 		ZIndex = 20,
+		-- absorbe les clics : sinon un clic dans le panneau part en tir du Blaster
+		Active = true,
 	})
 	local contrainte = Instance.new("UISizeConstraint")
 	contrainte.MaxSize = Vector2.new(780, 480)
@@ -14779,7 +14812,10 @@ function M.demarrer(ctx)
 	local function majColosse()
 		local actif = lireEtat("ColosseActif", false) == true and enRun()
 		bandeauColosse.Visible = actif
-		if actif and not colosseAffiche then
+		local nouveau = actif and not colosseAffiche
+		-- mis à jour avant task.spawn, qui exécute la boucle tout de suite
+		colosseAffiche = actif
+		if nouveau then
 			son("alerte")
 			animationColosse = animationColosse + 1
 			local numero = animationColosse
@@ -14792,7 +14828,6 @@ function M.demarrer(ctx)
 				end
 			end)
 		end
-		colosseAffiche = actif
 		if not actif then echelleColosse.Scale = 1 end
 	end
 
@@ -15714,6 +15749,8 @@ local VOIX_PAR_SON = 3 -- lectures simultanées possibles d'un même son
 local DISTANCE_PLEINE = 30 -- en deçà, le tir est joué à plein volume
 local DISTANCE_MUETTE = 180 -- au-delà, le tir est joué au volume plancher
 local VOLUME_PLANCHER = 0.15
+local FENETRE_TIR_LOCAL = 0.35 -- un tir serveur proche d'un tir local récent a déjà été entendu
+local DISTANCE_TIR_LOCAL = 8
 
 -- nom -> fichier intégré, volume, hauteur (PlaybackSpeed)
 local DEFINITIONS = {
@@ -15819,6 +15856,21 @@ function M.demarrer(ctx)
 		jouer(nom)
 	end)
 
+	-- tir local récent : son déjà joué par Interface/Blaster, l'écho serveur ne le rejoue pas
+	local dernierTirLocal = -10
+	local origineTirLocal = nil
+	Bus.ecouter("TirLocal", function(origine)
+		if typeof(origine) == "Vector3" then
+			dernierTirLocal = os.clock()
+			origineTirLocal = origine
+		end
+	end)
+	local function echoTirLocal(donnees)
+		if os.clock() - dernierTirLocal > FENETRE_TIR_LOCAL or not origineTirLocal then return false end
+		if type(donnees) ~= "table" or typeof(donnees.origine) ~= "Vector3" then return false end
+		return (donnees.origine - origineTirLocal).Magnitude <= DISTANCE_TIR_LOCAL
+	end
+
 	-- effets envoyés par le serveur
 	local SONS_EFFET = {
 		Impact = "impact",
@@ -15829,10 +15881,12 @@ function M.demarrer(ctx)
 		JourDebut = "victoire",
 	}
 	if Reseau and Reseau.Effet then
-		Reseau.Effet.OnClientEvent:Connect(function(genre, position)
+		Reseau.Effet.OnClientEvent:Connect(function(genre, position, donnees)
 			if type(genre) ~= "string" then return end
 			if genre == "Tir" then
-				jouer("tir", facteurDistance(position))
+				if not echoTirLocal(donnees) then
+					jouer("tir", facteurDistance(position))
+				end
 			elseif SONS_EFFET[genre] then
 				jouer(SONS_EFFET[genre])
 			end

@@ -232,6 +232,30 @@ function M.demarrer(ctx)
 		fixerPV(nombre("PVMaison", 0) + (nouveauMax - ancienMax))
 	end)
 
+	-- ===== réapparition pendant une run =====
+	-- l'unique SpawnLocation est au lobby : un Survivant qui réapparaît (reset) est renvoyé sur le parvis
+	local function surPersonnage(joueur, personnage)
+		if not estEnRun(joueur) then return end
+		local racineHumanoide = personnage:WaitForChild("HumanoidRootPart", 5)
+		task.wait()
+		if not racineHumanoide or joueur.Character ~= personnage then return end
+		if not estEnRun(joueur) then return end
+		local p = phase()
+		if p ~= "Horde" and p ~= "Repit" then return end
+		local cible = CFrame.new(Plan.parvis.centre + Vector3.new(0, 4, 0))
+		pcall(function() personnage:PivotTo(cible) end)
+	end
+
+	local function suivreJoueur(joueur)
+		joueur.CharacterAdded:Connect(function(personnage)
+			surPersonnage(joueur, personnage)
+		end)
+	end
+	for _, joueur in ipairs(Players:GetPlayers()) do
+		suivreJoueur(joueur)
+	end
+	Players.PlayerAdded:Connect(suivreJoueur)
+
 	-- ===== départ des joueurs =====
 	Players.PlayerRemoving:Connect(function(joueur)
 		if phase() == "Lobby" then return end

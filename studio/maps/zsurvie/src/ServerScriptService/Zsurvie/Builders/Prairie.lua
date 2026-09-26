@@ -138,7 +138,8 @@ function M.construire(ctx)
 	local ecart = largeurChemin / 2 + 0.6
 	local rang = 0
 	for _, d in ipairs(directions) do
-		local t = DEBUT_CHEMIN + 1
+		-- premiers pavés au-delà des sacs de sable et du perron de la Maison (jusqu'à ~11,6)
+		local t = DEBUT_CHEMIN + 4
 		while t <= FIN_CHEMIN - 1 and place() do
 			rang = rang + 1
 			local couleur = couleurCreme

@@ -9,6 +9,8 @@ local VOIX_PAR_SON = 3 -- lectures simultanées possibles d'un même son
 local DISTANCE_PLEINE = 30 -- en deçà, le tir est joué à plein volume
 local DISTANCE_MUETTE = 180 -- au-delà, le tir est joué au volume plancher
 local VOLUME_PLANCHER = 0.15
+local FENETRE_TIR_LOCAL = 0.35 -- un tir serveur proche d'un tir local récent a déjà été entendu
+local DISTANCE_TIR_LOCAL = 8
 
 -- nom -> fichier intégré, volume, hauteur (PlaybackSpeed)
 local DEFINITIONS = {
@@ -114,6 +116,21 @@ function M.demarrer(ctx)
 		jouer(nom)
 	end)
 
+	-- tir local récent : son déjà joué par Interface/Blaster, l'écho serveur ne le rejoue pas
+	local dernierTirLocal = -10
+	local origineTirLocal = nil
+	Bus.ecouter("TirLocal", function(origine)
+		if typeof(origine) == "Vector3" then
+			dernierTirLocal = os.clock()
+			origineTirLocal = origine
+		end
+	end)
+	local function echoTirLocal(donnees)
+		if os.clock() - dernierTirLocal > FENETRE_TIR_LOCAL or not origineTirLocal then return false end
+		if type(donnees) ~= "table" or typeof(donnees.origine) ~= "Vector3" then return false end
+		return (donnees.origine - origineTirLocal).Magnitude <= DISTANCE_TIR_LOCAL
+	end
+
 	-- effets envoyés par le serveur
 	local SONS_EFFET = {
 		Impact = "impact",
@@ -124,10 +141,12 @@ function M.demarrer(ctx)
 		JourDebut = "victoire",
 	}
 	if Reseau and Reseau.Effet then
-		Reseau.Effet.OnClientEvent:Connect(function(genre, position)
+		Reseau.Effet.OnClientEvent:Connect(function(genre, position, donnees)
 			if type(genre) ~= "string" then return end
 			if genre == "Tir" then
-				jouer("tir", facteurDistance(position))
+				if not echoTirLocal(donnees) then
+					jouer("tir", facteurDistance(position))
+				end
 			elseif SONS_EFFET[genre] then
 				jouer(SONS_EFFET[genre])
 			end

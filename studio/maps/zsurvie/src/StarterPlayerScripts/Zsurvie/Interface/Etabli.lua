@@ -130,6 +130,8 @@ function M.demarrer(ctx)
 		BackgroundTransparency = 0.05,
 		Visible = false,
 		ZIndex = 20,
+		-- absorbe les clics : sinon un clic dans le panneau part en tir du Blaster
+		Active = true,
 	})
 	local contrainte = Instance.new("UISizeConstraint")
 	contrainte.MaxSize = Vector2.new(780, 480)

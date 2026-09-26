@@ -46,6 +46,8 @@ function M.demarrer(ctx)
 	local etats = {}
 	-- gemmes gagnées avant la fin du chargement (ajoutées ensuite)
 	local gemmesEnAttente = {}
+	-- sauvegardes de départ encore en cours (attendues par BindToClose)
+	local departsEnCours = 0
 
 	local function estJoueur(j)
 		return typeof(j) == "Instance" and j:IsA("Player")
@@ -242,6 +244,7 @@ function M.demarrer(ctx)
 	end
 
 	Players.PlayerRemoving:Connect(function(joueur)
+		departsEnCours = departsEnCours + 1
 		task.spawn(function()
 			local ok, err = pcall(sauvegarder, joueur)
 			if not ok then
@@ -249,6 +252,7 @@ function M.demarrer(ctx)
 			end
 			etats[joueur] = nil
 			gemmesEnAttente[joueur] = nil
+			departsEnCours = departsEnCours - 1
 		end)
 	end)
 
@@ -279,7 +283,8 @@ function M.demarrer(ctx)
 				end)
 			end
 			local attente = 0
-			while restants > 0 and attente < DELAI_FERMETURE do
+			-- on attend aussi les sauvegardes lancées par PlayerRemoving (dernier joueur parti)
+			while (restants > 0 or departsEnCours > 0) and attente < DELAI_FERMETURE do
 				task.wait(0.5)
 				attente = attente + 0.5
 			end

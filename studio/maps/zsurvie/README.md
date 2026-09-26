@@ -20,6 +20,9 @@ démarrage par `ServerScriptService.Zsurvie.Demarrage`.
 
 Vous préférez Rojo ? `rojo serve` dans ce dossier (`default.project.json`).
 
+![La Prairie](captures/prairie.png)
+![L'île du Laboratoire](captures/ile-laboratoire.png)
+
 ## 🎮 La boucle de jeu
 
 - **L'île du Laboratoire (lobby)** : Arbre des Recherches (dépensez vos 💎 en

@@ -9,7 +9,7 @@ local M = {}
 local BUDGET = 500
 
 -- réglages visuels (décor, pas des chiffres de jeu)
-local MARGE_PARVIS = 1.5       -- écart entre le bord du parvis et les mâts
+local MARGE_PARVIS = 3.5       -- écart entre le bord du parvis et les mâts (laisse la place aux panneaux et au réverbère Sud)
 local DEMI_TROUEE = 4.5        -- demi-largeur laissée libre autour du chemin (axe X = 0)
 local RAYON_ILE = 66
 local PAS_ANGLE_ILE = 20

@@ -237,11 +237,11 @@ function M.construire(ctx)
 			Color = boisSombre,
 		})
 	end
-	-- petite marche d'accès côté berge
+	-- petite marche d'accès côté berge (le coin monte vers +Z local, donc vers le ponton)
 	coin(ponton, {
 		Name = "Marche",
 		Size = Vector3.new(2.4, 0.7, 0.8),
-		CFrame = repere * CFrame.new(0, 0.35, -7.6) * CFrame.Angles(0, math.pi, 0),
+		CFrame = repere * CFrame.new(0, 0.35, -7.6),
 		Color = boisSombre,
 	})
 

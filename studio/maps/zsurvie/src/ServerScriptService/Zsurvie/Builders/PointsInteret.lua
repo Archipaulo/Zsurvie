@@ -382,7 +382,7 @@ function M.construire(ctx)
 
 		-- mousse et lierre
 		f.bloc("Lierre", Vector3.new(0.06, 2.2, 0.8), cf(3.02, SOL + 3.6, -1.7), mousse)
-		f.bloc("Mousse", Vector3.new(1.2, 0.08, 0.8), cf(-2.4, SOL + 5.24, 2.6), mousse)
+		f.bloc("Mousse", Vector3.new(1.2, 0.08, 0.8), cf(-2.4, SOL + 5.24, -2.6), mousse)
 		f.bloc("Mousse", Vector3.new(0.8, 0.08, 1.1), cf(-2.6, SOL + 4.04, 0.55), mousse)
 
 		-- poutres tombées dehors

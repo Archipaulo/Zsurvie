@@ -472,7 +472,10 @@ function M.demarrer(ctx)
 	local function majColosse()
 		local actif = lireEtat("ColosseActif", false) == true and enRun()
 		bandeauColosse.Visible = actif
-		if actif and not colosseAffiche then
+		local nouveau = actif and not colosseAffiche
+		-- mis à jour avant task.spawn, qui exécute la boucle tout de suite
+		colosseAffiche = actif
+		if nouveau then
 			son("alerte")
 			animationColosse = animationColosse + 1
 			local numero = animationColosse
@@ -485,7 +488,6 @@ function M.demarrer(ctx)
 				end
 			end)
 		end
-		colosseAffiche = actif
 		if not actif then echelleColosse.Scale = 1 end
 	end
 

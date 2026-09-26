@@ -131,7 +131,8 @@ function M.construire(ctx)
 	for k = 0, 23 do
 		local a = math.rad(k * 15)
 		local pos = Vector3.new(C.X + math.sin(a) * 21.2, 0.45, C.Z + math.cos(a) * 21.2)
-		libre(sol, CFrame.lookAt(pos, Vector3.new(C.X, 0.45, C.Z)) * CFrame.Angles(0, math.rad(90), 0),
+		-- lookAt vers le centre : l'axe X local est déjà tangent au cercle
+		libre(sol, CFrame.lookAt(pos, Vector3.new(C.X, 0.45, C.Z)),
 			Vector3.new(5.4, 0.3, 0.5), Charte.gemme, NEON)
 	end
 
