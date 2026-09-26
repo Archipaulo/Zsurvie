@@ -1,0 +1,17 @@
+{
+  "name": "Zsurvie",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Zsurvie": { "$path": "src/ReplicatedStorage/Zsurvie" }
+    },
+    "ServerScriptService": {
+      "Zsurvie": { "$path": "src/ServerScriptService/Zsurvie" }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Zsurvie": { "$path": "src/StarterPlayerScripts/Zsurvie" }
+      }
+    }
+  }
+}
