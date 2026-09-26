@@ -69,14 +69,23 @@ const echecs = []
 log(`Brief reçu pour « ${NOM} ». Livrables dans ${RACINE}/`)
 const bench = par(ROLES_PROD.benchmark), da = par(ROLES_PROD.da), directeur = par(ROLES_PROD.canon)
 const [okBrief, okBench, okDa] = await parallel([
-  () => agent(`N'utilise pas l'outil Bash. Avec l'outil Write, écris dans \`${RACINE}/brief.md\` exactement le texte suivant, caractère pour caractère, sans rien ajouter ni reformuler (il est entre les deux lignes de tirets) :\n-----\n${BRIEF}\n-----\nPuis réponds « livré ».`,
+  () => agent(`N'utilise pas l'outil Bash. Avec l'outil Write (si un fichier existe déjà, lis-le d'abord avec Read, puis remplace-le) :
+1. écris dans \`${RACINE}/brief.md\` exactement le texte suivant, caractère pour caractère, sans rien ajouter ni reformuler (il est entre les deux lignes de tirets) :
+-----
+${BRIEF}
+-----
+2. écris dans \`${RACINE}/infos.json\` exactement le texte suivant (entre les deux lignes de tirets) :
+-----
+${JSON.stringify({ brief: BRIEF, echecs: [] })}
+-----
+Puis réponds « livré ».`,
     { label: "📝 Archivage du brief", phase: "Vision", effort: "low" }),
   () => agent(prompt(bench, TACHES.benchmark(BRIEF), livraison(CHEMINS_SPECIAUX.benchmark)),
     { label: etiquette(bench), phase: "Vision" }),
   () => agent(prompt(da, TACHES.da(BRIEF), livraison(CHEMINS_SPECIAUX.da)),
     { label: etiquette(da), phase: "Vision" }),
 ])
-if (!okBrief) echecs.push("infos:brief")
+if (!okBrief) log("brief.md n'a pas pu être écrit : la commande d'assemblage transmet de toute façon le brief exact.")
 if (!okBench) echecs.push("vision:a05")
 if (!okDa) echecs.push("vision:a04")
 const lire = chemin => `(lis en entier le fichier \`${RACINE}/${chemin}.md\` ; s'il n'existe pas, fais sans)`
@@ -191,7 +200,7 @@ if (!bible) echecs.push("bible:a01")
    pour que l'assembleur puisse être relancé plus tard sans cette commande */
 const INFOS = JSON.stringify({ brief: BRIEF, echecs })
 const okInfos = await agent(
-  `N'utilise pas l'outil Bash. Avec l'outil Write, écris dans \`${RACINE}/infos.json\` exactement le texte suivant, caractère pour caractère (il est entre les deux lignes de tirets), puis réponds « livré » :\n-----\n${INFOS}\n-----`,
+  `N'utilise pas l'outil Bash. Lis d'abord \`${RACINE}/infos.json\` avec Read s'il existe, puis, avec l'outil Write, remplace-le par exactement le texte suivant, caractère pour caractère (il est entre les deux lignes de tirets), puis réponds « livré » :\n-----\n${INFOS}\n-----`,
   { label: "📝 Archivage des infos", phase: "Plan & Bible", effort: "low" })
 if (!okInfos) log("infos.json n'a pas pu être écrit : utilisez la commande d'assemblage renvoyée, qui transmet le brief et les échecs.")
 const ASSEMBLAGE = `node studio/assembler.js ${RACINE} --infos-stdin <<'FIN_INFOS_ATELIER'\n${INFOS}\nFIN_INFOS_ATELIER`

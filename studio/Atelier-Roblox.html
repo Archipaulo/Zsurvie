@@ -1315,32 +1315,42 @@ function normaliser(brut) {
   s.settings.parallele = [1, 2, 3, 4, 6, 8].includes(Number(r.parallele)) ? Number(r.parallele) : 3;
   s.log = liste(src.log).filter(e => objetSimple(e) && typeof e.msg === "string")
     .map(e => ({ t: Number(e.t) || 0, msg: e.v === 2 ? e.msg : decoderEntites(e.msg), v: 2 })).slice(0, 60);
-  s.projects = liste(src.projects).filter(objetSimple).map(normaliserProjet);
+  s.projects = liste(src.projects).filter(objetSimple).map((p, i) => normaliserProjet(p, i));
   return s;
 }
-function normaliserProjet(p) {
+/* un identifiant absent ou invalide est remplacé par un identifiant dérivé de la position :
+   tous les onglets qui chargent les mêmes données obtiennent le même */
+let idsRegeneres = false;
+function idOu(v, deduit) {
+  if (idSur(v)) return v;
+  idsRegeneres = true;
+  return deduit;
+}
+function normaliserProjet(p, i = 0) {
+  const pid = idOu(p.id, `r-p${i}`);
   return {
-    id: idSur(p.id) ? p.id : uid(),
+    id: pid,
     nom: texte(p.nom, "Projet sans nom"),
     type: texte(p.type, "Autre"),
     desc: texte(p.desc),
     statut: STATUTS_PROJET.includes(p.statut) ? p.statut : "actif",
     phases: PHASES.map((_, i) => !!liste(p.phases)[i]),
-    tasks: liste(p.tasks).filter(objetSimple).map(t => ({
-      id: idSur(t.id) ? t.id : uid(),
+    tasks: liste(p.tasks).filter(objetSimple).map((t, j) => ({
+      id: idOu(t.id, `${pid}-t${j}`),
       titre: texte(t.titre, "Tâche"),
       statut: STATUTS_TACHE.includes(t.statut) ? t.statut : "todo",
       agents: liste(t.agents).filter(estAgentId),
       note: texte(t.note),
       created: Number(t.created) || 0,
     })),
-    productions: liste(p.productions).map(normaliserProduction).filter(Boolean),
+    productions: liste(p.productions).map((pr, k) => normaliserProduction(pr, `${pid}-r${k}`)).filter(Boolean),
     created: Number(p.created) || 0,
   };
 }
 /* renvoie null si l'objet n'est pas une production exploitable */
-function normaliserProduction(pr) {
+function normaliserProduction(pr, idDeduit) {
   if (!objetSimple(pr) || !objetSimple(pr.vision) || !objetSimple(pr.contributions)) return null;
+  const id = idOu(pr.id, idDeduit || uid());
   const parAgent = (obj, fn) => Object.fromEntries(Object.entries(objetSimple(obj) ? obj : {})
     .filter(([id, x]) => estAgentId(id) && objetSimple(x)).map(([id, x]) => [id, fn(x)]));
   const cles = obj => Object.keys(objetSimple(obj) ? obj : {});
@@ -1355,9 +1365,9 @@ function normaliserProduction(pr) {
   }
   let statut = STATUTS_PROD.includes(pr.statut) ? pr.statut : "incomplet";
   // « en cours » sans onglet vivant pour la faire tourner = coupée en route
-  if (statut === "en_cours" && !verrouFrais(pr.id)) statut = "interrompu";
+  if (statut === "en_cours" && !verrouFrais(id)) statut = "interrompu";
   return {
-    id: idSur(pr.id) ? pr.id : uid(),
+    id,
     source: pr.source === "claude-code" ? "claude-code" : "app",
     brief: texte(pr.brief),
     modele: MODELES.includes(pr.modele) ? pr.modele : null,
@@ -1453,6 +1463,8 @@ function load() {
   } catch (e) { return defaultState(); }
 }
 let state = load();
+// identifiants réparés : on les enregistre tout de suite pour que tous les onglets les partagent
+if (idsRegeneres) { idsRegeneres = false; save(); }
 
 function productionActive() {
   return typeof run !== "undefined" && run && run.actif;

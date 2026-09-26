@@ -42,8 +42,10 @@ const lireInfos = (texte, origine) => {
   return null;
 };
 if (process.argv.includes("--infos-stdin")) infos = lireInfos(fs.readFileSync(0, "utf8"), "entrée standard") || {};
+let origineInfos = Object.keys(infos).length ? "entrée standard" : null;
 if (!Object.keys(infos).length && fs.existsSync(path.join(racine, "infos.json"))) {
   infos = lireInfos(fs.readFileSync(path.join(racine, "infos.json"), "utf8"), "infos.json") || {};
+  if (Object.keys(infos).length) origineInfos = "infos.json";
 }
 
 const lib = n => fs.readFileSync(path.join(__dirname, n), "utf8");
@@ -184,8 +186,11 @@ if (coordination) fiche("coord:a03", S.CHEMINS_SPECIAUX.coordination);
 if (plan) fiche("plan:a02", S.CHEMINS_SPECIAUX.plan);
 if (bible) fiche("bible:a01", S.CHEMINS_SPECIAUX.bible);
 for (const cle of Array.isArray(infos.echecs) ? infos.echecs : []) {
-  if (typeof cle === "string" && /^([a-z]+:a\d\d|infos:brief)$/.test(cle)) manque(cle, "échec de l'agent pendant le workflow");
+  if (typeof cle === "string" && /^[a-z]+:a\d\d$/.test(cle)) manque(cle, "échec de l'agent pendant le workflow");
 }
+
+// sans les infos du workflow, ses échecs sont inconnus : on ne peut pas conclure « terminée »
+if (!origineInfos) manque("infos:echecs", "liste des échecs du workflow introuvable : relancez avec la commande d'assemblage renvoyée par le workflow");
 
 /* ---------- assemblage ---------- */
 const production = {
@@ -209,6 +214,7 @@ const production = {
   usages: {},
 };
 
+if (!production.brief) { manque("infos:brief", "brief introuvable (entrée standard, infos.json, brief.md)"); production.statut = "incomplet"; }
 fs.writeFileSync(path.join(racine, "production.json"), JSON.stringify(production, null, 2));
 let md = S.productionEnMarkdown(production);
 if (Object.keys(scripts).length) {
