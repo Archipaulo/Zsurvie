@@ -154,6 +154,42 @@ for (const t of D.terrain || []) {
   m.applyMatrix4(m4); scene.add(m);
 }
 
+
+// étiquettes flottantes (BillboardGui) : texte cerné dessiné sur un canvas, affiché en sprite
+const etiquettes = D.etiquettes || [];
+for (const [x, y, z, w, h, lignes] of etiquettes) {
+  if (!(w > 0 && h > 0)) continue;
+  const W = 512, H = Math.max(32, Math.min(1024, Math.round(W * h / w)));
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const g = cv.getContext("2d");
+  const total = lignes.reduce((a, l) => a + (l[2] || 1 / lignes.length), 0) || 1;
+  let yCur = H;
+  for (let k = lignes.length - 1; k >= 0; k--) {
+    const [texte, couleur, frac, degrade, contour, police] = lignes[k];
+    const hl = H * ((frac || 1 / lignes.length) / total);
+    const titre = /Luckiest/.test(police || "");
+    let fs = hl * 0.82;
+    g.font = (titre ? "900 " : "800 ") + fs + "px 'Arial Black', system-ui, sans-serif";
+    const larg = g.measureText(texte).width;
+    if (larg > W * 0.96) { fs = fs * W * 0.96 / larg; g.font = (titre ? "900 " : "800 ") + fs + "px 'Arial Black', system-ui, sans-serif"; }
+    g.textAlign = "center"; g.textBaseline = "middle";
+    const ty = yCur - hl / 2;
+    g.lineJoin = "round"; g.lineWidth = Math.max(3, fs * 0.2); g.strokeStyle = contour ? "#" + contour.replace("#", "") : "#000";
+    g.strokeText(texte, W / 2, ty);
+    if (degrade && degrade.length) {
+      const lg = g.createLinearGradient(W * 0.2, 0, W * 0.8, 0);
+      degrade.forEach((c, i) => lg.addColorStop(degrade.length === 1 ? 0 : i / (degrade.length - 1), c));
+      g.fillStyle = lg;
+    } else g.fillStyle = couleur || "#fff";
+    g.fillText(texte, W / 2, ty);
+    yCur -= hl;
+  }
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, transparent: true }));
+  sp.scale.set(w, h, 1); sp.position.set(x, y, z); sp.renderOrder = 5;
+  scene.add(sp);
+}
+
 const NOMS = { Dinos: "🦖 Dinos en jeu", Bases: "🏠 Bases", Tapis: "🟥 Tapis roulant", Sol: "🌱 Sol", Falaises: "⛰️ Falaises", Jungle: "🌴 Jungle", Riviere: "💧 Rivière", Volcan: "🌋 Volcan", Nurserie: "🥚 Nurserie", FinTapis: "🚪 Grande Porte", Place: "⛲ Place", Comptoir: "🛒 Boutique", Autel: "♻️ Autel", Cratere: "☄️ Cratère", Fossiles: "🦴 Fossiles", Lumieres: "🔥 Torches", Signaletique: "🪧 Panneaux", Classement: "🏆 Classement", Coffre: "💰 Coffre caché" };
 const conteneur = document.getElementById("zones");
 const viser = (cx, cy, cz, dist, haut = 0.55) => {
