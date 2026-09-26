@@ -727,13 +727,25 @@ Pour chaque candidat, dans l'ordre, fais un appel séparé à l'outil Glob avec 
   }
 }
 /* réservation exclusive : Write refuse de remplacer un fichier que l'agent n'a pas lu,
-   donc un seul lancement peut créer le marqueur (deux lancements simultanés du même nom) */
+   donc un seul lancement peut créer le marqueur (deux lancements simultanés du même nom).
+   args.jeton (facultatif) identifie le lancement : une reprise après interruption reconnaît son marqueur. */
+const JETON = typeof entree.jeton === "string" && /^[A-Za-z0-9_-]{4,64}$/.test(entree.jeton) ? entree.jeton : ""
+const CONTENU_MARQUEUR = `${NOM}|${JETON}`
 const marqueur = await agent(
-  `N'utilise pas l'outil Bash et surtout ne lis PAS le fichier avant. Avec l'outil Write, crée le fichier \`${RACINE}/.reservation\` contenant exactement : ${JSON.stringify(NOM)}
+  `N'utilise pas l'outil Bash et surtout ne lis PAS le fichier avant. Avec l'outil Write, crée le fichier \`${RACINE}/.reservation\` contenant exactement : ${JSON.stringify(CONTENU_MARQUEUR)}
 Si l'outil Write échoue (par exemple parce que le fichier existe déjà), n'insiste pas et réponds cree = false ; s'il réussit, réponds cree = true.`,
   { label: "🔐 Réservation exclusive", phase: "Vision", effort: "low", schema: objet({ cree: { type: "boolean" } }) })
-if (!marqueur || marqueur.cree !== true) {
-  throw new Error(`${RACINE} vient d'être pris par un autre lancement : relancez, un nouveau dossier sera réservé.`)
+let reserve = !!marqueur && marqueur.cree === true
+if (!reserve && JETON) {
+  // reprise d'une exécution interrompue : le marqueur est peut-être le nôtre
+  const relu = await agent(
+    `N'utilise pas l'outil Bash. Lis le fichier \`${RACINE}/.reservation\` avec l'outil Read et renvoie son contenu exact (sans les numéros de ligne).`,
+    { label: "🔐 Vérification du marqueur", phase: "Vision", effort: "low", schema: objet({ contenu: { type: "string" } }) })
+  reserve = !!relu && String(relu.contenu || "").trim().replace(/^"|"$/g, "") === CONTENU_MARQUEUR
+}
+if (!reserve) {
+  throw new Error(`${RACINE} vient d'être pris par un autre lancement : relancez, un nouveau dossier sera réservé.` +
+    (JETON ? "" : " (Pour pouvoir reprendre une exécution interrompue, passez un args.jeton unique.)"))
 }
 const echecs = []
 log(`Brief reçu pour « ${NOM} ». Livrables dans ${RACINE}/`)

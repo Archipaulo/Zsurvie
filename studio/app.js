@@ -773,7 +773,10 @@ document.getElementById("import-file").addEventListener("change", e => {
       const s = JSON.parse(r.result);
       if (!s || !Array.isArray(s.projects)) throw new Error("format invalide");
       if (productionActive() || verrouAutreOnglet()) throw new Error("une production est en cours, interrompez-la d'abord");
-      if (typeof run !== "undefined" && run && run.nonSauve) throw new Error("une production n'est pas enregistrée : exportez-la d'abord");
+      // l'export ne suffit pas à lever ce blocage : on demande un choix explicite ; la protection
+      // n'est levée que si l'import est réellement enregistré (voir save())
+      if (typeof run !== "undefined" && run && run.nonSauve &&
+          !confirm("Une production n'est pas enregistrée dans le navigateur. Si vous l'avez exportée, l'import peut continuer ; sinon ses résultats seront perdus. Importer quand même ?")) return;
       const ancien = state;
       state = normaliser(s);
       state.settings.apiKey = ancien.settings.apiKey;   // on garde la clé de ce navigateur, jamais celle du fichier

@@ -889,11 +889,13 @@ function rendreBible(el, projet, prod) {
   }
   const nbTaches = prod.plan ? (prod.plan.taches || []).length : 0;
   const ailleurs = tenueAilleurs(prod.id);
+  const nonEnregistree = !!(run && run.nonSauve && run.prodId === prod.id);
   el.innerHTML = `
     <div id="bible-maj"></div>
     ${nbTaches ? `<div class="import-bar">📋 Le plan contient ${nbTaches} tâches assignées aux agents.
       ${prod.tachesImportees ? `<span class="muted">✅ déjà ajoutées au tableau du projet</span>`
         : ailleurs ? `<span class="muted">🔒 disponible quand la production sera terminée dans l'autre onglet</span>`
+        : nonEnregistree ? `<span class="muted">💾 disponible une fois la production enregistrée (libérez de la place)</span>`
         : `<button class="primary-btn" id="btn-import-taches">➕ Ajouter au tableau de « ${esc(projet.nom)} »</button>`}</div>` : ""}
     <div class="bible">
       <nav class="bible-toc">${sections.map(s => `<a href="#" data-sec="${s.id}">${esc(s.titre)}</a>`).join("")}</nav>
@@ -912,7 +914,8 @@ function rendreBible(el, projet, prod) {
   if (imp) imp.addEventListener("click", () => importerTaches(projet, prod));
 }
 function importerTaches(projet, prod) {
-  if (prod.tachesImportees || tenueAilleurs(prod.id)) return;
+  if (prod.tachesImportees || tenueAilleurs(prod.id) || (run && run.nonSauve && run.prodId === prod.id)) return;
+  const avant = projet.tasks.length;
   for (const t of prod.plan.taches || []) {
     projet.tasks.push({
       id: uid(), titre: t.titre, statut: "todo",
@@ -922,8 +925,14 @@ function importerTaches(projet, prod) {
     });
   }
   prod.tachesImportees = true;
+  if (!save()) {
+    projet.tasks.length = avant;
+    prod.tachesImportees = false;
+    toast("Stockage du navigateur plein : les tâches n'ont pas été ajoutées.");
+    rendreProduction();
+    return;
+  }
   logEvent(`<b>${projet.nom}</b> : ${prod.plan.taches.length} tâches du plan de production ajoutées au tableau`);
-  save();
   toast(`${prod.plan.taches.length} tâches ajoutées au tableau du projet ✅`);
   rendreProduction();
 }
