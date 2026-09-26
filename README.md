@@ -73,3 +73,10 @@ projets (`studio/Atelier-Roblox.html`, à ouvrir d'un double-clic). À partir
 d'un seul brief, les 50 agents se coordonnent pour produire une bible de
 production complète. Exemple réel : l'adaptation de Zsurvie en jeu Roblox
 coopératif, dans [`studio/productions/zsurvie-roblox/`](studio/productions/zsurvie-roblox/BIBLE-COMPLETE.md).
+
+## 🎮 La map Roblox codée par les 50 agents
+
+[`studio/maps/zsurvie/`](studio/maps/zsurvie/README.md) : une vraie map Roblox
+jouable, écrite en Luau par les 50 agents (un module chacun). Ouvrez
+`Zsurvie.rbxlx` dans Roblox Studio et appuyez sur Jouer, ou regardez
+`Apercu-3D.html` dans un navigateur.

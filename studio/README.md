@@ -106,3 +106,10 @@ Claude Code, le workflow et la version fichier unique :
 ```bash
 node generer.js
 ```
+
+## 🎮 La map Roblox codée par les 50 agents
+
+[`maps/zsurvie/`](maps/zsurvie/README.md) : une vraie map Roblox
+jouable, écrite en Luau par les 50 agents (un module chacun). Ouvrez
+`Zsurvie.rbxlx` dans Roblox Studio et appuyez sur Jouer, ou regardez
+`Apercu-3D.html` dans un navigateur.
