@@ -1,0 +1,102 @@
+{
+  "decisions": [
+    "Le Sky n'est jamais visible en run : la caméra plonge à 58° et le haut de l'écran vise 33° sous l'horizon. L'humeur de la Prairie passe par la lumière au sol, les ombres et l'Atmosphere. Le Sky « Ciel Pixel-bloc » ne se voit qu'au Laboratoire et dans les plans de caméra levée (atterrissage de la Capsule, annonce du Colosse, chute de la Maison).",
+    "Un jour dure 95 s. La horde occupe 80 s, de ClockTime 8,5 à 15,5 : le soleil reste au-dessus de 35° et les ombres sont courtes. Le Répit dure 15 s : coucher à 18,6, nuit express de 21 à 3 pendant 5 s au maximum, aube à 5,5. Les 8 moments (Aube, Matin, Midi, ApresMidi, Coucher, Nuit, Colosse, Laboratoire) sont définis dans ReplicatedStorage.Charte.Ambiances.",
+    "Jour du Colosse (jours 5, 10, 15…) : au début du jour, le soleil file de 8,5 à 17,5 en 4 s pour annoncer le Colosse. ClockTime reste ensuite à 17,5 jusqu'à 80 s. OutdoorAmbient est relevé à #C49494 pour que les Zbires restent lisibles dans les ombres longues. Écart mineur avec le canon : la valeur 17,5 est atteinte à 4 s et non à 0 s.",
+    "Le temps est sous autorité serveur. Le serveur publie JourNumero, JourDebut (workspace:GetServerTimeNow()), JourColosse et MaisonTombee en attributs de workspace. Chaque client calcule Lighting et Atmosphere en local, 20 fois par seconde. Le serveur n'écrit plus dans Lighting après le chargement.",
+    "Le Laboratoire est figé à ClockTime 19,4 (heure bleue, néons cyan), avec une TintColor de ColorCorrection propre à chaque zone : Laboratoire #E8F6FA, Quai des Capsules #F6EEDC, Galerie des Zbires #F6EAF4. Le samedi de 16 h 45 à 17 h 15, l'événement Zbire de la Semaine passe la teinte à #EFE3FB et les néons au Violet horde.",
+    "Budget : 12 lumières par place, toutes avec Shadows à false. Sur la Prairie : Maison 2, Mine 1, portails 4, Établi 1, Colosse 1 et 3 en réserve. L'ambiance utilise 32 Parts Neon sur la Prairie. Technology ShadowMap, avec ShadowSoftness 0,1 et GeographicLatitude 20. SunRays, DepthOfField et Clouds sont interdits. Aucun clignotement au-dessus de 3 Hz."
+  ],
+  "besoins": [
+    {
+      "de": "Programmeur gameplay (directeur de run)",
+      "besoin": "Poser les attributs de workspace JourNumero, JourColosse (numero % 5 == 0) et JourDebut (workspace:GetServerTimeNow()) au début de chaque jour, et MaisonTombee à la chute de la Maison. Ne jamais écrire dans Lighting côté serveur pendant la run."
+    },
+    {
+      "de": "Directeur artistique (garant de ReplicatedStorage.Charte)",
+      "besoin": "Intégrer les sous-tables Ambiances, CycleJour et DUREE_JOUR dans le module Charte. Valider les couleurs de lumière dérivées de la palette : Crème ombre #C5B99A, Gemme cyan clair #5AD9E7, Toit orange clair #F0904C, Alerte ombre #CC254F, Nuit labo clair #535676."
+    },
+    {
+      "de": "Artiste textures 2D",
+      "besoin": "Peindre en pixels de 16 px les 6 faces en 1024² du Ciel Pixel-bloc (Prairie) et du Ciel Labo, ainsi que le soleil carré Or et la Lune carrée Crème en 64²."
+    },
+    {
+      "de": "Constructeurs de la Maison, de la Mine et de la Lisière",
+      "besoin": "Prévoir dans la Maison 6 fenêtres Neon et les attaches des 2 PointLight (intérieur et porche). Prévoir 10 gemmes Neon dans la Mine, 4 cadres de portail Neon dans la Lisière et une attache PointLight à l'Établi. Chaque élément doit porter un nom stable pour les scripts."
+    },
+    {
+      "de": "Concepteur caméra et cinématiques",
+      "besoin": "Créer trois plans de caméra levée qui cadrent le Sky : atterrissage de la Capsule, course du soleil de 0 à 4 s au Jour du Colosse, chute de la Maison."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "Un coq 8-bit au passage à 95 s (nouveau jour) et une fanfare d'alerte calée sur la course du soleil de 4 s du Jour du Colosse."
+    },
+    {
+      "de": "Responsable performance et QA mobile",
+      "besoin": "Profiler au MicroProfiler sur Android 3 Go avec 6 joueurs et 60 Zbires un Jour du Colosse. Confirmer les 30 FPS et, s'ils ne tiennent pas, couper le BloomEffect en premier."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Faire valider par le directeur créatif le tableau des 8 moments et le cycle de 95 s (nuit express de 5 s, course du soleil de 4 s au Jour du Colosse)",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Installer Lighting (réglages fixes), Atmosphere, ColorCorrection, BloomEffect et un Sky provisoire dans les places Prairie et Laboratoire",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Régler l'Atmosphere et vérifier depuis la caméra de jeu (0, 45, 28) que l'anneau de la Lisière (70 à 100 studs) est adouci aux 7 moments",
+      "phase": 2,
+      "charge": "S"
+    },
+    {
+      "titre": "Placer les 4 PointLight de portail #9B5DE5 (Range 14), la PointLight de la Mine #33D6F0 (Range 12, Brightness 1,8) et celle de l'Établi",
+      "phase": 2,
+      "charge": "S"
+    },
+    {
+      "titre": "Intégrer le Ciel Pixel-bloc et le Ciel Labo : 6 faces, soleil et Lune, SunAngularSize 18, MoonAngularSize 14/16, StarCount 1200/2000",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Poser les lumières du Laboratoire : Arbre des Recherches, Doc Boulon, 3 Capsules, 3 SpotLight de la Galerie et 12 bandes Neon d'Alcôve",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Écrire Charte.Ambiances, Charte.CycleJour et le LocalScript CycleCiel (20 mises à jour par seconde, lecture des attributs serveur, figeage à MaisonTombee)",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Scripter les pulsations : Capsules de 0,5 à 2 Hz, Mine +30 % par gemme, porche à 1 Hz sous 25 % de PV, portails de 1 à 2,5 en début de horde, fenêtres de la Maison au Répit",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Écrire le LocalScript ZonesLabo : TintColor en fondu de 0,6 s entre Laboratoire, Quai et Galerie, plus l'ambiance ZbireDeLaSemaine",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Faire une passe de polish des 8 moments en conditions réelles, avec 60 Zbires et les VFX actifs",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Faire tester par 5 joueurs de 9 à 13 ans la planche de contrôle couleurs (8 Zbires, pièce, gemme) aux 7 moments de la Prairie",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Profiler sur Android 3 Go : 30 FPS au Jour du Colosse, CycleCiel sous 0,2 ms par mise à jour, aucune pulsation au-dessus de 3 Hz",
+      "phase": 6,
+      "charge": "M"
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "decisions": [
+    "Style « Pixel-bloc 16 » : chaque icône est dessinée sur une grille de 16 × 16 pixels, avec un contour Encre #1E1B2E d'un pixel et au plus 2 couleurs de la palette. Elle ne contient jamais de texte ni de chiffre : les quantités et les prix sont affichés dans des TextLabel.",
+    "Toutes les tailles sont des multiples de 16 (32, 48, 64, 96, 128 et 256 px), avec ResampleMode = Enum.ResamplerMode.Pixelated. La validation se fait à 32 px. Un bouton mobile mesure au moins 64 px, et 96 px pour Réparer, Défenses et Roue des Pings. Le pictogramme mesure la taille de la pastille moins 16 px.",
+    "La forme de la pastille indique la catégorie : cercle Crème pour les actions, carré orange pour l'Établi, hexagone Nuit labo pour les recherches, octogone Terre battue pour les défenses, losange Alerte pour le danger, bulle pour les pings. Le BadgeEquipe marque Solidité, Réparation et Régénération.",
+    "L'or et le cyan sont réservés aux icônes de monnaie (Pièce, Gemme, Butin, Foreuse, Doré). Le Doré est dessiné en or bordé de violet pour rester lisible comme ennemi.",
+    "Les icônes sont livrées dans 2 atlas de 1024 × 1024. ico_atlas_a.png contient 64 cellules de 128 px : 55 icônes et une réserve. ico_atlas_b.png contient 16 cellules de 256 px pour les 10 portraits du bestiaire. Le module ReplicatedStorage.Icones les sert avec des clés sans accents.",
+    "Aucun écart avec le canon : les noms sont repris tels quels. Les seules icônes ajoutées hors canon sont Boutique (cosmétiques en Robux), Paramètres, Son et les marqueurs hors écran."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif",
+      "besoin": "Valider le Doré en or bordé de violet (exception au code « violet = ennemi ») et l'icône Boutique (t-shirt) pour les cosmétiques en Robux."
+    },
+    {
+      "de": "Directeur artistique",
+      "besoin": "Le module ReplicatedStorage.Charte avec les 11 couleurs et leurs 3 teintes (base, ombre × 0,8, lumière + 20 % Crème), pour que les atlas utilisent exactement les mêmes valeurs."
+    },
+    {
+      "de": "Designer UI / HUD",
+      "besoin": "Les maquettes du HUD mobile avec l'emplacement et la taille de chaque bouton, et la confirmation des tailles de 64 px (secondaires) et 96 px (principaux)."
+    },
+    {
+      "de": "Typographe UI",
+      "besoin": "La police et la taille des TextLabel posés à côté des icônes de 32 px (compteurs, prix, 2/3), lisibles sur un Android d'entrée de gamme."
+    },
+    {
+      "de": "Game designer systèmes",
+      "besoin": "La liste définitive des améliorations, des recherches et des modificateurs du Défi du Jour, pour réserver les cellules de la ligne 7 de l'Atlas A."
+    },
+    {
+      "de": "Character designer des Zbires",
+      "besoin": "Les silhouettes validées des 8 Zbires, du Mini-Gluant et du Colosse, pour que les portraits de l'Atlas B correspondent aux modèles 3D."
+    },
+    {
+      "de": "Scripteur gameplay",
+      "besoin": "Les événements client pour afficher Etourdi, Bloque, le coup critique (ViseeCritique) et les pings répliqués par le serveur via RemoteEvent."
+    },
+    {
+      "de": "Responsable QA",
+      "besoin": "Un panel de 5 joueurs de 9 à 13 ans et un Android d'entrée de gamme de 5,5 pouces pour le test de reconnaissance à 32 px."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Valider avec la DA et le game design la liste des 55 icônes de l'Atlas A et des 10 portraits de l'Atlas B",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Produire la planche de style : les 6 pastilles et 4 icônes pilotes (Piece, Gemme, Reparer, Horde) en 16 × 16, testées à 32 px",
+      "phase": 0,
+      "charge": "M"
+    },
+    {
+      "titre": "Coder ReplicatedStorage.Icones (appliquer, creer, creerBouton, rebond) et vérifier les assert sur les tailles et les clés",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Dessiner les lignes 0 à 2 de l'Atlas A : monnaies, HUD, Survivant, défenses et Établi",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Dessiner les lignes 3 à 6 de l'Atlas A : Laboratoire, boutons, pings, marqueurs et pastilles",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Dessiner les 10 portraits de l'Atlas B : 8 Zbires, Mini-Gluant et Colosse",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Importer les 2 atlas via l'Asset Manager, reporter les rbxassetid et contrôler l'ImageRectOffset de chaque clé sur un écran de test",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Brancher les BillboardGui des pings et des états (Etourdi, Bloque) : 48 × 48 px, AlwaysOnTop, LightInfluence 0, MaxDistance 150",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Faire le test d'ombre chinoise à 32 px avec 5 joueurs de 9 à 13 ans et redessiner chaque icône reconnue par moins de 4 joueurs sur 5",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Faire les tests daltonisme (niveaux de gris, deutéranopie), fonds (Prairie, Terre battue, Nuit labo, ClockTime 17,5) et Android de 5,5 pouces",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Vérifier que les 2 atlas passent la modération Roblox et que leur mémoire texture reste sous 8 Mo",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

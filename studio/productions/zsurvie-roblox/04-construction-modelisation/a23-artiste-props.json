@@ -1,0 +1,88 @@
+{
+  "decisions": [
+    "Couloir libre : dans la Prairie (rayon de 70 studs), seuls des props Décor ou Sol de 2 studs de haut au plus (fleurs, buissons S, nappes, paniers, souches), plus 8 lampadaires (2 par chemin, à 1 stud du bord) et les props de l'empreinte de la Mine. Caisses, rochers, barrières et arbres M et L vivent dans la Lisière (hors chemins et hors couloirs de 8 studs entre portail et Maison) et au lobby. Le Muret reste le seul mur de l'arène.",
+    "Physique : toutes les Parts du kit sont en Anchored = true et CanTouch = false. Seule la Part Collision (à défaut Corps) des props Bloquants a CanCollide et CanQuery à true. Aucun prop ne bloque le tir : le raycast de tir utilise FilterType Include sur Workspace.Dynamique.Zbires.",
+    "Nommage ASCII PRP_<Famille>_<Forme>_<Variante> et DEF_<Nom>. Attributs Kit, Categorie et Version sur le Model, Couleur et Teinte sur les Parts. Le module ReplicatedStorage.KitProps.Regles recolore les Parts depuis ReplicatedStorage.Charte (ombre = base × 0,8, lumière = base mêlée à 20 % de Crème).",
+    "Dossiers : les maîtres de décor sont des Packages dans ServerStorage.KitPropsMaitres, donc jamais répliqués. DEF_Muret, DEF_MiniTourelle et DEF_TapisCollant sont dans ReplicatedStorage.KitProps.Defenses (fantôme côté client, clone côté serveur). Les props placés vont dans Workspace.Carte.Props, par zone. Workspace.Dynamique est réservé au serveur.",
+    "Budgets du kit : Prairie 2 500 Parts, 40 Neon et 4 PointLight (2 au porche, 2 à la Mine), lampadaires en variante Eteint. Laboratoire 3 000 Parts, 60 Neon et 6 PointLight. Le reste des budgets du canon (150 Neon, 12 PointLight) revient aux autres départements.",
+    "Couleurs : sur la run, Violet horde, Or et Alerte sont interdits aux props, et Gemme cyan est réservé à la Mine. Aucun objet plat orange hormis le Tapis Collant. La face du dessus de chaque prop est en teinte lumière pour la caméra (0, 45, 28)."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur technique",
+      "besoin": "Que ReplicatedStorage.Charte expose Charte.Palette.<Nom> en Color3 avec les 11 clés ASCII : Encre, Prairie, TerreBattue, Creme, ToitOrange, Or, GemmeCyan, VioletHorde, Alerte, NuitLabo, Ardoise."
+    },
+    {
+      "de": "Programmeur gameplay",
+      "besoin": "Un raycast de tir en FilterType Include sur Workspace.Dynamique.Zbires. Une validation de pose par GetPartBoundsInBox (les Parts Collision des props Bloquants ont CanQuery). Un appel à Regles.appliquer(clone) côté serveur et à Regles.appliquer(clone, true) pour le fantôme client. Un attribut Etat de 1 à 3 sur DEF_Muret, qui affiche Fissure_1 et Fissure_2. Une détection du Tapis Collant par la distance, sans Touched."
+    },
+    {
+      "de": "Level designer",
+      "besoin": "Les positions des 4 chemins, des portails de la Lisière et de l'empreinte de la Mine, pour placer les 8 lampadaires et tracer les couloirs de 8 studs entre portail et Maison, où aucun prop Bloquant ne doit se trouver."
+    },
+    {
+      "de": "Artiste bâtiments",
+      "besoin": "Le pivot de Workspace.Carte.Maison au centre de son sol (l'audit de hauteur s'en sert) et deux points d'accroche pour les lanternes du porche."
+    },
+    {
+      "de": "Éclairagiste",
+      "besoin": "La validation du partage des budgets : 4 PointLight et 40 Parts Neon pour le kit sur la Prairie, 6 PointLight et 60 Neon au Laboratoire."
+    },
+    {
+      "de": "Artiste personnages",
+      "besoin": "L'emprise maximale des figurines de Zbires (4 × 4 studs) pour dimensionner PRP_Socle dans la Galerie des Zbires."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Valider avec le directeur créatif et le level designer le catalogue de 29 props, la convention PRP_ et DEF_ et la règle du couloir libre",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Greybox : placer des blocs gris aux dimensions exactes des 29 props sur la Prairie et au Laboratoire, puis les contrôler avec la caméra (0, 45, 28) et FieldOfView 50",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Habiller la Lisière avec PRP_Arbre M et L, PRP_Rocher, PRP_Buisson M et PRP_Caisse_S_PiqueNique, hors chemins et hors couloirs entre portail et Maison",
+      "phase": 2,
+      "charge": "M"
+    },
+    {
+      "titre": "Modéliser les props de la run (caisses, panier, nappe, lampes, fleurs, buissons, souche, rails, wagonnet, cristaux, étai) avec leurs variantes et leurs attributs Couleur et Teinte",
+      "phase": 3,
+      "charge": "L"
+    },
+    {
+      "titre": "Modéliser les props du lobby (tuyaux, consoles, étagère, bancs, socles, panneaux, néons, cordons, barrières Labo)",
+      "phase": 3,
+      "charge": "L"
+    },
+    {
+      "titre": "Modéliser DEF_Muret (avec Fissure_1 et Fissure_2), DEF_MiniTourelle et DEF_TapisCollant, puis les ranger dans ReplicatedStorage.KitProps.Defenses",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Convertir les maîtres en Packages dans ServerStorage.KitPropsMaitres et relier les copies placées dans les places Prairie et Laboratoire",
+      "phase": 3,
+      "charge": "S"
+    },
+    {
+      "titre": "Écrire et tester le module ReplicatedStorage.KitProps.Regles (appliquer, auditer) avec le programmeur gameplay",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Régler les 4 lanternes (Range 12, Brightness 1,5, Shadows false) et vérifier les teintes du kit au ClockTime 17,5 du Jour du Colosse",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Obtenir un audit sans erreur sur la Prairie et le Laboratoire, puis mesurer Parts, Neon et mémoire sur un Android de 3 Go avec 6 joueurs et 60 Zbires",
+      "phase": 6,
+      "charge": "M"
+    }
+  ]
+}

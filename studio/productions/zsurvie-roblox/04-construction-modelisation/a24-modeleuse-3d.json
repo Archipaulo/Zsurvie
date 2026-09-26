@@ -1,0 +1,112 @@
+{
+  "decisions": [
+    "Chaque MeshPart porte une seule couleur de la Charte, sans texture (TextureID vide). La couleur est appliquée depuis ReplicatedStorage.Charte grâce au suffixe __Cle du nom (ex. Casque_Casque__Ardoise_Ombre). Le Material est SmoothPlastic partout, et Neon seulement sur les pièces suffixées __Neon.",
+    "Pipeline : 1 unité Blender = 1 stud. L'origine de chaque asset est au centre de son emprise au sol, en (0, 0, 0), avec la face avant vers -Y. Un cube étalon de 1 × 1 × 1 valide l'import. Toute MeshPart doit avoir Size = MeshSize : on ne redimensionne jamais dans Studio.",
+    "Collisions : CollisionFidelity Box partout, Hull pour les seuls rochers ; Default et PreciseConvexDecomposition sont interdits. Les bâtiments collisionnent par des Parts invisibles rangées dans un dossier Collisions. Les Zbires n'ont pas de collision, mais une Part Hitbox (CanQuery à true) pour le clic sur PC.",
+    "Rendu : RenderFidelity Precise sur les Zbires et les bâtiments, Automatic sur le décor, Performance sur la Lisière. Budgets : 90 000 triangles visibles au maximum sur la Prairie avec 60 Zbires, et 700 triangles au maximum par Zbire ordinaire.",
+    "Les Zbires sont faits de 2 à 5 MeshParts rigides, animées par CFrame côté client, sans skinning. Seuls le Colosse et Doc Boulon ont un rig Motor6D avec un AnimationController. Le Mini-Gluant a son propre mesh pour garder le pixel de 0,5 stud.",
+    "Aucun écart au canon : le Colosse est trapu (9 × 6 × 9 studs). Il respecte ainsi la règle des 6 studs près de la Maison et ne la masque jamais à la caméra (0, 45, 28)."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur artistique",
+      "besoin": "Les planches pixel art (face, profil, dessus) des 8 Zbires, du Mini-Gluant, du Colosse et de Doc Boulon, calées sur la grille de 0,5 stud, avant la phase 3."
+    },
+    {
+      "de": "Lead technique / programmeur outils",
+      "besoin": "L'API exacte du module ReplicatedStorage.Charte. Je suppose une table Couleurs de Color3 avec les clés VioletHorde, GemmeCyan, Creme, etc. ; le script d'audit en a besoin pour appliquer les teintes sans alerte."
+    },
+    {
+      "de": "Scripteur gameplay (Zbires et combat)",
+      "besoin": "La confirmation que les Zbires sont clonés côté client depuis ReplicatedStorage.Assets.Zbires et déplacés par CFrame, ainsi que la liste des Attachments et Parts attendus (Attache_Canon, Attache_Tete, Hitbox)."
+    },
+    {
+      "de": "Animateur 3D",
+      "besoin": "La liste des articulations du Colosse et de Doc Boulon, pour découper leurs MeshParts avant de monter le rig Motor6D."
+    },
+    {
+      "de": "Level designer",
+      "besoin": "Le plan d'implantation de la Prairie et du Laboratoire, avec les positions sur les grilles de 1 et 4 studs, pour dimensionner le kit Prairie et les modules du Quai."
+    },
+    {
+      "de": "Artiste lumière et VFX",
+      "besoin": "Une répartition du plafond de 150 Parts Neon qui valide ma réservation : 4 cristaux de la Mine, 8 voiles de portail et 10 branches de l'Arbre des Recherches."
+    },
+    {
+      "de": "Testeur performance mobile",
+      "besoin": "Un Android de référence à 3 Go de RAM, pour valider GraphicsMeshParts à 40 Mo au maximum dans la Developer Console avec 60 Zbires."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Rédiger la fiche technique des meshes (budgets de triangles, nommage Asset_Piece__Cle, tags Mesh_*) et la faire valider par le directeur artistique",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Créer le preset d'export FBX Zsurvie_Roblox et valider l'échelle avec le cube étalon de 1 × 1 × 1 (Size = MeshSize)",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Modéliser et importer le Marcheur de référence (4 MeshParts, 400 triangles au maximum), puis le tester sur téléphone avec la caméra (0, 45, 28) et un FieldOfView de 50",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Livrer les proxys de collision de la Maison (16 × 14 × 16), de la Mine (8 × 5 × 8) et de l'Établi en Parts invisibles, aux cotes finales",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Produire le kit Prairie (15 meshes de 6 studs de haut au maximum), les 3 arbres-cubes et le portail violet de la Lisière",
+      "phase": 2,
+      "charge": "M"
+    },
+    {
+      "titre": "Modéliser les 7 autres Zbires et le Mini-Gluant dans leurs budgets (700 triangles au maximum), avec Attache_Tete et Hitbox",
+      "phase": 3,
+      "charge": "L"
+    },
+    {
+      "titre": "Modéliser la Maison en 3 états (3 500 triangles par état au maximum, socle commun, Attache_TourelleToit) et la Tourelle de toit",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Modéliser la Mine, la Foreuse, l'Établi, le Muret, la Mini-Tourelle, le Tapis Collant, la Pièce et la Gemme",
+      "phase": 3,
+      "charge": "L"
+    },
+    {
+      "titre": "Modéliser le Colosse trapu de 9 × 6 × 9 studs (12 MeshParts, 3 000 triangles au maximum), découpé pour le rig Motor6D",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Modéliser le Blaster (Tool.Handle, Attache_Canon) et le Sac à dos (Accessory sur BodyBackAttachment)",
+      "phase": 3,
+      "charge": "S"
+    },
+    {
+      "titre": "Modéliser le Laboratoire : Capsule, 6 modules du Quai, Alcôve, Arbre des Recherches, 2 machines, Doc Boulon et socle de la Galerie",
+      "phase": 3,
+      "charge": "L"
+    },
+    {
+      "titre": "Régler les PivotOffset des pièces mobiles et poser tous les Attachments attendus par les scripteurs",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Modéliser les 16 accessoires de variantes de la Galerie des Zbires (150 triangles au maximum chacun)",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Passer le script d'audit sur les deux places et profiler GraphicsMeshParts (40 Mo au maximum) sur l'Android 3 Go avec 60 Zbires",
+      "phase": 6,
+      "charge": "M"
+    }
+  ]
+}

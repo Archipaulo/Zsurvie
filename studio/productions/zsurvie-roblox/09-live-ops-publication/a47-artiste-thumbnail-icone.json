@@ -1,0 +1,82 @@
+{
+  "decisions": [
+    "La vignette V1 « Le Colosse arrive ! » (ClockTime 17,5, bulle de la Roue des Pings « Colosse ! ») est la vignette de lancement et le témoin du premier test A/B, contre V2 « Défendez à 6 ! ». L'icône I1 « Le Zbire gourmand » (tête de Marcheur, sans texte) est testée en premier, contre I2 « La Maison assiégée ».",
+    "Toutes les images sont des captures des vrais modèles du jeu, faites dans une place dédiée Zsurvie_Vignettes (Lighting.Technology Future), jamais publiée comme place jouable. Pas de Zbire inventé, pas d'échelle trichée, et aucun jour affiché au-delà du Jour 12 (une run plafonne vers le jour 15).",
+    "Formats : vignettes en 1920 × 1080 avec 5 % de marge (96 px sur les côtés, 54 px en haut) et 15 % en bas (162 px). Icône en 512 × 512, contenu clé dans le carré central de 410 px. Contrôle obligatoire à 256 × 144 et à 64 × 64, puis en niveaux de gris.",
+    "Texte : 3 mots au maximum sur les vignettes, aucun sur l'icône. Remplissage Crème #F6E7C1, contour Encre #1E1B2E de 10 px. Versions FR et EN via la localisation des images du Creator Hub.",
+    "Le code couleur canon s'applique strictement aux images : violet pour les seuls Zbires, orange et crème pour la Maison et les Survivants, or pour les pièces, cyan pour les gemmes. L'Alerte #FF2E63 est réservée à la bulle « Colosse ! ».",
+    "Critère de victoire d'un test A/B : un meilleur taux de clic sans perdre plus de 5 % de durée moyenne de session. Un seul test à la fois, 7 jours minimum, aucune image modifiée pendant un test."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif",
+      "besoin": "Valider les textes dans l'image (« Colosse ! », « DÉFENDEZ À 6 ! » / « 6-PLAYER CO-OP! », « JOUR 1 » / « JOUR 12 ») et le traitement du logo ZSURVIE sur les vignettes."
+    },
+    {
+      "de": "Artiste personnages & Zbires",
+      "besoin": "Modèles finaux du Colosse, du Marcheur, du Rapide, du Casqué, du Gluant, du Volant et du Costaud, avec une pose expressive chacun (Colosse bouche ouverte, Marcheur en clin d'œil), et l'échelle du Colosse en studs."
+    },
+    {
+      "de": "Artiste environnement",
+      "besoin": "Une copie de la Prairie construite (Maison dans ses 3 états, Mine, 4 chemins en croix, portails violets de la Lisière) livrée en fin de phase 3 pour la place Zsurvie_Vignettes."
+    },
+    {
+      "de": "Développeur gameplay",
+      "besoin": "Les noms exacts des clés Color3 du module ReplicatedStorage.Charte (Encre, Creme, NuitLabo, Alerte…), pour que le script MiseEnScene lise la palette sans passer par ses valeurs de secours."
+    },
+    {
+      "de": "Designer UI",
+      "besoin": "Le logo ZSURVIE en lettrage bloc (PNG transparent de 1200 px de large) et la bulle de la Roue des Pings « Colosse ! » exportable en haute définition."
+    },
+    {
+      "de": "Artiste VFX",
+      "besoin": "Des émetteurs d'éclat en cubes violets, de pièces et de traînées de Blaster qu'on peut figer avec ParticleEmitter.TimeScale = 0 au moment de la capture."
+    },
+    {
+      "de": "Responsable Live Ops",
+      "besoin": "Un accès au Creator Hub (tests A/B des vignettes et icônes, localisation des images) et le taux de clic de référence dès la mise en ligne."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Faire valider au directeur créatif les croquis en noir et blanc des vignettes V1, V2, V3 et des icônes I1, I2, testés à 256 × 144 et à 64 × 64",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Monter la place Zsurvie_Vignettes en greybox et sortir 5 maquettes de composition qui passent le test du plissement",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Poser les modèles finaux (Colosse, Zbires, Survivants avatars blocs R15, Maison, Mine) pour les scènes V1, V2, V3, I1 et I2",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Intégrer et régler le script MiseEnScene (6 préréglages, guide de cadrage dans StarterGui) dans la place de capture",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Capturer et composer les vignettes V1, V2 et V3 en 1920 × 1080, avec les versions texte FR et EN",
+      "phase": 5,
+      "charge": "L"
+    },
+    {
+      "titre": "Capturer et finaliser les icônes I1 et I2 en 512 × 512, vérifiées à 64 × 64 et en niveaux de gris",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Produire les vignettes 4 et 5 du carrousel : le Laboratoire (Alcôves, néons cyan) et la Galerie des Zbires",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Lancer le test A/B V1 contre V2 (7 jours, taux de clic et durée de session), puis I1 contre I2, puis le gagnant contre V3",
+      "phase": 6,
+      "charge": "M"
+    }
+  ]
+}

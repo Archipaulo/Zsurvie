@@ -1,0 +1,102 @@
+{
+  "decisions": [
+    "ReplicatedStorage.Catalogue est la seule table de chiffres de Zsurvie, lue par Economie, Donnees, l'UI et l'onboarding. Établi : base × 1,45^(niv − 1), niveau 10 max (Butin 5). Bases : Cadence 25, Portée et Réparation 20, Solidité et Butin 30, Régénération 40, Balles explosives 60. ÉCART EXPLICITE à la consigne : la base de Dégâts passe de 25 à 10 (10 au niveau 1, 285 au niveau 10) pour lever le bloquant QA du premier achat à T 70 s. Cagnotte (Solidité, Réparation, Régénération) : prix × (0,5 + 0,5 × joueurs). Défenses : Muret 15, Tapis Collant 25, Mini-Tourelle 60, × (1 + 0,15 × (jour − 1)). PIECES_PAR_ZBIRE : Marcheur 2, Rapide 2, Sauteur 3, Volant 3, Gluant 3, MiniGluant 1, Costaud 5, Casque 5, Dore 10, Colosse 150.",
+    "Economie (ServerScriptService, place Prairie) est le seul handler de DemandeAchat(cle, niveauVise) et de la cagnotte. Un tap verse ce qui manque, dans la limite du solde, et le surplus passe au niveau suivant. Economie gère aussi payerDefense et reprendreDefense (50 % du prix payé, attribut PrixPaye). Le CATALOGUE et AcheterAmelioration de a33 sont supprimés.",
+    "Gemmes, toutes via Donnees.AjouterGemmes ou Donnees.CrediterRun. Jour franchi : 5 + 2 × min(jour, 15), doublé aux J5, J10 et J15. Mine commune : 1 gemme toutes les 20 s, stock de 6, versée à chaque Survivant actif dès qu'un Survivant la touche (7 studs). Doré : 4 par Survivant, dès le J3. Plancher de 40 à la 1re run. Tourelle de toit 1 à 40. Foreuse en 5 niveaux : 5, 9, 14, 20 et 27 gemmes par heure, prix 100, 170, 290, 490 et 835. Arbre ≈ 56 300 gemmes (≈ 45 h). Cible publiée d'une 1re run au J6 : 112 gemmes (fourchette H7/H8 de 95 à 130), 224 un week-end.",
+    "Pièces : aimant serveur de 8 studs et 20 s au sol. Le non-ramassé est versé à 50 % au début du Répit (« +X » gris). Jour parfait : 25 % des Pièces du jour via ajouterPieces. Cumuls à 85 % de ramassage : ≈ 780 au J5, ≈ 2 700 au J10. Coop bornée : HordeService multiplie les Zbires par jour par (1 + 0,2 × (actifs − 1)), facteur renvoyé par Economie.debutJour. Les Pièces par Zbire sont divisées par ce facteur, fraction gardée côté serveur, donc le revenu par Survivant est identique de 1 à 6 joueurs. Bonus coop : ≈ + 1 jour à 2,5 joueurs, + 0,6 jour à 6.",
+    "Activité unique : Economie.marquerActif et Economie.estActif, aussi utilisés par a08 et a14. Comptent : 4 studs de déplacement cumulé, une réparation, une pose, un ping ou un tap de ciblage. Le tir automatique est exclu. Fenêtre de 90 s. À 75 s, l'attribut Inactif déclenche un « Zzz » et un bip (consigne du chef de projet, au lieu des 45 s proposées par la QA). Les gemmes refusées alimentent l'attribut GemmesInactif et la ligne « inactif » de l'écran de fin. Le Défi du Jour, le Calendrier et les secrets passent sur Transactions.cleJourParis (minuit à Paris), le 0 h UTC est abandonné.",
+    "§5 recalculé avec 2,5 Survivants en moyenne, le Défi du Jour dès la 1re heure, la Capsule Difficile + 50 %, Filon et Panier (a15) + 10 %, la Foreuse Turbo (a08) × 1,25 et les week-ends + 100 % (a49). Les bonus s'additionnent, × 2,5 au plus. Résultat : 708 gemmes et 7 recherches la 1re heure, 4 859 gemmes et 19 recherches en 5 h. Soumis à Victor Lanoue : l'aspiration à 50 % (en cas de refus, prix de l'Établi × 0,82) et le puits cosmétique (teintes d'Alcôve de 500 à 2 000 gemmes), non codé sans son accord."
+  ],
+  "besoins": [
+    {
+      "de": "Programmeur backend et données",
+      "besoin": "Exposer Donnees.AjouterGemmes(joueur, montant, source), qui met en tampon la run et crédite directement au Laboratoire, et Donnees.CrediterRun(joueur, finDeRun), un UpdateAsync idempotent avec runId = game.JobId qui applique le plancher de 40 (Catalogue.GEMMES.PLANCHER_PREMIERE_RUN) à la 1re run terminée. Lire la Foreuse en 5 niveaux (FOREUSE_PAR_HEURE, 8 h max, os.time() serveur) et utiliser Transactions.cleJourParis pour le Défi du Jour. Vider le tampon à BindToClose. Loguer chaque crédit de gemmes via AnalyticsService:LogEconomyEvent."
+    },
+    {
+      "de": "Designer combat et Zbires",
+      "besoin": "Dans HordeService, multiplier le nombre de Zbires par jour par le facteur renvoyé par Economie.debutJour, soit 1 + 0,2 × (actifs − 1). Appeler Economie.lacherButin(type, position, jour) à chaque Zbire éclaté. Faire apparaître 1 Doré par jour dès le J3 et 2 dès le J8. Confirmer l'hypothèse de 18 + 7 × jour Zbires. Garder les PV en hausse d'au moins 15 % par jour, pour une chute entre J11 et J15. Lire PV de la Maison, réparation, Muret et Mini-Tourelle (50 % du Blaster) dans le Catalogue."
+    },
+    {
+      "de": "Programmeur gameplay Luau",
+      "besoin": "Supprimer le CATALOGUE et AcheterAmelioration de a33. Créer ReplicatedStorage.Remotes (DemandeAchat, GainPieces, Butin, ButinRetire). Appeler Economie.marquerActif depuis les handlers de réparation, de pose, de ping et de tap de ciblage, jamais depuis le tir automatique. Dans DemandePose, appeler payerDefense et écrire PrixPaye, puis reprendreDefense à la reprise. Brancher le directeur de run sur debutJour, debutRepit(jourParfait), franchirJour et finDeRun."
+    },
+    {
+      "de": "Designer UI mobile",
+      "besoin": "Lire les prix dans ReplicatedStorage.Catalogue, ainsi que les attributs Pieces et Niv_* du joueur et Niv_* et Cagnotte_* de ReplicatedStorage.EtatEquipe. Afficher le « +X » gris de l'aspiration (GainPieces, gris = true). Afficher un BillboardGui « Zzz » au-dessus du Survivant et jouer un bip pour lui seul quand l'attribut Inactif vaut true. Ajouter la ligne « Inactif : X gemmes non versées » (GemmesInactif) sur l'écran de fin. Boutons de 60 px minimum."
+    },
+    {
+      "de": "Designer progression (a08) et designer coop (a14)",
+      "besoin": "Remplacer vos seuils (20 studs, 90 s) par Economie.estActif. a08 : chiffrer la Foreuse Turbo (hypothèse retenue : × 1,25 en moyenne sur la production)."
+    },
+    {
+      "de": "Designers Prairie (a15) et LiveOps (a49)",
+      "besoin": "a15 : confirmer que le Filon et le Panier rapportent ≈ + 10 % des gemmes de run, les rattacher à la Mine ou au Doré (les 5 sources du canon) et les créditer via Donnees.AjouterGemmes. a49 : confirmer que le week-end × 2 ne s'applique qu'aux gemmes de run, en bonus additif avec la Capsule Difficile (× 2,5 au plus), et jamais au Défi du Jour ni à la Foreuse."
+    },
+    {
+      "de": "Level designer de la Prairie",
+      "besoin": "Nommer les Models « Etabli » et « Mine » dans workspace, avec un pivot au centre. Placer l'Établi à moins de 6 s de course de la Maison et la Mine à 12 studs, accessible à 7 studs de son pivot."
+    },
+    {
+      "de": "Directeur créatif (Victor Lanoue)",
+      "besoin": "Valider ou refuser l'aspiration à 50 % des Pièces non ramassées au début du Répit, et le puits cosmétique en gemmes (teintes d'Alcôve de 500 à 2 000, palette Charte) après l'arbre des recherches."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Publier le tableur d'équilibrage v2 (Établi avec Dégâts à 10, gemmes par run de J5 à J12, courbe des 5 heures à 2,5 Survivants), identique au Catalogue",
+      "phase": 0,
+      "charge": "M"
+    },
+    {
+      "titre": "Soumettre à Victor Lanoue l'aspiration à 50 % et le puits cosmétique, puis consigner sa décision dans le Catalogue",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Mesurer en greybox les trajets Maison → Établi (moins de 6 s) et Maison → Mine (12 studs), et le rayon de contact de 7 studs",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Créer ReplicatedStorage.Catalogue et migrer a06, a09 et a33 dessus (plus aucun prix en dur ailleurs)",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Implémenter Economie : DemandeAchat(cle, niveauVise), cagnotte au tap, payerDefense et reprendreDefense à 50 %",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Implémenter le butin serveur : aimant de 8 studs, 20 s au sol, aspiration à 50 % au Répit, fraction coop, Jour parfait à 25 %",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Implémenter marquerActif et estActif (fenêtre de 90 s, alerte à 75 s), la Mine commune (stock de 6) et le crédit via Donnees",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Intégrer le « Zzz » avec bip, le « +X » gris et la ligne « inactif » de l'écran de fin",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Playtester 20 runs en solo, 20 runs à 2-3 joueurs et 10 runs à 6 : jour de chute, 1re run au J6 à 112 ± 15 gemmes, ramassage à 85 %, premier achat avant T 70 s",
+      "phase": 6,
+      "charge": "L"
+    },
+    {
+      "titre": "Tester les exploits : AFK de groupe, tremblement de position, double tap sur la cagnotte, déconnexion en cours de jour, double Défi du Jour à minuit à Paris",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Brancher les alertes AnalyticsService (stock médian supérieur à 2 fois le prochain prix, gemmes par heure hors de ± 15 % de la courbe)",
+      "phase": 6,
+      "charge": "M"
+    }
+  ],
+  "revise": true
+}

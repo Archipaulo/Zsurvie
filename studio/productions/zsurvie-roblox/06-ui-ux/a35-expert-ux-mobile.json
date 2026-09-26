@@ -1,0 +1,83 @@
+{
+  "decisions": [
+    "Paysage imposé dans le Laboratoire et sur la Prairie (StarterGui.ScreenOrientation = LandscapeSensor), gabarit de référence 800 x 360 pt, tout ScreenGui interactif en ScreenInsets = CoreUISafeInsets et ResetOnSpawn = false.",
+    "Répartition des pouces sur la Prairie : pouce gauche = joystick dynamique Roblox seul (40 % gauche x 60 % bas sans aucun bouton) ; pouce droit = la Grappe, Réparer 96 px dans le coin et Muret, Mini-Tourelle, Tapis Collant, Roue des Pings en 64 px sur un arc de 150 px (180, 210, 240, 270 degrés) ; le haut de l'écran est en lecture seule sauf Paramètres.",
+    "Tailles tactiles : visuel 64 px (plancher canon de 60 px respecté), zone de touch visuel + 6 px par côté, 12 px entre visuels, 24 px de marge aux bords, texte 16 px minimum, UIScale borné entre 1 et 1,4 pour ne jamais passer sous 60 px.",
+    "Ajout au canon soumis à Victor Lanoue : saut désactivé sur la Prairie (CharacterUseJumpPower = true, CharacterJumpPower = 0) pour masquer le bouton de saut Roblox et libérer le coin du pouce droit ; saut conservé au Laboratoire.",
+    "Pose des défenses en 2 taps sans glisser-déposer (fantôme 6 studs devant le Survivant, grille 1 stud, Muret orienté tangent à la Maison) ; Roue des Pings sans visée (« Ici ! » = position du Survivant) ; tir automatique mobile qui propose d'abord le Zbire visible hors de la Grappe, revalidé par le serveur à 40 studs.",
+    "Anti-tap fantôme : aucun écran modal en combat, taps ignorés 0,8 s sur tout écran qui surgit (fin de run) ; achat en Pièces à l'Établi en 1 tap (anti double tap 0,3 s), dépense de Gemmes au Laboratoire en 2 taps avec « Confirmer ? » pendant 3 s."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif (Victor Lanoue)",
+      "besoin": "Valider l'ajout « pas de saut sur la Prairie » et le ping « Ici ! » posé sur la position du Survivant plutôt que visé au doigt."
+    },
+    {
+      "de": "Game designer",
+      "besoin": "Confirmer le ramassage des Pièces au contact (aucun bouton), la portée de réparation de 14 studs depuis le centre de la Maison, le maintien de Réparer par tranches de 0,5 s et la fermeture automatique de l'Établi à 12 studs."
+    },
+    {
+      "de": "Directeur artistique UI / UI designer",
+      "besoin": "Icônes pixel-bloc 64 px lisibles à 40 px pour Réparer, Muret, Mini-Tourelle, Tapis Collant, Roue des Pings et les 4 pings, plus les noms de champs exacts du module ReplicatedStorage.Charte (Creme, Encre, etc.)."
+    },
+    {
+      "de": "Scripteur gameplay / réseau",
+      "besoin": "RemoteEvents DemandeTir(id), DemandeReparer(debut/fin), DemandePose(type, position), DemandePing(type) avec validation serveur (distance 40 studs, cadence, 3 défenses max, 1 ping / 2 s) et un dossier workspace.Zbires côté client dont chaque modèle porte l'attribut Id."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "Bip d'appui 8-bit de moins de 80 ms par type de bouton, compté dans le budget de 16 sons simultanés."
+    },
+    {
+      "de": "Responsable QA",
+      "besoin": "Parc de test réel : Android d'entrée de gamme 3 Go, iPhone SE, iPhone à encoche, iPad 10,2 pouces, et organisation de sessions encadrées avec 5 testeurs de 9 à 13 ans avec accord parental."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Rédiger la checklist mobile et le gabarit du HUD à 800 x 360 (positions, AnchorPoint, tailles de chaque élément) validé avec l'UI designer",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Vérifier en greybox le cadrage caméra (0, 45, 28) FOV 50 sur 4 ratios : champ visible devant, derrière et sur les côtés, aucun décor de plus de 6 studs ne masque le Survivant",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Contrôler l'espacement des ProximityPrompt du Laboratoire (8 studs minimum entre Doc Boulon, Arbre des Recherches, Capsules et Alcôves) et régler MaxPromptsVisible = 1",
+      "phase": 3,
+      "charge": "S"
+    },
+    {
+      "titre": "Implémenter le module DispositionTactile (Grappe en arc, zones de touch élargies, CoreUISafeInsets, UIScale borné, bascule tactile / clavier via LastInputTypeChanged)",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Implémenter la sélection de cible du tir automatique mobile (priorité aux Zbires visibles hors de la Grappe, verrou par tap 3 s, anneau de cible) avec revalidation serveur",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Implémenter la pose des défenses en 2 taps (fantôme, grille 1 stud, orientation automatique du Muret, annulation après 4 s) et la Roue des Pings (tap ou maintenir + glisser, anti-spam serveur)",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Adapter les écrans Établi (panneau 52 %), Arbre des Recherches (scroll horizontal, double confirmation), Capsule, fin de run (verrou 0,8 s), état Étourdi et flèches hors écran",
+      "phase": 5,
+      "charge": "L"
+    },
+    {
+      "titre": "Campagne multi-écrans : 6 configurations (émulateur Studio et appareils réels), 20 taps par bouton en marchant avec 19 réussis minimum, run de 12 min sans tap involontaire, 30 FPS sur l'Android 3 Go",
+      "phase": 6,
+      "charge": "L"
+    },
+    {
+      "titre": "Test utilisateurs sur téléphone avec 5 joueurs de 9 à 13 ans : taux de taps manqués inférieur à 5 %, corrections du gabarit",
+      "phase": 6,
+      "charge": "M"
+    }
+  ]
+}

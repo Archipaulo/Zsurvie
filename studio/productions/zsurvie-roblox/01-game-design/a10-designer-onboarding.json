@@ -1,0 +1,133 @@
+{
+  "decisions": [
+    "L'accueil court du premier spawn jusqu'à l'étape PremiereRecherche. Novice de run : RunsTerminees == 0 (ouverture scriptée et indices de la Prairie). Accueil actif : AccueilEtape < PremiereRecherche, exposé par l'attribut Player.AccueilActif, qui bloque toute carte d'arrivée de a33. RunsTerminees (fin de run) et AccueilEtape (module Onboarding) sont écrits par Donnees.Modifier. Au Laboratoire, la caméra est Custom pour tous (arbitrage a11, à valider par Victor Lanoue) : dalles cyan et hologramme de Doc Boulon guident sans caméra de run.",
+    "Le novice atterrit sur le SpawnLocation du Parvis (Plan v1 : (−3 ; 0,5 ; 16)), à 9 studs de Plan.ETABLI (−12 ; 14). Le point x = +20 est retiré. Les 20 s d'Arrivée de a06 sont conservées et servent à l'anneau de portée (40 studs) et au joystick fantôme.",
+    "Onboarding.OUVERTURE compte depuis H, le début de la horde du Jour 1 : 13 Marcheurs à t = 3, 5, 7, 9, 11 et 13 par le chemin Est, puis à t = 15, 17, 19, 21, 23, 25 et 27 par le chemin Ouest (la Maison masque le Nord depuis le Parvis). Les 2 premiers portent ReservePour, attribué à tour de rôle entre novices et retiré après 20 s. Écart soumis à Victor Lanoue : ils échappent au multiplicateur coopératif de PV et ne sont visés ni par les tourelles ni par les autres Survivants.",
+    "Rythme calé sur BlasterStats (4 tirs/s) : premier éclatement vers T 56 (T 58 au pire, donc sous T 60), balise de l'Établi dès que le solde atteint PRIX_PREMIER_ACHAT = Economie.prixEtabli('Degats', 1) (25 Pièces, soit 13 Marcheurs) vers T 79, premier achat vers T 81. Aucun prix n'est codé en dur.",
+    "Après les 90 s, un seul indice à la fois. Maison touchée (après le premier achat) : clé et bouton Réparer qui pulse. Premier Répit : fantôme de Muret et bouton Muret qui pulse. Premier Colosse : bouton Ping qui pulse 2 s avec l'icône PingColosse ; la Roue des Pings ne s'ouvre jamais seule. Au retour au Laboratoire : dalles cyan de la Voie d'arrivée (0, −55) au pupitre de l'Arbre des Recherches, et main or sur la Tourelle de toit (AccueilCible = \"TourelleDeToit\").",
+    "Aucun appel à AnalyticsService dans l'onboarding. Les 7 jalons (Laboratoire, MonteeCapsule, ArriveePrairie, PremierZbire, PremierAchatEtabli, FinJour1, PremiereRecherche) passent par Telemetrie.Etape et se rattachent aux 12 étapes de a50. Objectifs de rétention repris de a50 : J1 ≥ 22 %, J7 ≥ 8 %."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif",
+      "besoin": "Valider l'écart des 2 Marcheurs ReservePour : pas de multiplicateur coopératif de PV, ignorés par les tourelles et les autres Survivants, libérés après 20 s. Valider aussi la caméra Custom au Laboratoire (arbitrage a11)."
+    },
+    {
+      "de": "Designer économie",
+      "besoin": "Exposer Economie.prixEtabli('Degats', 1) = 25 dans ReplicatedStorage.Partage.Economie, lisible par le serveur. Confirmer que le Marcheur lâche 2 Pièces. Garantir que la Tourelle de toit coûte moins que les gemmes d'une première run perdue au Jour 1, et confirmer son identifiant \"TourelleDeToit\"."
+    },
+    {
+      "de": "Designer combat",
+      "besoin": "Confirmer : Marcheur à 8 studs/s qui tombe en 3 tirs, cadence de 4 tirs/s dans ReplicatedStorage.Partage.BlasterStats. Le tir auto, les Mini-Tourelles et la Tourelle de toit ne ciblent un Zbire portant ReservePour que pour ce UserId. Afficher 3 étoiles or à chaque étourdissement de 2 s. Appeler Onboarding.surElimination."
+    },
+    {
+      "de": "Designer boucle de run (a06)",
+      "besoin": "Conserver l'Arrivée de 20 s, puis faire jouer Onboarding.OUVERTURE depuis le début de la horde du Jour 1 si Onboarding.aDesNovices(), en appelant Onboarding.reserver sur les entrées reserve. Appeler surJourFranchi et surEvenementRun (\"MaisonTouchee\", \"Repit\", \"Colosse\"). Incrémenter RunsTerminees par Donnees.Modifier en fin de run."
+    },
+    {
+      "de": "Level designer Prairie",
+      "besoin": "Placer le SpawnLocation du Parvis en (−3 ; 0,5 ; 16), à 10 studs au plus de Plan.ETABLI. Mettre les portails des chemins Est et Ouest à x = ±72. Garder un sol plat à Y = 0 entre le Parvis et les deux portails, et fournir workspace.Etabli.Balise (ParticleEmitter Rate 15, désactivé par défaut)."
+    },
+    {
+      "de": "Level designer Laboratoire",
+      "besoin": "Placer SpawnNovice face à la Capsule Normale, à 12 studs. Créer workspace.DallesAccueil.Quai (6 dalles) et workspace.DallesAccueil.Recherches (10 dalles de la Voie d'arrivée (0, −55) jusqu'au pupitre de l'Arbre des Recherches), en Parts Neon 4 × 0,2 × 4 nommées 1 à n, Transparency 1. Ajouter la position du pupitre dans ReplicatedStorage.Plan."
+    },
+    {
+      "de": "Lead scripteur",
+      "besoin": "Brancher les hooks d'Onboarding : enregistrer avant LoadCharacter, surMontee, surElimination, surSolde, surAchat, surJourFranchi, surEvenementRun et surRecherche. Confirmer les signatures Donnees.Modifier(joueur, cle, transformation) et Telemetrie.Etape(joueur, nom), ainsi que les clés de Charte (Charte.Creme)."
+    },
+    {
+      "de": "Data analyst (a50)",
+      "besoin": "Confirmer que les 7 jalons figurent tels quels dans l'entonnoir de 12 étapes, avec leur horodatage depuis l'apparition. Construire le tableau de bord par plateforme : entonnoir, taux de 2e run, rétention J1 22 % et J7 8 %, alerte dès 10 points de perte."
+    },
+    {
+      "de": "Auteur des cartes d'arrivée (a33)",
+      "besoin": "N'afficher aucune carte d'arrivée tant que Player:GetAttribute(\"AccueilActif\") n'est pas false."
+    },
+    {
+      "de": "UI designer",
+      "besoin": "Dans le HUD, prévoir des boutons Reparer, Muret et Ping munis d'un ImageLabel Icone, l'icône PingColosse et un JoystickFantome (main de 80 px, aller-retour en 0,8 s). Afficher une main or de 72 px sur l'élément nommé par AccueilCible, dans le panneau d'Établi comme dans l'Arbre des Recherches. Fournir aussi la flèche or hors champ, l'anneau de 512 px et le TeleportGui en tunnel cyan."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "6 sons chiptune de moins de 1,5 s : jingle d'accueil, bloup de portail, éclatement, ding de pièce, tintin de l'Établi et fanfare d'achat."
+    },
+    {
+      "de": "Animateur",
+      "besoin": "Animer l'hologramme de Doc Boulon (salut de 1,2 s, geste de pointer, au Quai et au pupitre), la Capsule qui se pose sur le Parvis puis redécolle avec un effet élastique, et les 3 étoiles or de l'étourdissement."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Faire valider par Victor Lanoue l'écart ReservePour (sans multiplicateur coopératif, ignoré par les tourelles et les autres Survivants, libéré à 20 s) et la caméra Custom au Laboratoire",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Storyboard pictographique de l'accueil en 14 vignettes (90 s de jeu, puis retour au Laboratoire jusqu'à PremiereRecherche), validé en revue design",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Greybox Prairie : SpawnLocation du Parvis en (−3 ; 0,5 ; 16) à moins de 10 studs de Plan.ETABLI, portails Est et Ouest à x = ±72. Vérifier sur téléphone que les Marcheurs Est et Ouest sont à l'écran avant d'entrer dans l'anneau",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Greybox Laboratoire : SpawnNovice à 12 studs de la Capsule Normale, 6 dalles sur le Quai et 10 dalles de la Voie d'arrivée (0, −55) jusqu'au pupitre de l'Arbre des Recherches",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Construire la Capsule d'atterrissage (pose et redécollage élastiques) et l'hologramme cyan de Doc Boulon pour le Quai et le pupitre",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Intégrer le module Onboarding : AccueilEtape écrit par Donnees.Modifier, jalons envoyés par Telemetrie.Etape, attributs AccueilActif et AccueilCible, les 8 hooks branchés",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Faire jouer Onboarding.OUVERTURE par le Directeur de horde à partir de H si aDesNovices(), avec Onboarding.reserver ; filtrer ReservePour dans le tir auto et les tourelles",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Retour au Laboratoire : dalles jusqu'au pupitre, nœud Tourelle de toit seul allumé, cartes a33 bloquées par AccueilActif, puis dalles vers la Capsule pendant 10 s après surRecherche",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Chevrons violets et flèche or hors champ via Camera:WorldToViewportPoint, un chevron par chemin",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Produire les pictogrammes, l'anneau de 512 px, l'icône PingColosse, le JoystickFantome, la main or et les pulses des boutons Réparer, Muret et Ping (2 pulses par seconde au plus)",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Intégrer les 6 sons 8-bit (ding de pièce à PlaybackSpeed × 1,06 par pièce) et le TeleportGui en tunnel cyan repris dans le ReplicatedFirst de la Prairie",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Test à l'aveugle avec 10 enfants de 9 à 13 ans sur Android 3 Go, sans consigne orale : au moins 8 sur 10 éclatent un Zbire avant T 60, 6 sur 10 achètent avant T 90, 7 sur 10 lancent la Tourelle de toit sans aide",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Chronométrer sur Android 3 Go : atterrissage avant T 30 au 90e centile, balise de l'Établi vers T 79 en solo, Colosse toujours dans la 8e minute avec l'Arrivée de 20 s",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Brancher le tableau de bord a50 : entonnoir de 12 étapes avec les 7 jalons d'accueil, taux de 2e run, rétention J1 et J7 par plateforme, alerte dès 10 points",
+      "phase": 6,
+      "charge": "S"
+    }
+  ],
+  "revise": true
+}

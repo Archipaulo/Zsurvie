@@ -1,0 +1,274 @@
+{
+  "taches": [
+    {
+      "titre": "T01 Faire trancher par Victor Lanoue les écarts au canon en attente",
+      "phase": 0,
+      "agents": ["a01", "a03", "a02"],
+      "note": "Charge S. Séance unique le 29/09, réponses écrites avant le 30/09 à 18 h dans le document de design. Écarts bloquants : Arrivée de 20 s, victoire au J15, aspiration des pièces à 50 %, rayon du tir auto égal à la Portée (52 studs au plus), caméra (0, 52, 32) pendant le Colosse, multiplicateur coop limité aux actifs, JumpHeight 0 et A/B H2, ReservePour, caméra Custom au Laboratoire, Mine à 12 studs bord à bord, StreamingEnabled du Laboratoire, Cabine d'Essayage, noms d'instances sans accents, Eau-bloc. Écarts de contenu (POI, Tuyauterie, peluches, polices, progression) avant le 06/10. Sans réponse, la valeur du canon s'applique."
+    },
+    {
+      "titre": "T02 Publier ReplicatedStorage.Plan v1 et ReplicatedStorage.Charte",
+      "phase": 0,
+      "agents": ["a11", "a30"],
+      "note": "Charge M, le 29/09. Plan : Maison à l'origine, porte au Sud (+Z), Mine de X/Z 20 à 32, 8 portails à R 80 tagués PortailZbire, Grand Portail Nord en (0, 0, -80), barrière à R 72, pose jusqu'à R 66 par posePermise, Établi en (-12, 14), SpawnLocation en (-3 ; 0,5 ; 16) ; Laboratoire avec Alcôves à R 43 et SpawnLocation en (0 ; 0,5 ; 64). Charte : Couleurs aux 11 clés ASCII et teinte(nom, 'Base' | 'Ombre' | 'Lumiere'), rien d'autre. Bloque toute greybox."
+    },
+    {
+      "titre": "T03 Publier le Catalogue, ZbiresDefs.Jours et Config.Mouvement",
+      "phase": 0,
+      "agents": ["a07", "a06", "a09"],
+      "note": "Charge M, avant le 02/10. Catalogue au barème unique de a07 : Établi à base × 1,45^(niv - 1), Dégâts niveau 1 à 25 (et non 10), défenses, Foreuse en 5 niveaux, jours franchis à 5 + 2 × min(jour, 15). Tableur v2 identique au Catalogue. ZbiresDefs.Jours de J1 à J15 : 1 portail de J1 à J3, 2 de J4 à J8, 3 ou 4 dès J9, paquets de 3 à 5. Config.Mouvement : WalkSpeed 18, 24 et 8 sur la Prairie, JumpHeight 0 (5 pour le profil B) ; WalkSpeed 16 et JumpHeight 7,2 au Laboratoire."
+    },
+    {
+      "titre": "T04 Figer et versionner le contrat technique v2 (réseau, état, données)",
+      "phase": 0,
+      "agents": ["a27", "a29", "a28"],
+      "note": "Charge M, avant le 02/10. ReplicatedStorage.Reseau généré depuis ReglesRemotes : 11 remotes montantes, aucune RemoteFunction. EtatRun sur la Prairie seulement. Formats EtatZbires (9 octets) et Evenements (8 octets). Schéma v2 de Zsurvie_Joueurs_v1. Donnees.AjouterGemmes limité aux 5 sources du canon. Temps.cleJour à minuit, heure de Paris. Toute évolution ultérieure passe en revue devant a27 et a03."
+    },
+    {
+      "titre": "T05 Maquetter les 8 écrans clés au gabarit 800 × 360",
+      "phase": 0,
+      "agents": ["a31", "a35", "a33"],
+      "note": "Charge L. HUD de run : bandeau Maison, Grappe avec Réparer en 96 px et 4 boutons de 64 px, aucun bouton de saut. Établi en panneau droit de 55 %. Roue des Pings, fin de run de 8 s, HUD du Laboratoire, Capsule, Arbre des Recherches (maintien de 0,5 s), Galerie. Critère : maquettes validées par Victor Lanoue et a32 le 02/10, puis prototype cliquable testé par 3 enfants de 9 à 12 ans avant le 09/10."
+    },
+    {
+      "titre": "T06 Valider la fiche technique art et les budgets par zone",
+      "phase": 0,
+      "agents": ["a04", "a24", "a25"],
+      "note": "Charge S. Budgets de triangles (Zbire 700, Colosse 3 000 et 30 Parts), nommage Asset_Piece__Cle, preset FBX avec cube étalon, table du Gabarit : 6 500 Parts statiques, 150 Neon, 12 lumières, 24 émetteurs et 16 voix. Critère : fiche signée par la directrice artistique le 02/10."
+    },
+    {
+      "titre": "T07 Valider le storyboard d'accueil et le plan de marquage",
+      "phase": 0,
+      "agents": ["a10", "a50"],
+      "note": "Charge M. Storyboard de 14 vignettes : Arrivée de 20 s, 13 Marcheurs entre H+3 et H+30, premier achat (Dégâts 1 à 25 Pièces) vers T 80, retour au Laboratoire jusqu'à PremiereRecherche. Plan de marquage : entonnoir de 12 étapes, entonnoirs Run et Boutique, 12 événements, objectifs J1 22 % et J7 8 %. Critère : validé par le lead scripting le 02/10."
+    },
+    {
+      "titre": "T08 Préparer les deux places et l'outillage",
+      "phase": 1,
+      "agents": ["a30", "a16", "a27"],
+      "note": "Charge M, du 30/09 au 02/10. Terrain vidé (CountCells() = 0). ServerStorage.Outillage.Gabarit avec attributs Budget. Auditeur Pixel-bloc v2 installé sur tous les postes et Semeur branché. Attributs Workspace TypePlace, CentrePlace et RayonPlace. StreamingEnabled à false sur la Prairie. MaxPlayers à 12 au Laboratoire et à 6 sur la Prairie."
+    },
+    {
+      "titre": "T09 Monter la greybox unique de la Prairie et la valider sur téléphone",
+      "phase": 1,
+      "agents": ["a11", "a14", "a35"],
+      "note": "Charge L, J1. Une seule greybox, qui remplace les 7 proposées, clonée du Gabarit. Hiérarchie Workspace.Arene, Maison de 16 × 16 × 14, Mine, Établi, Parvis, 4 chemins de 8 studs, 8 portails à R 80 et Grand Portail Nord, barrière à R 72, îlots entre 45 et 66 studs. Critères : Auditeur à 0 bloquant, 6 500 Parts au plus. Caméra (0, 45, 28) FOV 50 sur 4 ratios : la Maison, un chemin ou un chevron reste à l'écran depuis 12 points. Maison → Lisière en moins de 5 s, Maison → Établi en moins de 6 s. Marcheurs Est et Ouest visibles avant l'anneau."
+    },
+    {
+      "titre": "T10 Monter la greybox du Laboratoire",
+      "phase": 1,
+      "agents": ["a11", "a21", "a12"],
+      "note": "Charge M, J1. Conforme à Plan.LABO : Arbre des Recherches au centre, Alcove_01 à Alcove_12 à R 43 (12 × 16 × 16), Quai des Capsules au Nord, Galerie à l'Ouest, SpawnLocation en (0 ; 0,5 ; 64), Voie d'arrivée en (0, -55). 36 studs libres au-dessus de l'anneau pour la Tuyauterie, sols tagués ZoneJouable. Critères : spawn → Capsule Normale en moins de 11 s, ProximityPrompt espacés d'au moins 8 studs."
+    },
+    {
+      "titre": "T11 Rendre la greybox jouable : Marcheur, tir et horde des jours 1 à 3",
+      "phase": 1,
+      "agents": ["a24", "a38", "a09"],
+      "note": "Charge M, J1. Marcheur de référence (4 MeshParts, 400 triangles). Blocking P0 : Survivant (Idle, Course, Visée, Recul) et Marcheur (Marche, Attaque). Tir provisoire et Passage provisoire Laboratoire → Prairie → Laboratoire. Critères : playtest interne à 6 le 09/10, traversée en 3,9 s, 18 Murets posés en anneau traversés par les Survivants."
+    },
+    {
+      "titre": "T12 Poser le sol de la Prairie et le Socle du Laboratoire",
+      "phase": 2,
+      "agents": ["a16", "a20"],
+      "note": "Charge L. SculpteurBloc puis couches fixes. Arene.Sol limité à 300 Parts, avec CastShadow à false. Roche de la Mine (12 × 12 × 3 puis 8 × 8 × 3). Tramages Bayer de a20 limités à 350 tuiles. Socle du Laboratoire limité à 60 Parts. Critères : 0 écart à l'audit Charte, aucun vide visible depuis 8 points de la barrière."
+    },
+    {
+      "titre": "T13 Planter la Lisière et la végétation (a17 seul constructeur)",
+      "phase": 2,
+      "agents": ["a17", "a20", "a14"],
+      "note": "Charge L. 2 200 Parts pour la végétation de la Prairie et de la Lisière (les forêts de a20 et a21 sont retirées). a20 fixe les hauteurs (10 au Sud, 14 à l'Est et à l'Ouest, 18 au Nord) et les teintes. a14 garde les 8 trouées de 22 studs. Critères : aucun arbre ne masque un Survivant collé à la barrière au Sud, aucune Part végétale avec CanCollide ou CanQuery à true."
+    },
+    {
+      "titre": "T14 Construire l'eau en Eau-bloc et l'atmosphère statique",
+      "phase": 2,
+      "agents": ["a18", "a19"],
+      "note": "Charge M. Douve opaque en 16 MeshParts entre 73 et 77 studs, Bassin de Doc Boulon en Eau-bloc de 1 stud, 16 flaques à Reflectance 0. Lighting fixe, Atmosphere et Sky de la Prairie (faces de 256², StarCount 0). Critère : CountCells() = 0 dans les deux places."
+    },
+    {
+      "titre": "T15 Réserver en blocs gris les emprises des POI et des énigmes",
+      "phase": 2,
+      "agents": ["a11", "a13", "a15"],
+      "note": "Charge S. Pique-nique en (-36, 0, 22). Colosse endormi avec le nez à 78 studs. Nid du Volant hors des axes, à 14 studs au moins de tout portail. 12 Nids entre 58 et 66 studs. Plaques du Filon et Circuit du Réacteur. Critère : aucune Part de palier C à moins de 6 studs des 8 axes portail → Maison."
+    },
+    {
+      "titre": "T16 Construire la Maison, la Mine, l'Établi et la Tourelle de toit",
+      "phase": 3,
+      "agents": ["a21", "a22", "a24"],
+      "note": "Charge L, chemin critique. Maison : base commune et 120 Parts de dégâts au plus, seuils à 66 et 33 % avec 5 points d'hystérésis, hauteur Y 14 au plus, intérieur de 200 Parts au plus, PanneauRecord de 12 × 3. Mine de 6 studs de haut au plus, avec sa coiffe invisible. Établi aux cotes de Plan v1. Critères : Vérificateur de a21 au vert, 16 Neon pour la Maison, 12 pour la Mine et 6 pour l'Établi."
+    },
+    {
+      "titre": "T17 Modéliser et forger les 8 Zbires, le Mini-Gluant et le Colosse",
+      "phase": 3,
+      "agents": ["a24", "a30", "a38"],
+      "note": "Charge L, chemin critique. Racine ancrée et 3 à 5 MeshParts (700 triangles). Colosse de 9 × 6 × 9 (30 Parts, 4 Neon). Motor6D aux noms de a38. Disque Encre sous le Volant et le Sauteur. Rangement dans ReplicatedStorage.Modeles.Zbires uniquement. 4 types finaux pour l'Alpha du 23/10, les 10 types le 30/10. Critère : ligne « types manquants : » vide dans l'Auditeur."
+    },
+    {
+      "titre": "T18 Construire les portails, les îlots et les repères de quartier",
+      "phase": 3,
+      "agents": ["a14", "a21"],
+      "note": "Charge M. 8 cadres à 4 barres Neon (32 Neon) et Grand Portail Nord de 20 × 24, en un seul modèle (les portails de a20 sont retirés). 4 îlots (400 Parts au plus, 1 stud de haut au plus entre 45 et 66 studs) et 4 repères de quartier. Critère : budget Portails du Gabarit respecté."
+    },
+    {
+      "titre": "T19 Modéliser les défenses, le kit de props et les objets du Survivant",
+      "phase": 3,
+      "agents": ["a23", "a24"],
+      "note": "Charge L. a23 : DEF_Muret (Fissure_1 et Fissure_2), DEF_MiniTourelle et DEF_TapisCollant dans ReplicatedStorage.KitProps.Defenses ; 29 props en Packages KitPropsMaitres ; modules du Quai et Capsule, repris de a24. a24 : Blaster (Tool.Handle), Sac à dos (BodyBackAttachment), Pièce, Gemme et Foreuse. Critères : props limités à 1 200 Parts, audit KitProps.Regles au vert."
+    },
+    {
+      "titre": "T20 Construire le Laboratoire : Rotonde, Arbre, Alcôves, Quai et Galerie",
+      "phase": 3,
+      "agents": ["a21", "a22", "a20"],
+      "note": "Charge L. a21 : structures, avec la Rotonde recalée sur Plan.LABO, l'Arbre des Recherches à 24 nœuds et le Quai à verrière. a22 : Cabinet de Doc Boulon, gabarit d'Alcôve en 12 exemplaires, 12 machines-stades de 40 Parts, 3 cabines de Capsule à 6 Seat, 8 socles de Galerie. a20 : sols et bandeaux Neon. Critère : lobby limité à 150 Neon et 12 lumières."
+    },
+    {
+      "titre": "T21 Produire les cosmétiques de progression et de boutique",
+      "phase": 3,
+      "agents": ["a08", "a46"],
+      "note": "Charge L. a08 : sacs à dos, tenues, Blasters et apparences du Muret et de la Mini-Tourelle. a46 : 4 tenues, 4 teintes de Sac à dos, 3 Blasters, 9 Bonnets de Zbire et 3 thèmes d'Alcôve (120 Parts au plus). Aucun cosmétique ne donne d'avantage de jeu. Critère : grille de lisibilité validée par Victor Lanoue."
+    },
+    {
+      "titre": "T22 Composer la musique et les signatures des Zbires",
+      "phase": 3,
+      "agents": ["a40", "a39"],
+      "note": "Charge L. Fiche son et fiche musicale validées le 02/10. Pistes : Labo_Base, Labo_Quai et Labo_Galerie (96 BPM) ; HordeA, HordeB et HordeC en 2 couches (120 BPM) ; Colosse (LoopRegion 4-68) ; Repit, Capsule et Bilan ; 3 jingles et 8 signatures MOT_. Critères : écoute validée sur l'Android 3 Go, mémoire audio sous 15 Mo."
+    },
+    {
+      "titre": "T23 Livrer Donnees, Passage et Temps côté serveur",
+      "phase": 4,
+      "agents": ["a27", "a29"],
+      "note": "Charge L, chemin critique, à livrer le 12/10. UpdateAsync via Donnees.Modifier sous verrou de session. CrediterRun idempotent sur le runId. Migration du schéma v1 vers v2. TeleportService:ReserveServer et RunEnCours avec TTL de 1 800 s. Temps.SecondesAvantDemain validé. Critères : un FinDeRun rejoué 3 fois ne crédite qu'une fois, 20 allers-retours avec 3 comptes sans aucun écart."
+    },
+    {
+      "titre": "T24 Coder BoucleDuJour et l'orchestration de la Prairie",
+      "phase": 4,
+      "agents": ["a06", "a26"],
+      "note": "Charge M. BoucleDuJour est le seul script qui écrit EtatRun : Arrivée de 20 s, Horde de 80 s, Répit de 15 s. Colosse aux jours 5, 10 et 15 par le Grand Portail Nord, 40 s après le début de la horde (7:20 au J5), enragé après 60 s. LIMITE_RUN à 25:00 déclenche une vraie fin de run, suivie du retour au Laboratoire. Critère : banc de test Studio vert avec des dépendances factices."
+    },
+    {
+      "titre": "T25 Coder HordeService, ZbiresRendu et ZbireAnimateur",
+      "phase": 4,
+      "agents": ["a26", "a14", "a38"],
+      "note": "Charge L, chemin critique. HordeService absorbe les portails (le module Horde.Portails de a14 est supprimé). Champ de flux de 55 × 55 cases et second champ pour le Rapide, file d'attente du plafond de 60, EtatZbires à 10 Hz. Pool de 70 modèles, un seul BulkMoveTo par image, Animator actif sur les 20 Zbires visibles les plus proches. Clips P0 et P1. Critères sur l'Android 3 Go : HordeTick sous 1 ms, rendu et animation sous 3 ms."
+    },
+    {
+      "titre": "T26 Coder le combat, les défenses et le mouvement",
+      "phase": 4,
+      "agents": ["a09", "a29", "a28"],
+      "note": "Charge L. ServiceCombat en hitscan : Casqué à 50 % hors critique, Balles perforantes, Balles explosives. BlasterControleur, seule boucle de tir automatique (rayon égal à la Portée) ; a28 code la désignation de cible. ServiceDefenses : posePermise, 3 défenses par Survivant, reprise à 50 %, CollisionGroup Defenses. GardienMouvement, seul à écrire WalkSpeed. Étourdissement de 2 s suivi de 2 s d'invulnérabilité. Les retours de collecte et les liaisons ContextActionService passent de a09 à a28."
+    },
+    {
+      "titre": "T27 Coder Economie et le butin serveur",
+      "phase": 4,
+      "agents": ["a07", "a27"],
+      "note": "Charge L. Economie est le seul handler de DemandeAchat(cle, niveauVise). Cagnottes d'équipe au tap. Butin par Survivant : aimant de 8 studs, pièces visibles 20 s, 50 % crédités au Répit en « +X » gris. Mine commune (1 gemme toutes les 20 s, stock de 6). marquerActif et estActif (fenêtre de 90 s, Zzz à 75 s). Jour parfait à 25 %. Critère : un double tap ne débite qu'une fois."
+    },
+    {
+      "titre": "T28 Scripter le Laboratoire, la progression et les rendez-vous quotidiens",
+      "phase": 4,
+      "agents": ["a08", "a22", "a33"],
+      "note": "Charge L. ProgressionService : XP et paliers ; verrous du Muret au niveau 1, du Tapis Collant au 2, de la Mini-Tourelle au 4 et du Calendrier au 3 ; recherches révélées aux niveaux 1, 3, 4 et 5. Alcôves avec stades aux niveaux 1, 4 et 8. DemandeRecherche avec maintien de 0,5 s. Foreuse hors connexion (8 h au plus), conditions des 3 Capsules, Défi du Jour et RecapRun. Critère : un novice atteint la Tourelle de toit à 40 gemmes."
+    },
+    {
+      "titre": "T29 Intégrer l'onboarding de la première run",
+      "phase": 4,
+      "agents": ["a10", "a28"],
+      "note": "Charge M. Module Onboarding et OUVERTURE : 13 Marcheurs entre H+3 et H+30, les 2 premiers en ReservePour. Anneau de portée et joystick fantôme pendant l'Arrivée. Chevrons et flèche or. Retour au pupitre jusqu'à PremiereRecherche. Jalons envoyés par Telemetrie uniquement."
+    },
+    {
+      "titre": "T30 Coder le client : HUD unique, Grappe, Établi et Roue des Pings",
+      "phase": 4,
+      "agents": ["a28", "a35", "a32"],
+      "note": "Charge L. Une seule maquette, codée par a28 (le HudController de a32 est retiré). UIScale borné et CoreUISafeInsets. Bandeau Maison, Grappe en arc, Établi contextuel de 72 px, Roue des Pings (3 pings en 5 s au plus), flèches de bord à 10 Hz. Un bouton reste en Attente jusqu'à ProfilMaj ou Annonce, 3 s au plus. Critère : aucun chevauchement au Device Emulator en 800 × 360, en 732 × 412, sur iPhone SE et sur iPad."
+    },
+    {
+      "titre": "T31 Brancher l'ambiance, les VFX et le son sur EtatRun et Evenements",
+      "phase": 4,
+      "agents": ["a36", "a37", "a39"],
+      "note": "Charge M. AmbianceClient est le seul script qui écrit dans Lighting : ClockTime 14, fondu de 8 s vers 17,5 avant le Colosse, attribut Qualite ; la météo passe par definirMeteo. VfxClient lit Evenements (VfxRapide et VfxImportant sont supprimés). Son : pool de 16 voix créé au démarrage, aucun son de récompense sans crédit du serveur."
+    },
+    {
+      "titre": "T32 Coder Telemetrie et instrumenter les deux places",
+      "phase": 4,
+      "agents": ["a50"],
+      "note": "Charge L. Package ServerScriptService.Telemetrie (pcall, tranches J1-4, J5-7, J8-11 et J12+), seule voie d'envoi. Entonnoir d'accueil de 12 étapes, run, économie, Laboratoire et boutique. Critère : chaque événement apparaît dans le tableau de bord de la version privée."
+    },
+    {
+      "titre": "T33 Coder la boutique Robux",
+      "phase": 4,
+      "agents": ["a46", "a33"],
+      "note": "Charge M. ProcessReceipt idempotent, qui écrit dans Achats[PurchaseId] via Donnees.EnregistrerAchat (Boutique_v1 et Cosmetiques_v1 supprimés). 4 passes, 10 produits, Equiper. Aucune invite d'achat dans la Prairie. Bouton masqué jusqu'à la fin de la 1re run. Critère : un reçu rejoué après une coupure ne crée aucun doublon."
+    },
+    {
+      "titre": "T34 Contenu de découverte : Tuyauterie, secrets et énigmes (coupable)",
+      "phase": 4,
+      "agents": ["a12", "a13", "a15"],
+      "note": "Charge L. Construction et scripts en Package partagé. Tuyauterie : 3 sections, chrono serveur de 22 s au moins, Ressorts via GardienMouvement.accorderEnvol. Pompon, Pique-nique, Colosse endormi, Bornes, Filon (Mine × 2 pendant 80 s) et Panier renversé. Aucune gemme en récompense, sauf par le Filon et le Panier. Changement de jour par Temps.cleJour. À la revue de coupe du 30/10, tout élément non jouable passe en v1.1."
+    },
+    {
+      "titre": "T35 Préparer l'Avent de Doc Boulon pour la v1.1",
+      "phase": 4,
+      "agents": ["a49", "a01"],
+      "note": "Charge L, du 16/11 au 27/11, en dehors du gel de la v1.0. Accord écrit de Victor Lanoue exigé avant tout code. CalendrierLiveOps en Package, mur de 24 cases, 1 case par jour de run terminée. Récompenses en XP, cosmétiques ou Foreuse Turbo, jamais en gemmes. Rattrapage jusqu'au 4 janvier. La Nuit des Citrouilles est reportée à 2027."
+    },
+    {
+      "titre": "T36 Habiller l'interface et les icônes",
+      "phase": 5,
+      "agents": ["a31", "a34", "a33"],
+      "note": "Charge L. 12 ScreenGui (6 par place) construites avec Charte.Interface et le Package Interface. Atlas A (55 icônes) et Atlas B (10 portraits) alignés sur 96 et 64 px. Écran de fin de 8 s, travelling vers l'Alcôve, ProximityPrompt en Style Custom. Critères : audit à 0 faute (ni noir ni blanc purs, TextSize de 14 au moins, boutons de 60 px au moins), atlas sous 8 Mo."
+    },
+    {
+      "titre": "T37 Polir la lumière et les VFX aux moments clés",
+      "phase": 5,
+      "agents": ["a36", "a37", "a19"],
+      "note": "Charge L. Ambiances Jour et Jour du Colosse. Laboratoire en ShadowMap, Future seulement si 30 FPS sont tenus à 12 joueurs. 20 effets P0 et pack de retours repris de a09. Séquences du Colosse et de la chute de la Maison. Critères : 24 émetteurs Enabled au plus, 3 flashs plein écran par seconde au plus."
+    },
+    {
+      "titre": "T38 Intégrer et mixer le son et la musique",
+      "phase": 5,
+      "agents": ["a39", "a40"],
+      "note": "Charge M. Environ 45 SFX chiptune en .ogg mono à -16 LUFS, uploadés au nom du groupe avant le 06/11. EtatMusical branché sur BoucleDuJour, fondus croisés de 1,5 s, ducking sous les Alertes. Seules HordeA, Repit et Colosse sont préchargées. Critères sur l'Android 3 Go : 16 voix au plus, musique 6 dB sous les tirs."
+    },
+    {
+      "titre": "T39 Produire les vignettes, les icônes et la fiche du jeu",
+      "phase": 5,
+      "agents": ["a47", "a48"],
+      "note": "Charge L. Vignettes V1 à V3 en 1920 × 1080, en FR et en EN. Icônes I1 et I2 lisibles à 64 × 64. LocalizationTable Canon (52 entrées). Fiche FR/EN avec la mention « Tir automatique sur tous les appareils » et questionnaire de maturité au niveau Léger."
+    },
+    {
+      "titre": "T40 Mener la campagne de performance sur l'Android 3 Go",
+      "phase": 6,
+      "agents": ["a42", "a25", "a26"],
+      "note": "Charge L. Mesure chaque vendredi dès l'Alpha du 23/10, avec 6 joueurs, 60 Zbires, le Colosse et 18 défenses. Seuils : 30 FPS au moins, moins de 800 Mo, 500 draw calls et 50 Ko/s reçus au plus. Pic mesuré comparé aux 7 900 Parts calculées. Laboratoire mesuré à 12 joueurs. Critère de gel : 3 mesures vertes consécutives."
+    },
+    {
+      "titre": "T41 Mener les playtests d'équilibrage chronométrés",
+      "phase": 6,
+      "agents": ["a43", "a06", "a07"],
+      "note": "Charge L. 20 runs en solo, 20 à 2 ou 3 joueurs, 10 à 6. Critères : chute entre J8 et J11, aucune run au-delà de 25 min, 1re run au J6 avec 112 ± 15 gemmes, 1re recherche après la 1re run, défenses rentables à J3, J7 et J10. Seuls ZbiresDefs.Jours (par a06) et le Catalogue (par a07) sont ajustés."
+    },
+    {
+      "titre": "T42 Faire tester le jeu à l'aveugle par des enfants de 9 à 13 ans",
+      "phase": 6,
+      "agents": ["a45", "a10", "a35"],
+      "note": "Charge M. 10 enfants sur l'Android 3 Go, sans consigne orale. Critères : 8 sur 10 éclatent un Zbire avant T 60, 6 sur 10 achètent avant T 90, 7 sur 10 lancent la Tourelle de toit sans aide. Taps manqués sous 5 %. Chaque icône reconnue par 4 joueurs sur 5 à 32 px. PV de la Maison, Jour et Pièces lus en moins de 3 s."
+    },
+    {
+      "titre": "T43 Mener les tests d'exploit et d'intégrité des données",
+      "phase": 6,
+      "agents": ["a29", "a44", "a27"],
+      "note": "Charge M. Les 11 remotes montantes (format, NaN, rafales), double tap sur un achat ou une recherche, CrediterRun rejoué, déconnexion en pleine run, corruption (Gemmes = abc), minuit à Paris et passage à l'heure d'hiver (test le 26/10), AFK de groupe, intrusions (vitesse, vol, noclip). Critère : aucun bloquant ouvert au go/no-go."
+    },
+    {
+      "titre": "T44 Mener la bêta fermée, les audits et le go/no-go",
+      "phase": 6,
+      "agents": ["a41", "a03", "a02"],
+      "note": "Charge M, du 13/11 au 18/11. 3 runs par taille d'équipe sur la version privée. Auditeur Pixel-bloc, Vérificateur et KitProps.Regles à 0 faute, checklist de a25 signée, CountCells() = 0. Go/no-go le 18/11 à 17 h. Si un seul bloquant reste ouvert, le lancement recule d'une semaine, au 27/11."
+    },
+    {
+      "titre": "T45 Publier la v1.0 et piloter les 30 premiers jours",
+      "phase": 6,
+      "agents": ["a50", "a48", "a46"],
+      "note": "Charge L. Publication le 20/11. Événement Zbire de la Semaine (samedi à 17:00, Europe/Paris) dès le 21/11. Passes, produits et serveur privé à 50 R$ par mois. Revue quotidienne de J1 à J30 et rapport hebdomadaire. A/B d'icône pendant les 2 premières semaines. Audit anti-pay-to-win à J+14 : écart sous 3 % entre payeurs et non-payeurs."
+    }
+  ]
+}

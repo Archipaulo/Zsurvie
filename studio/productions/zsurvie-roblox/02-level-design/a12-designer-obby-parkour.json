@@ -1,0 +1,106 @@
+{
+  "decisions": [
+    "Mouvement de référence identique dans le Laboratoire et la Prairie : CharacterWalkSpeed 16, CharacterUseJumpPower false, CharacterJumpHeight 7,2, Workspace.Gravity 196,2. La portée théorique à plat est de 8,7 studs. Un saut obligatoire ne dépasse jamais 75 % de la portée théorique (6,5 studs à plat) et les plateformes obligatoires font au moins 3 × 3 studs.",
+    "Ajout à valider par Victor Lanoue : la Tuyauterie de Doc Boulon, parcours facultatif d'environ 180 studs au-dessus des 12 Alcôves du Laboratoire. C'est un sous-espace du Laboratoire, pas une nouvelle zone. Elle compte 3 sections (Paillasses, Tuyaux, Couronne des Néons), 6 checkpoints CP0-CP5 et 3 raccourcis experts. Elle donne un badge et une place au tableau Record du Jour, jamais de gemmes.",
+    "Aucun saut obligatoire dans le lobby, aucune mort, aucun vide : des filets tagués ZoneChute ramènent au dernier checkpoint. Règle des 11 s : depuis n'importe quel point de la Tuyauterie, le Quai des Capsules est à 11 s au plus (Toboggan de l'Arrivée, Trappes de sortie à CP2 et CP4).",
+    "Prairie organisée en anneaux de hauteur : de 0 à 20 studs, aucun décor collidable ; de 20 à 45, décor de 1 stud maximum, non collidable ; de 45 à 66, îlots de 3 studs maximum ; de 66 à 74, décor de 6 studs maximum. La Haie de Lisière, à 74 studs, marque la limite des Survivants (mur invisible de 16 studs). Tout le sol est à Y 0 et les chemins font 8 studs de large, sans décor.",
+    "Ajout à valider par Victor Lanoue : 4 Ressorts de retour à 58 studs, sur les diagonales de la Prairie. Ils lancent jusqu'au rayon 22 en 0,75 s, avec une recharge de 3 s. Le Muret est limité à 3 studs de haut pour qu'un Survivant puisse le franchir d'un saut.",
+    "Galerie des Zbires : un Sauteur-trampoline mène à la mezzanine (Y 10) et la Grimpe du Colosse (figurine de 24 studs en TrussPart) donne le badge « Sur la tête du Colosse »."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif",
+      "besoin": "Valider les ajouts hors canon : la Tuyauterie de Doc Boulon, les Ressorts de retour, les badges « Tuyauterie » et « Sur la tête du Colosse », et le tableau Record du Jour."
+    },
+    {
+      "de": "Level designer du Laboratoire",
+      "besoin": "Une hauteur sous plafond d'au moins 36 studs au-dessus de l'anneau des Alcôves, un trajet sol → Quai des Capsules de 112 studs maximum depuis le pied de chaque Trappe de sortie, et le rayon définitif de l'anneau des 12 Alcôves pour caler les 180 studs de parcours."
+    },
+    {
+      "de": "Level designer de la Prairie",
+      "besoin": "La position exacte de la Mine (pour décaler un Ressort de 15° si elle tombe sur une diagonale), la Haie de Lisière à 74 studs et les portails violets entre 85 et 95 studs."
+    },
+    {
+      "de": "Game designer des défenses",
+      "besoin": "Un Muret de 3 studs de haut au maximum, avec une pose interdite à moins de 6 studs de la porte de la Maison et sur les 4 zones d'atterrissage 6 × 6 des Ressorts."
+    },
+    {
+      "de": "Scripteur gameplay",
+      "besoin": "Les LocalScripts des Ressorts (vitesse initiale 48 studs/s à l'horizontale et 73,6 studs/s à la verticale, recharge de 3 s) et des Clapets synchronisés sur workspace:GetServerTimeNow(), ainsi que le CollisionGroup Survivants pour le mur invisible de la Haie."
+    },
+    {
+      "de": "Designer UI mobile",
+      "besoin": "Un bouton de saut natif jamais recouvert par la Roue des Pings ni par l'Établi, un chrono HUD et le retour visuel de checkpoint (anneau cyan en local, bip) branché sur le RemoteEvent ParcoursRetour."
+    },
+    {
+      "de": "Designer du Colosse",
+      "besoin": "Si le Colosse produit une onde au sol, elle doit faire 1,5 stud de haut au plus et avancer à 30 studs/s au plus pour rester sautable."
+    },
+    {
+      "de": "Ingénieur données",
+      "besoin": "Une clé de jour commune au Défi du Jour et au Record du Jour (fuseau de Paris), et le budget de requêtes OrderedDataStore du tableau des chronos."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Valider avec le directeur créatif la table des portées et les ajouts (Tuyauterie, Ressorts, badges)",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Monter la greybox de la Tuyauterie de Doc Boulon aux cotes du document : 3 sections, 24 sauts, CP0-CP5, filets, 3 raccourcis, Toboggan et 2 Trappes de sortie",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Monter la greybox de la Galerie : Sauteur-trampoline, mezzanine à Y 10, figurine du Colosse de 24 studs en TrussPart",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Bloquer les anneaux de hauteur de la Prairie, la Haie de Lisière à 74 studs et les 4 Ressorts à 58 studs",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Habiller les supports en Pixel-bloc : dessus Crème, flancs Ardoise, liseré d'appel Toit orange de 0,5 stud, 6 anneaux Neon de checkpoint",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Intégrer le script serveur Parcours : checkpoints ordonnés, chrono serveur, ZoneChute, ZoneBadge, OrderedDataStore du jour",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Écrire les LocalScripts des Ressorts de retour, du Ressort final, du Sauteur-trampoline et des Clapets synchronisés",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Configurer le CollisionGroup Survivants pour la Haie et les zones d'interdiction de pose des défenses",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Afficher le tableau Record du Jour (top 10, rafraîchi toutes les 60 s) et le chrono HUD mobile",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Playtester sur Android 3 Go : mesurer la réussite au 1er essai par section (95, 80 et 60 %) et ajuster les écarts par pas de 0,5 stud",
+      "phase": 6,
+      "charge": "L"
+    },
+    {
+      "titre": "Tester l'anti-triche : checkpoints hors ordre et chronos sous 15 s rejetés, aucun raccourci ne saute un checkpoint",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Vérifier la règle des 11 s jusqu'au Quai des Capsules depuis chaque point de la Tuyauterie",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

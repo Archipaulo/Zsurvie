@@ -1,0 +1,102 @@
+{
+  "decisions": [
+    "Zbires animés par AnimationController + Animator (sans Humanoid) sur modèles côté client : PrimaryPart ancrée déplacée par PivotTo, 6 Motor6D au maximum aux noms imposés (Corps, Tete, PiedG, PiedD, Accessoire, Accessoire2), ce qui permet 3 clips communs (Apparition, Touche, Eclat) pour tous les Zbires ; LOD : la marche est coupée hors champ (vérification toutes les 0,25 s).",
+    "Survivant sur rig R15 standard, Blaster relié à RightHand par le Motor6D Grip_Blaster, script Animate forké dans StarterCharacterScripts ; en visée, AutoRotate = false et AlignOrientation (Responsiveness 40) vers la cible, course jouée à AdjustSpeed(-0.8) quand on recule.",
+    "Échelle des priorités : Idle (idle, attente) < Movement (locomotion) < Action (visée, réparation, attaques) < Action2 (recul, touché, frappe au sol du Colosse) < Action3 (étourdi, casque éjecté) < Action4 (gestes de Pings, éclat, division, fin de run).",
+    "Les durées d'anticipation et d'impact vivent dans ReplicatedStorage.Config.Timings, partagé avec le serveur : le serveur applique dégâts et étourdissements selon ces constantes ; les KeyframeMarker (Impact, Pas, Pose, Eclat) ne déclenchent que sons et VFX côté client.",
+    "Élastique canon (× 0,8 puis × 1,2 en 0,15 s) simulé sur les rigs en déplaçant les cubes, car l'Animation Editor n'anime pas Size ; anticipation minimale de 0,25 s par attaque de Zbire et de 1,0 s pour le Colosse, sans cinématique qui prenne le contrôle.",
+    "Casqué : coup normal = réaction « tink » de 0,2 s (Action2), coup critique = casque éjecté de 0,4 s (Action3), pour rendre lisible le pilier « le Casqué impose les critiques »."
+  ],
+  "besoins": [
+    {
+      "de": "Lead scripting / gameplay",
+      "besoin": "Pour chaque Zbire, envoyer au client l'id, le type, la vitesse et chaque changement d'état (Apparition, Attaque, Touche, CasqueEjecte, Division, Eclat) avec l'horodatage serveur, afin d'appeler ZbireAnimateur.jouer, majVitesse et eclater ; poser l'attribut Etourdi sur le personnage du Survivant pendant 2 s."
+    },
+    {
+      "de": "Game designer",
+      "besoin": "Valider ReplicatedStorage.Config.Timings (anticipations, VitesseRef par Zbire, cadence de tir maximale, WalkSpeed du Survivant) avant le blocking des animations."
+    },
+    {
+      "de": "Modeleur personnages",
+      "besoin": "Livrer les rigs des 8 Zbires, des Mini-Gluants et du Colosse avec la convention de joints Motor6D (Corps, Tete, PiedG, PiedD, Accessoire, Accessoire2), 30 Parts au maximum, et le StarterCharacter R15 avec le Blaster soudé par Grip_Blaster."
+    },
+    {
+      "de": "Artiste VFX",
+      "besoin": "Écouter les marqueurs Eclat, Impact et Pas pour l'éclatement en cubes et en pièces, les étoiles d'étourdissement, le cercle Alerte de la frappe au sol du Colosse et la secousse de caméra de 0,15 s."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "Sons chiptune calés sur les marqueurs : Pas (Costaud et Colosse uniquement), Impact (réparation, attaques), Eclat, « tink » du Casqué, dans le plafond de 16 sons simultanés."
+    },
+    {
+      "de": "Producteur / responsable du groupe Roblox",
+      "besoin": "Donner les droits de publication d'animations sur le groupe propriétaire de l'expérience Zsurvie (Laboratoire et Prairie), sinon les AnimationId ne chargent pas."
+    },
+    {
+      "de": "UI designer",
+      "besoin": "Prévoir un UIScale sur chaque bouton et une marge d'au moins 10 % autour pour l'étirement à × 1,2 sans chevauchement sur mobile."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Rédiger ReplicatedStorage.Config.Timings (durées, anticipations, VitesseRef par Zbire) et le faire valider par le game designer",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Publier la convention de rigs : noms des 6 Motor6D des Zbires, Grip_Blaster du Survivant, arborescence ReplicatedStorage.Animations",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Blocking des animations P0 sur rigs greybox : Survivant (Idle, Course, Visée, Recul) et Marcheur (Marche, Attaque) pour le premier playtest",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Valider dans Studio les rigs livrés (R15 + Grip_Blaster, 8 Zbires, Mini-Gluant, Colosse : 30 Parts et 6 Motor6D maximum, Parts animées Massless et sans collision)",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Finaliser les clips P0 : Réparation, Étourdi et Relevé du Survivant, clips communs Apparition/Touche/Eclat, Maison (coup, état, réparée), pièces et gemmes",
+      "phase": 4,
+      "charge": "L"
+    },
+    {
+      "titre": "Intégrer le module ZbireAnimateur (phase aléatoire, AdjustSpeed Tapis Collant, LOD hors champ) et le script Animate forké avec visée en courant",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Produire les clips P1 des 7 autres Zbires, du Colosse (Entrée, Marche, Frappe Maison, Frappe au sol, Défaite) et des 3 défenses",
+      "phase": 4,
+      "charge": "L"
+    },
+    {
+      "titre": "Produire les animations du Laboratoire : Doc Boulon (Bricole, Parle, Pointe, Accueil), Capsules (départ, atterrissage), arrivée d'une nouvelle machine d'Alcôve, 4 gestes de la Roue des Pings",
+      "phase": 5,
+      "charge": "L"
+    },
+    {
+      "titre": "Animer l'interface : boutons élastiques 0,15 s, compteur de pièces, Roue des Pings, alerte « Colosse ! », bilan des gemmes",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Produire les animations P2 : machines procédurales des Alcôves avec LOD, figurines de la Galerie des Zbires, Tourelle de toit, Jour franchi",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Profiler 60 Zbires animés + 6 Survivants sur Android 3 Go (30 FPS minimum, coût de l'Animator mesuré au MicroProfiler) et ajuster le LOD",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Test de lisibilité avec des joueurs de 9 à 13 ans : reconnaître l'anticipation du Colosse et la différence coup normal / critique sur le Casqué",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

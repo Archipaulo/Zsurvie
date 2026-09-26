@@ -1,0 +1,124 @@
+{
+  "decisions": [
+    "Calendrier ancré sur un lancement le vendredi 16 octobre 2026 à 17 h (Paris), 13 semaines jusqu'au 14 janvier 2027 : publications le jeudi à 10 h, jamais le vendredi ; événements activés par l'horloge serveur via ReplicatedStorage.CalendrierLiveOps (dates saisies en heure de Paris) ; gel du code du 17 déc. au 4 janv. Si le lancement glisse après le 23 octobre, La Nuit des Citrouilles est reportée à 2027.",
+    "Aucune nouvelle monnaie : chaque événement saisonnier repose sur un compteur serveur (Citrouilles dorées éclatées, Cadeaux livrés) plafonné par jour (60 et 50) et sur 5 paliers de cosmétiques fixes. Jamais de tirage au sort ni de palier vendu en Robux (1 pack cosmétique Robux par événement au plus).",
+    "Week-ends bonus du vendredi 17 h au lundi 0 h (Paris) : x2 Gemmes ne multiplie que la Mine, le Doré et les jours franchis (Foreuse, Défi du Jour et Avent restent fixes) via LiveOps.gemmesAvecBonus côté serveur ; x2 Galerie double les éliminations comptées. Jamais pendant un événement saisonnier, jamais deux x2 Gemmes d'affilée.",
+    "Les ambiances saisonnières sont des états de la Prairie, comme le Jour du Colosse : Halloween en ClockTime 19,5 (16 Parts Neon, 4 PointLight), neige par recoloration des Parts taguées SolPrairie en Crème #F6E7C1. Accessoires des Zbires : 4 Parts au plus (30 au total), règles des Zbires inchangées.",
+    "Écarts au canon soumis à Victor Lanoue : recherche « Aimant à Pièces » (v1.2), 3 missions hebdomadaires rattachées au Zbire de la Semaine (v1.4), nouveaux noms La Nuit des Citrouilles, L'Avent de Doc Boulon, Le Grand Givre, et skins Colosse-Citrouille et Colosse de Neige.",
+    "Rotation du Zbire de la Semaine (samedi 17 h) sur 13 semaines : Gluant, Volant, Colosse-Citrouille (31 oct.), Casqué, Rapide, Sauteur, Costaud, Doré, Marcheur, Colosse de Neige, Gluant, Volant, Casqué."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif (Victor Lanoue)",
+      "besoin": "Valider les écarts : noms des événements et skins de Colosse avant le 9 octobre (paquet Halloween), « Aimant à Pièces » avant le 5 novembre, missions hebdomadaires avant le 17 décembre."
+    },
+    {
+      "de": "Producteur",
+      "besoin": "Confirmer la date de lancement du vendredi 16 octobre 2026 ou en fixer une autre : le maintien de La Nuit des Citrouilles en dépend."
+    },
+    {
+      "de": "Designer économie",
+      "besoin": "Valider l'impact des x2 Gemmes (Mine, Doré, jours franchis), des 1 000 gemmes de l'Avent et des 300 gemmes hebdomadaires des missions sur la courbe des recherches."
+    },
+    {
+      "de": "Artiste personnages / Zbires",
+      "besoin": "Accessoires citrouille et bonnet violets #9B5DE5 (4 Parts au plus) pour les 8 Zbires et les Mini-Gluants, skins Colosse-Citrouille et Colosse de Neige, cosmétiques Survivant et Blaster des paliers."
+    },
+    {
+      "de": "Level designer / environnement",
+      "besoin": "Taguer SolPrairie (CollectionService) toutes les Parts de sol de la Prairie hors chemins, prévoir 8 socles de lanternes autour de la Maison et un mur de 24 × 16 studs derrière Doc Boulon pour l'Avent."
+    },
+    {
+      "de": "Scripteur gameplay",
+      "besoin": "Appeler LiveOps.gemmesAvecBonus avant chaque crédit de gemmes, exposer un signal serveur de début de horde pour faire apparaître Citrouilles dorées et Cadeaux, sauvegarder les compteurs d'événement dans le même UpdateAsync que les gemmes."
+    },
+    {
+      "de": "Designer UI",
+      "besoin": "Widget d'événement mobile de 220 × 36 px, bannière x2, panneau des paliers ouvert par un bouton de 60 px, compte à rebours du Nouvel An."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "Jingles chiptune Halloween (sautillant, jamais effrayant), Noël et Nouvel An, plus un son de livraison de Cadeau, dans la limite de 16 sons simultanés."
+    },
+    {
+      "de": "Data analyst",
+      "besoin": "Tableaux de bord D1, D7, D30, jours distincts joués par événement et cases de l'Avent ouvertes, alimentés par AnalyticsService (LogCustomEvent, LogEconomyEvent)."
+    },
+    {
+      "de": "Community manager",
+      "besoin": "Créer chaque Événement de l'expérience sur le Creator Hub et les notifications opt-in ExperienceNotificationService pour le samedi 17 h et chaque ouverture d'événement."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Rédiger les fiches détaillées de La Nuit des Citrouilles, de L'Avent de Doc Boulon et du Grand Givre (paliers, récompenses, KPIs)",
+      "phase": 0,
+      "charge": "M"
+    },
+    {
+      "titre": "Soumettre les écarts au canon à Victor Lanoue et consigner sa réponse dans le document de design",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Créer les états saisonniers de la Prairie : nuit d'Halloween (Lighting) et neige (recoloration des Parts SolPrairie en #F6E7C1)",
+      "phase": 2,
+      "charge": "M"
+    },
+    {
+      "titre": "Construire le mur de l'Avent (24 cases de 4 × 4 studs) derrière Doc Boulon au Laboratoire",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Modéliser les accessoires saisonniers des 8 Zbires (4 Parts au plus) et les skins Colosse-Citrouille et Colosse de Neige",
+      "phase": 3,
+      "charge": "L"
+    },
+    {
+      "titre": "Construire les 8 lanternes-citrouilles (16 Parts Neon, 4 PointLight), les Citrouilles dorées (3 × 3 × 3 studs) et les Cadeaux (2 × 2 × 2 studs)",
+      "phase": 3,
+      "charge": "S"
+    },
+    {
+      "titre": "Intégrer CalendrierLiveOps et LiveOps en Package partagé Laboratoire/Prairie et brancher LiveOps.gemmesAvecBonus dans le service d'économie",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Scripter côté serveur les Citrouilles dorées et les Cadeaux perdus (apparition, portage, livraison, plafonds journaliers, sauvegarde UpdateAsync)",
+      "phase": 4,
+      "charge": "L"
+    },
+    {
+      "titre": "Scripter l'Avent côté serveur : 1 case par jour de run terminée, récompenses fixes, rattrapage jusqu'au 4 janvier",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Scripter les 3 missions hebdomadaires du Zbire de la Semaine (v1.4) avec renouvellement le samedi à 17 h",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Intégrer le widget d'événement mobile, la bannière x2 et le compte à rebours du Nouvel An",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Tester chaque bascule du calendrier avec DecalageTest, dont le passage à l'heure d'hiver du 25 octobre et le retour des multiplicateurs à 1 en moins de 30 s",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Mesurer les états saisonniers sur Android 3 Go : 30 FPS avec 6 joueurs et 60 Zbires, sous 800 Mo",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Créer les Événements de l'expérience sur le Creator Hub et les tableaux de bord KPI par événement",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

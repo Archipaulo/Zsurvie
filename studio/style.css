@@ -369,7 +369,10 @@ h2 { font-size: 17px; margin: 14px 0 10px; color: var(--txt); }
   background: #14372a; border: 1px solid #1a8a66; border-radius: 11px;
   padding: 10px 14px; margin-bottom: 16px; font-size: 14px;
 }
-.bible { display: grid; grid-template-columns: 240px 1fr; gap: 22px; align-items: start; }
+.bible { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 22px; align-items: start; }
+/* une colonne de grille ne doit jamais s'élargir au-delà de l'écran à cause d'un tableau ou d'un bloc de code */
+.bible-corps { min-width: 0; overflow-wrap: anywhere; }
+#livrable-body { overflow-wrap: anywhere; }
 @media (max-width: 900px) { .bible { grid-template-columns: 1fr; } .bible-toc { position: static; } }
 .bible-toc {
   position: sticky; top: 0;

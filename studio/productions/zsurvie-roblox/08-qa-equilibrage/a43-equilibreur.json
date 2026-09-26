@@ -1,0 +1,112 @@
+{
+  "problemes": [
+    {
+      "gravite": "bloquant",
+      "agent": "a06",
+      "probleme": "Deux barèmes de gemmes coexistent. BoucleDuJour crédite 2 + ⌊N ÷ 2⌋ (+15 au Colosse) dans le DataStore Gemmes_v1, sans anti-AFK, en parallèle d'Economie.franchirJour (a07 : 5 + 2 × min(N, 15), doublé aux jours 5, 10 et 15). Résultat : double crédit, ou gains ÷ 2,4 (≈ 97 gemmes contre 231 pour une run au J10). La Mine suit trois règles (a06 : 1 toutes les 30 s, stock 4 ; a07 : 1 toutes les 20 s ; a09 : 1 toutes les 30 s, stock 10), et la 1re recherche a deux prix (50 contre 40).",
+      "correction": "Supprimer verserGemmes et Gemmes_v1, et appeler Economie.franchirJour(jour) à chaque jour franchi. Barème unique : a07. Mine : 1 gemme toutes les 20 s par Survivant actif, stock 6 (2 min), vidée pour toute l'équipe au contact (règle a06), reprise par a09. 1re recherche à 40 gemmes."
+    },
+    {
+      "gravite": "bloquant",
+      "agent": "a27",
+      "probleme": "Les gemmes ont quatre adresses : Gemmes_v1/J_ (a06), Zsurvie_Profils_v1/Survivant_ (a07), Zsurvie_Joueurs_v1/J_ (a27) et Zsurvie_Profils_v1/Joueur_ (a29). Une gemme gagnée sur la Prairie n'arrive donc pas au Laboratoire. Le plafond « Jour 100 » par appel rogne des gains légitimes : un J15 donne 70 gemmes, × 1,5 en Difficile et × 2 en week-end bonus, soit 210. Le plafond « ZbireSemaine 500 » suppose une source de gemmes que le canon n'a pas.",
+      "correction": "Un seul store, Zsurvie_Joueurs_v1, clé J_<UserId>, écrit uniquement par Donnees.AjouterGemmes (a06, a07 et a29 s'y branchent). Plafond Jour relevé à 210. Source ZbireSemaine supprimée."
+    },
+    {
+      "gravite": "bloquant",
+      "agent": "a26",
+      "probleme": "L'Établi et les recherches suivent trois courbes. a07 vend 10 niveaux, mais a09 plafonne Portée au niv 4, Cadence au 5, Dégâts au 8 et Explosives au 3 : 9 800 des 20 000 Pièces de l'Établi n'achèteraient rien. a26 applique +25 %, +8 % et +1,2 par niveau. Les Balles perforantes de a07 (50 % + 10 points par niveau) atteignent 140 % au niv 10 : le 2e Zbire prend plus que le 1er. La Visée critique de a07 (+4 points par niveau) monte à 45 % : le Casqué subit alors 0,5 + 1,5 × 0,45 = 1,18 fois les dégâts normaux, et le pilier « le Casqué impose les critiques » disparaît.",
+      "correction": "Un seul ReplicatedStorage.Partage.BlasterStats sur 10 niveaux, aux prix a07. Dégâts : 10 + 2 par niveau (30). Cadence : 4 + 0,2 par niveau (6 tirs/s). Portée : 40 + 1,2 par niveau (52), rayon du tir auto compris. Balles explosives : 5 % par niveau (50 %), rayon 6 studs, 50 % des dégâts. Butin : +10 % par niveau, niv 5 max. Visée critique : 5 % + 2 points par niveau (25 % au max, Casqué à 0,875). Balles perforantes : 45 % + 5 points par niveau (95 %). a07 et a09 reprennent ce tableau."
+    },
+    {
+      "gravite": "bloquant",
+      "agent": "a08",
+      "probleme": "Les recherches sont invisibles au premier retour. Après la 1re run (tutoriel 160 + run au J5 × 2 ≈ 840 XP, niveau 4), seule la Foreuse (100 gemmes) est visible. Le novice n'a que 74 gemmes, et la Tourelle de toit (40 gemmes, l'achat guidé par Doc Boulon selon a07) n'apparaît qu'au niveau 5. L'étape PremiereRecherche (a50) et l'objectif de 70 % de a49 échouent donc. Deux verrous se doublent aussi : Capsule Difficile au niv 10 ou au Record Jour 10 (a06), Défi du Jour au niv 3 ou au 1er Colosse repoussé (a07).",
+      "correction": "Rendre la Tourelle de toit visible au niv 1, la Visée critique au 3, les Balles perforantes au 4 et la Foreuse au 5 (fin de 1re session, pour que la première nuit compte). Capsule Difficile : Record Jour 10 seul. Défi du Jour : 1er Colosse repoussé seul. Le niveau ne verrouille que les défenses."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a06",
+      "probleme": "Aucune run n'a de fin garantie. Le Jour du Colosse dure « tant qu'il est debout », sans limite. Au J15, le Colosse entre à 23 min 10, plus les prolongations des J5 et J10 : une équipe qui le fait courir dépasse 25 min. LIMITE_RUN ne fait qu'un warn, et la Tension (+30 % par cran) n'existe pas dans la formule de PV de a26. Les PV du Colosse ne sont fixés dans aucun livrable relu.",
+      "correction": "PV du Colosse : 2 500 × 1,15^(jour − 1) avant coop (≈ 4 400 au J5, soit ≈ 45 s de combat en solo). Colosse enragé 60 s après son entrée (vitesse × 1,5, dégâts sur la Maison × 3). Fin de run forcée à 25:00, avec les gemmes normales. Tension multiplicative, × 1,3^cran sur les PV et la taille des paquets, ajoutée par a26 dans HordeService."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a07",
+      "probleme": "La coop n'est pas neutre, contrairement à l'affirmation du §6. À 6 Survivants, le DPS est × 6 contre des PV × 2,75 : la capacité est × 2,18, soit ≈ 3,5 jours de plus sans Tension (chute au J12-13 au lieu du J9, 331 à 371 gemmes au lieu de 197). Les lignes partagées à 58 % du prix creusent encore l'écart. La courbe du §5 est calculée en solo, alors que a50 vise 60 % de runs en coop.",
+      "correction": "Multiplier le nombre de Zbires par jour par (1 + 0,2 × (Survivants actifs − 1)) dans HordeService (le canon ne fixe que les PV). PV totaux × 5,5 contre DPS × 6 : bonus coop ≈ +0,6 jour, cohérent avec le pilier 2. Recalculer le §5 avec 2,5 Survivants en moyenne."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a07",
+      "probleme": "Les Pièces suivent quatre règles : aimant de 10 studs (a06, a07) ou de 8 (a09, a29) ; durée au sol de 12 s (a06), 15 s (a14) ou 20 s (a28) ; au Répit, 50 % aspirés (a07) ou 100 % (a09) ; Doré dès le J2 (a07) ou le J3 (a06). Le revenu réel varie donc de 50 à 100 % des cumuls du §3.",
+      "correction": "Aimant serveur de 8 studs, 20 s au sol, 50 % aspirés au début du Répit, Doré dès le J3. Recalculer les cumuls à 85 % de ramassage (≈ 780 Pièces au J5, 2 700 au J10). a09, a14 et a28 reprennent ces valeurs."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a07",
+      "probleme": "La Foreuse est un mauvais placement. Avec (3 + 2 × niv) gemmes par heure, chaque niveau rapporte +16 gemmes par nuit et coûte de 170 à 11 860 gemmes : le niveau 10 se rentabilise en 741 jours. La ligne coûte 28 660 gemmes, soit 34 % de l'arbre, pour +144 gemmes par nuit au total.",
+      "correction": "Foreuse en 5 niveaux : 5, 9, 14, 20 et 27 gemmes par heure (de 40 à 216 par nuit), prix 100, 170, 290, 490 et 835. L'arbre passe à ≈ 56 300 gemmes (≈ 45 h), aligné sur le niveau 30 de a08 (6e semaine). a27 élargit sa plage de Foreuse à 5-27 gemmes par heure."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a09",
+      "probleme": "La réparation se cumule sans limite : 1,5 % des PV max par seconde et par Survivant, +25 % par niveau. À 6 avec Réparation 5, la Maison regagne 20 %/s : elle est pleine en 5 s et chaque Répit la remet à 100 %. En solo, un Répit rend 15 %. Les PV de la Maison et les dégâts des Zbires ne sont fixés dans aucun livrable relu.",
+      "correction": "Débit total = 1,5 % × (1 + 0,25 × niv) × (1 + 0,5 × (réparateurs − 1)), avec 3 réparateurs comptés au plus. Maison à 1 000 PV (Solidité +12 % par niveau). Zbire au contact : 4 × 1,15^(jour − 1) PV/s (Costaud × 2)."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a09",
+      "probleme": "Les défenses restent figées. La Mini-Tourelle (5 dégâts × 2 tirs/s) et le Muret (150 PV) ne progressent pas, alors que leur prix monte de 15 % par jour et les PV des Zbires aussi : au J10, 141 Pièces pour 10 DPS contre des Zbires à × 3,5. C'est un achat piège après le J3.",
+      "correction": "Dégâts de la Mini-Tourelle : 50 % des dégâts du Blaster de son poseur (niveau de Dégâts compris). PV du Muret : 150 × 1,15^(jour − 1)."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a10",
+      "probleme": "Le premier achat tombe hors délai. PRIX_PREMIER_ACHAT vaut 10, mais le niveau 1 de Dégâts coûte 25 (a07), soit 13 Marcheurs à 2 Pièces. L'ouverture démarre à A+3, alors que a06 place 20 s d'Arrivée avant le Jour 1 : premier Zbire vers T 56, achat vers T 95, hors des 90 s. La cadence de base est de 3 tirs/s au lieu de 4 (a09, a26).",
+      "correction": "Lire Economie.prixEtabli('Degats', 1) au lieu de coder 10. Porter Onboarding.OUVERTURE à 13 Marcheurs entre +3 et +30 s (2 réservés). a06 saute l'Arrivée si Onboarding.aDesNovices() (le Colosse arrive alors à 7:00, toujours dans la 8e minute). Premier achat vers T 75. Cadence de base : 4 tirs/s."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a50",
+      "probleme": "Le mur de l'entonnoir Run est mal placé. « La plus grosse marche doit être 4 → 5 » (J5 → J6) : si la majorité des runs meurent au premier Colosse, la médiane tombe vers 8 min, contre les 12-18 min visées par a50 elle-même et la fenêtre J8-J11 de a06. Les tranches J5-9 et J10-14 coupent cette fenêtre en deux.",
+      "correction": "Attendre la plus grosse marche entre J8 et J12 pour les runs de rang 4 et plus d'un joueur, avec une perte J5 → J6 de 20 % au plus. Analyser à part les 3 premières runs (J5-J7 attendus). Tranches J1-4, J5-7, J8-11, J12+. Alerte si la médiane des runs de rang 4 et plus passe sous le J8."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a49",
+      "probleme": "Deux sources de gemmes sortent du canon (§6, 5 sources) : l'Avent (20 cases × 50 = 1 000 gemmes) et les missions hebdomadaires (3 × 100 = 300 gemmes par semaine). a07 refuse justement toute source propre au Zbire de la Semaine. Avec les secrets de a13, cela fait ≈ +13 % de gemmes non modélisées.",
+      "correction": "Convertir les cases d'Avent en XP (a08), en cosmétiques ou en Foreuse Turbo (source existante). Récompenser les missions par 500 XP et un cosmétique. Rien n'est codé sans l'accord de Victor Lanoue."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a49",
+      "probleme": "Le pack cosmétique Robux prévu pour chaque événement n'a aucune garantie de rester en vente après l'événement. Ce serait une offre à durée limitée, que a46 interdit (« ni promo limitée ») : une pression d'achat sur des 9-13 ans.",
+      "correction": "Laisser le pack en vente toute l'année après sa sortie, comme les Bonnets de Zbire, sans compte à rebours ni annonce de fin."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a13",
+      "probleme": "Les secrets rapportent jusqu'à 50 gemmes par jour (Mini-Gluant 15, Dalles 10, Bornes 20, Alcôve 13 10). C'est une source hors canon, contraire aux règles de a15 et de a22 (« aucune gemme ») : 350 gemmes par semaine, +8 à +11 % sur la 1re heure d'un novice.",
+      "correction": "Récompenser les secrets en cosmétiques, badges, XP (a08) et Pièces de run. Aucune gemme."
+    },
+    {
+      "gravite": "mineur",
+      "agent": "a06",
+      "probleme": "Le Jour parfait donne +10 Pièces fixes. Les « 2 achats après un Jour parfait » deviennent impossibles dès le J3 (Dégâts niv 3 à 55, niv 5 à 110).",
+      "correction": "Bonus égal à 25 % des Pièces gagnées dans le jour (≈ 12 au J1, 60 au J5, 140 au J9)."
+    },
+    {
+      "gravite": "mineur",
+      "agent": "a07",
+      "probleme": "Le §5 est incomplet. Le Défi du Jour manque à la 1re heure alors qu'il se débloque au 1er Colosse repoussé (la 2e run du tableau, au J6) : 607 gemmes et 7 recherches, et non 457 et 5. Le × 1,5 de la Capsule Difficile, le Filon et le Panier de a15 (≈ +10 % au J10) et la Foreuse Turbo de a08 sont ignorés. La remise à zéro quotidienne est fixée à 0 h UTC (a07, a08, a13) ou à minuit à Paris (a06, a12, a29) : risque de double Défi.",
+      "correction": "Recalculer le §5 avec ces sources. Utiliser une seule clé de jour, Transactions.cleJourParis, pour le Défi du Jour, le Calendrier et les secrets."
+    },
+    {
+      "gravite": "mineur",
+      "agent": "a48",
+      "probleme": "La fiche annonce un serveur privé à 100 R$ par mois, alors que a46 fixe 50 R$. Elle écrit « Tir automatique sur mobile », alors que a09 et a28 l'activent sur tous les appareils.",
+      "correction": "Serveur privé à 50 R$ par mois. Écrire « Tir automatique sur tous les appareils » (EN : « Auto-shoot on every device »)."
+    }
+  ]
+}

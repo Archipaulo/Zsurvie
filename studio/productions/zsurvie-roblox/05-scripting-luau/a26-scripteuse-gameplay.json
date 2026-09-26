@@ -1,0 +1,118 @@
+{
+  "decisions": [
+    "ReplicatedStorage.Partage.BlasterStats est la seule courbe du Blaster, sur 10 niveaux. Dégâts 10 + 2 par niveau (30). Cadence 4 + 0,2 par niveau (6 tirs/s). Portée 40 + 1,2 par niveau (52), qui est aussi le rayon du tir auto. Balles explosives : 5 % de chance par niveau (50 %), rayon 6 studs, 50 % des dégâts de base. Butin : +10 % par niveau, niveau 5 au maximum. Visée critique : 5 % + 2 points par niveau (25 %), dégâts × 2. Balles perforantes : 45 % + 5 points par niveau (95 % sur le 2e Zbire). Le Casqué prend 50 % des dégâts hors critique, soit un facteur moyen de 0,875 au maximum. a07 et a09 lisent BlasterStats.valeur(stat, niveau) et BlasterStats.MAX.",
+    "Le contrat de rendu est figé dans ZbiresRendu. Pool client de 70 modèles créé pendant l'Arrivée dans workspace.Zbires, avec l'attribut Id (0 = libre). Quotas : Marcheur 18, Rapide 10, MiniGluant 10, Casque 8, Sauteur 6, Costaud 5, Gluant 5, Volant 5, Dore 2, Colosse 1. Chaque modèle : Racine ancrée invisible + 3 à 5 MeshParts (700 triangles au plus) reliées par Motor6D. Un seul workspace:BulkMoveTo par image, aucun Instance.new ni Destroy en combat. Écart ajouté au plafond de 60 du canon : le serveur ne fait sortir un Zbire que si le quota de son type a une place, sinon il attend son tour.",
+    "HordeService.demarrerJour(j) lit ZbiresDefs.JOURS et RAMPE, fournis par a06 dans le sous-module ZbiresDefs.Jours. PV = base × 1,15^(jour − 1) × 1,3^Tension × (1 + 0,35 × (actifs − 1)) × Défi. Effectifs × (1 + 0,2 × (actifs − 1)), avec actifs = Economie.estActif. Le Colosse arrive les jours multiples de 5 avec 2 500 × 1,15^(jour − 1) × coop PV, et devient enragé 60 s après sa sortie. Les portails de a14 sont absorbés : tag PortailZbire et Plan.positionPortail(Index), alerte de 1,5 s (Colosse 4 s), ciblableA = sortie + 0,8 s, tirage pondéré par Poids sans répéter le même portail deux fois de suite.",
+    "Les dégâts sur la Maison deviennent un débit continu : 4 × 1,15^(jour − 1) PV/s par Zbire au contact, Costaud × 2, Colosse × 3 (× 9 enragé), Doré 0. Le même débit s'applique à un Muret. on('maison') et frapper(degats) reçoivent un seul total par tick. Le multiplicateur 3 du Colosse est ma proposition, à valider par Victor Lanoue.",
+    "Réseau : EtatZbires envoie 9 octets par Zbire (id, x, z, PV, cap, puis type et état sur 4 bits chacun), soit environ 5,5 Ko/s par client. Les arrivants se resynchronisent sans message fiable. Les événements visuels passent par le flux Evenements : apparition, impact, critique, coupReduit, eclatement, division, bond et onde. EvenementsZbires et ImpactsTir sont supprimés. DemandeTir et DemandeDeblocage ne sont branchés que par Validation.brancher.",
+    "StatsSurvivant n'écrit plus ni WalkSpeed ni JumpHeight. Les allures Horde, Repit et Reparation sont transmises à GardienMouvement.definirVitesse, et l'étourdissement à GardienMouvement.etourdir, avec les valeurs de ReplicatedStorage.Config.Mouvement. ResetButtonCallback reçoit un BindableEvent qui envoie DemandeDeblocage (1 toutes les 10 s) ; le serveur appelle alors GardienMouvement.teleporter vers le SpawnLocation libre le plus proche. Les groupes de collision Survivants et Defenses ne se touchent plus."
+  ],
+  "besoins": [
+    {
+      "de": "a06 (game design, progression des jours)",
+      "besoin": "Livrer ReplicatedStorage.Partage.ZbiresDefs.Jours sous la forme { JOURS = { { tension, portails, zbires = { Marcheur = n, ... } } }, RAMPE = { parts cumulées à intervalles égaux, dernière valeur 1 } }. Utiliser les clés ASCII (Dore, Casque, MiniGluant) et ne pas y mettre le Colosse, qui est ajouté tous les 5 jours. Tenir compte des quotas simultanés, par exemple 18 Marcheurs au plus en même temps."
+    },
+    {
+      "de": "a14 (portails de la Lisière)",
+      "besoin": "Supprimer ServerScriptService.Horde.Portails, désormais absorbé par HordeService. Poser les attributs Index (1 à 8) et Poids (1 par défaut) sur chaque portail tagué PortailZbire, et afficher l'alerte de portail à l'écoute de l'événement apparition (délai de 1,5 s, Colosse 4 s)."
+    },
+    {
+      "de": "a11 (Plan de la Prairie)",
+      "besoin": "Exposer Plan.positionPortail(i) : Vector3 au sol pour i de 1 à 8, dans ReplicatedStorage.Plan, et garder le Grand Portail en (0, 0, −80)."
+    },
+    {
+      "de": "a24 (modélisation des Zbires)",
+      "besoin": "Livrer 10 Models dans ReplicatedStorage.Modeles.Zbires, nommés par leur clé ASCII. Chacun : une Part Racine dont le LookVector est l'avant du Zbire, et 3 à 5 MeshParts (700 triangles au plus pour tout le Zbire) reliées par Motor6D."
+    },
+    {
+      "de": "a38 (animation des Zbires)",
+      "besoin": "Brancher ZbireAnimateur par ZbiresRendu.brancherAnimateur(fn(actifs, dt)) et n'animer que Motor6D.Transform, sans Animator ni PivotTo. Lire entree.etat (bond, enragé, contact) et entree.pv. Le budget est commun avec ZbiresRendu : moins de 3 ms par image sur l'Android 3 Go."
+    },
+    {
+      "de": "a28 (commandes mobiles et UI)",
+      "besoin": "Retirer toute boucle de tir côté a28. Sur un tap ou un clic, appeler ZbiresRendu.chercher(InputObject.Position, 48) puis BlasterControleur.definirCiblePrioritaire(id). Afficher l'écran Etourdi (EtourdiJusqua) et les jauges PVColosse et ColosseEnrage."
+    },
+    {
+      "de": "Scripteur réseau et sécurité (Validation, Evenements)",
+      "besoin": "Confirmer Validation.brancher(remote, { arguments, maxParSeconde ou intervalleMin }, gestionnaire), ainsi que Evenements.publier(nom, ...) côté serveur et Evenements.ecouter(nom, fn) côté client dans ReplicatedStorage.Partage.Evenements. Le flux doit accepter les 8 noms publiés par a26."
+    },
+    {
+      "de": "Propriétaire de GardienMouvement",
+      "besoin": "Exposer GardienMouvement.definirVitesse(joueur, v), etourdir(joueur, duree) et teleporter(joueur, cframe), qui doivent aussi s'appliquer au personnage suivant. Fournir ReplicatedStorage.Config.Mouvement avec VITESSE_HORDE 18, VITESSE_REPIT 24, VITESSE_REPARATION 8, ETOURDI_DUREE 2 et SAUT_SURVIVANT (valeur arbitrée par Victor Lanoue)."
+    },
+    {
+      "de": "a07 et a09 (économie et Établi)",
+      "besoin": "Reprendre le tableau de BlasterStats (10 niveaux, Butin 5), avec les prix a07 pour chaque niveau. Economie expose estActif(joueur) et multiplie les Pièces par BlasterStats.butin(tueur)."
+    },
+    {
+      "de": "Scripteur DefensesService",
+      "besoin": "Mettre CollisionGroup = « Defenses » sur les Murets, Mini-Tourelles et Tapis Collants. Refuser toute pose dont l'emprise touche un Survivant ou un SpawnLocation. Adapter frapper(degats) au cumul envoyé une fois par tick."
+    },
+    {
+      "de": "Artiste VFX (EffetsControleur)",
+      "besoin": "Dessiner en pools les effets du flux Evenements : éclatement en cubes et pièces, alerte de portail, chiffre critique, étincelle Ardoise sur coupReduit, bond et explosion (6 studs). Respecter 150 Parts Neon, ParticleEmitter.Rate ≤ 20 et 16 sons au maximum."
+    },
+    {
+      "de": "Victor Lanoue (directeur créatif)",
+      "besoin": "Valider le multiplicateur de dégâts du Colosse sur la Maison (× 3), les quotas simultanés par type et la valeur unique de SAUT_SURVIVANT."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Livrer BlasterStats sur 10 niveaux et vérifier avec a07 et a09 que chacun des 10 achats de chaque stat change une valeur (Butin : 5)",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Brancher ZbiresDefs.Jours de a06 et valider demarrerJour sur les jours 1 à 15 : effectifs, Tension et Colosse aux jours 5, 10 et 15",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Absorber les portails de a14 dans HordeService (Index, Poids, alerte, ciblableA) et faire supprimer ServerScriptService.Horde.Portails",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Intégrer ZbiresRendu : pool de 70 modèles de a24, un BulkMoveTo par image, brancherAnimateur pour a38, warn par type manquant",
+      "phase": 4,
+      "charge": "L"
+    },
+    {
+      "titre": "Brancher DemandeTir et DemandeDeblocage par Validation.brancher et publier les 8 événements dans le flux Evenements",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Déléguer vitesses et étourdissement de StatsSurvivant à GardienMouvement, et créer les groupes de collision Survivants et Defenses",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Test Casqué : sur 1 000 tirs à Visée critique 10, dégâts moyens de 0,875 × base, à ± 3 %",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Test de déblocage : poche de 3 Murets en (−13, 0, ±4) et (−18, 0, 0), sortie par Réinitialiser, 2e demande refusée avant 10 s",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Test de mouvement : 15 s de Répit à 24 et un Ressort, 0 correction de GardienMouvement",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Mesures sur l'Android 3 Go avec 6 joueurs et 60 Zbires : HordeTick sous 1 ms, ZbiresRendu et ZbireAnimateur sous 3 ms par image, EtatZbires à environ 5,5 Ko/s",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Tests d'exploit : DemandeTir en rafale, avec NaN, sur un Zbire pas encore ciblable ou hors portée ; DemandeDeblocage en boucle",
+      "phase": 6,
+      "charge": "S"
+    }
+  ],
+  "revise": true
+}

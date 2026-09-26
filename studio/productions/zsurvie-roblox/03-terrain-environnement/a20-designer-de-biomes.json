@@ -1,0 +1,117 @@
+{
+  "decisions": [
+    "Plan concentrique : la Maison est centrée sur l'origine (sol à Y = 0, porte au sud face à la caméra). Bandes : Jardinet 8-18 studs, Prairie 18-60, Orée 60-70, Lisière 70-100, Fond au-delà. La Mine 8 × 8 est centrée en (24, 0, -24) : je lis « à 12 studs de la Maison » comme 12 studs de vide entre le mur et la Mine.",
+    "Zéro Terrain : toutes les transitions de sol sont un tramage de Bayer 4 × 4 en tuiles de 2 × 0,2 × 2 studs, jamais une frontière nette (script fourni). Budget du décor de la Prairie : 6 000 Parts, 50 Neon, 6 PointLight et 6 sons simultanés.",
+    "Écart signalé, à valider par Victor Lanoue : des noms de travail internes, jamais affichés au joueur. Il s'agit de Jardinet, Orée, Fond et des 4 quartiers d'orientation de la Prairie : Verger (NO), Carreau (NE), Potager (SE), Pique-nique (SO). Ces quartiers donnent un sens au ping « Ici ! ».",
+    "La Lisière est un décor de théâtre : arbres de 10 studs au plus au sud (côté caméra), 14 à l'est et à l'ouest, 18 au nord. 4 grands portails dans l'axe des chemins à r = 84 et 4 petits en diagonale à r = 80. Limite jouable proposée : 72 studs.",
+    "L'ambiance de la Prairie dépend d'un seul attribut serveur, workspace.EtatPrairie (Horde, Repit ou Colosse), que le LocalScript AmbianceBiomes applique côté client. Le serveur ne modifie jamais Lighting. Il pose « Colosse » dès le Répit qui précède le Jour du Colosse (ClockTime passe de 14 à 17,5 en 4 s).",
+    "Choix de couleurs : l'Or n'apparaît jamais dans le décor ni dans la Galerie. Les paliers de la Galerie (10, 100 et 1 000 éliminations) sont en Crème, Toit orange et Neon cyan. Capsule Normale en Toit orange, Difficile en Alerte, du Jour en Gemme cyan."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur technique",
+      "besoin": "Confirmer l'API de ReplicatedStorage.Charte : Charte.couleur(nom, teinte), avec les noms Prairie, TerreBattue, Creme, ToitOrange, Or, GemmeCyan, VioletHorde, Alerte, NuitLabo, Encre et Ardoise, et les teintes base, ombre et lumiere."
+    },
+    {
+      "de": "Scripteur gameplay (boucle de jeu)",
+      "besoin": "Écrire workspace:SetAttribute(\"EtatPrairie\", ...) à chaque changement de phase, avec « Colosse » dès le Répit qui précède le Jour du Colosse. Renverser les props tagués Chaos1, Chaos2 puis Chaos3 après les Colosses des jours 5, 10 et 15."
+    },
+    {
+      "de": "Level designer",
+      "besoin": "Valider la position de la Mine en (24, 0, -24), la largeur des chemins (8 studs) et la limite jouable à 72 studs, avec des murs invisibles."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "Livrer en chiptune, bouclables et de 30 s au plus : BoucleHorde, BoucleRepit, BoucleColosse, le carillon de la Mine, le bourdonnement des portails, le ronron du Laboratoire, le jingle du Quai et la boîte à musique de la Galerie."
+    },
+    {
+      "de": "Directeur créatif",
+      "besoin": "Valider les noms internes (Jardinet, Orée, Fond et les 4 quartiers) ainsi que les couleurs des paliers de la Galerie (Crème, Toit orange, Neon cyan, sans Or)."
+    },
+    {
+      "de": "Artiste Zbires et VFX",
+      "besoin": "Tenir la Prairie à 100 Parts Neon et 6 PointLight hors décor, pour les Zbires, les tirs et les explosions."
+    },
+    {
+      "de": "Constructeur de la Maison",
+      "besoin": "Prévoir la porte au sud, 6 fenêtres Neon Crème et une lanterne de porche avec PointLight (Range 14), allumées seulement au Jour du Colosse."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Faire valider par le directeur créatif les noms internes des biomes et quartiers ainsi que les couleurs des paliers de la Galerie",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Greyboxer la Prairie : bandes aux rayons 8, 18, 60, 70 et 100 et 4 chemins de 8 studs ; vérifier la fenêtre caméra de 88 × 64 studs depuis la Maison et depuis chaque bord",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Greyboxer le lobby : rotonde du Laboratoire sans plafond, sas de 12 studs, Quai des Capsules, Galerie des Zbires et 3 boîtes ZonesLobby",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Générer les tramages du Jardinet, du Carreau et de l'Orée avec le script Bayer, en restant sous 350 tuiles au total",
+      "phase": 2,
+      "charge": "S"
+    },
+    {
+      "titre": "Construire la Lisière : environ 500 arbres-cubes de 4 Parts en 3 gabarits de hauteur (sud 10, est-ouest 14, nord 18), contamination violette près des portails, 2 300 Parts au maximum",
+      "phase": 2,
+      "charge": "L"
+    },
+    {
+      "titre": "Habiller la Prairie : touffes, bords de chemins, empreintes violettes dans l'Orée et 4 quartiers de props de 6 studs au plus, 1 900 Parts au maximum",
+      "phase": 2,
+      "charge": "L"
+    },
+    {
+      "titre": "Construire les 8 portails (32 Neon, 4 PointLight, ParticleEmitter Rate 12) et le Fond en falaises-cubes",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Construire le carreau de la Mine : rochers de 6 studs au plus, rails, 2 wagonnets, 12 cubes Neon cyan, PointLight Range 14",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Créer les poses renversées des props tagués Chaos1, Chaos2 et Chaos3 (environ 30 CFrame par palier)",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Habiller le lobby : sols, bandeaux Neon cyan, Capsules en 3 couleurs, socles de la Galerie avec leurs liserés de palier, 140 Neon au maximum",
+      "phase": 3,
+      "charge": "L"
+    },
+    {
+      "titre": "Intégrer le LocalScript AmbianceBiomes, les 3 boucles dans SoundService et CorrectionBiome dans Lighting, puis brancher l'attribut EtatPrairie",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Coder la détection de zone côté client dans le lobby (toutes les 0,25 s) avec glissement du TintColor et fondu des ambiances en 1,5 s",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Régler Lighting, Atmosphere et ColorCorrection pour les 3 états de la Prairie et pour le lobby selon les tableaux de valeurs",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Mesurer sur Android 3 Go (30 FPS, moins de 800 Mo) le nombre de Parts, Neon, PointLight et sons simultanés dans chaque place",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Vérifier qu'aucun objet ne dépasse 6 studs à moins de 60 studs de la Maison et qu'aucun arbre de la Lisière sud ne masque un Survivant",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

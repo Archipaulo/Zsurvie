@@ -1,0 +1,83 @@
+{
+  "decisions": [
+    "HUD construit sur une référence de 1280 × 720, en paysage forcé (LandscapeSensor). Chaque groupe ancré (HautGauche, HautCentre, HautDroite, BasDroite) porte un UIScale tagué HudScale, réglé à clamp(min(X/1280, Y/720), 0.6, 1.25). Les boutons font 100 réf. : ils ne descendent jamais sous 60 px.",
+    "Toujours visibles : le Bandeau Maison en haut au centre (Jour, PV de la Maison, minuteur de phase), les Pièces en haut à gauche, les têtes des Survivants en haut à droite et les boutons Répare, Poser et Ping en bas à droite. Les gemmes de la run, la barre du Colosse, les flèches de bord et le Défi du Jour ne s'affichent que selon le contexte.",
+    "En haut on lit, en bas à droite on agit : sur tactile, seuls le groupe BasDroite et la Roue des Pings (centrée, UIAspectRatioConstraint 1, bulles de 0,33) réagissent au toucher. Le coin bas-gauche (45 % × 55 %) est réservé au joystick et le centre au Survivant.",
+    "Le HUD ne fait que lire des attributs écrits par le serveur : Maison.PV et PVMax ; EtatRun.Jour, Phase, FinPhase et ColosseActif ; Player.Pieces, GemmesRun, DefensesPosees et EtourdiJusqua. Il n'envoie que 3 RemoteEvent : DemandeReparation, DemandePose et DemandePing.",
+    "Les CoreGui Backpack, Health, PlayerList et EmotesMenu sont désactivés dans la place Prairie. ScreenGui HUD : ScreenInsets CoreUISafeInsets, ResetOnSpawn false. Hypothèse : Survivants sans saut (JumpPower 0), ce qui masque le bouton de saut natif.",
+    "Style Pixel-bloc : panneaux Encre transparents à 0,25, angles droits, UIStroke 3 px, police FredokaOne (Arcade réservée aux annonces), texte en 26 réf. minimum (≈ 16 px sur téléphone). Couleurs du canon : Or pour les Pièces, Cyan pour les Gemmes, Violet pour les flèches de Zbires, Alerte quand la Maison est à 25 % ou moins et pour le Colosse."
+  ],
+  "besoins": [
+    {
+      "de": "Programmeur gameplay",
+      "besoin": "Confirmer le contrat d'attributs répliqués (Maison.PV et PVMax ; EtatRun.Jour, Phase = Horde ou Repit, FinPhase en temps serveur via GetServerTimeNow, ColosseActif ; Player.Pieces, GemmesRun, DefensesPosees, EtourdiJusqua) et les RemoteEvent DemandeReparation, DemandePose(type) et DemandePing(nom) dans ReplicatedStorage.Remotes."
+    },
+    {
+      "de": "Programmeur Zbires / réseau",
+      "besoin": "Un module client (ZbiresClient) qui expose les positions lissées des Zbires, leur type (Doré, Colosse) et la position de l'Établi, lisibles à 10 Hz pour les flèches de bord."
+    },
+    {
+      "de": "Directeur technique",
+      "besoin": "Que le module ReplicatedStorage.Charte expose les couleurs en Color3 nommées Encre, Prairie, TerreBattue, Creme, ToitOrange, Or, GemmeCyan, VioletHorde, Alerte, NuitLabo et Ardoise."
+    },
+    {
+      "de": "Artiste UI",
+      "besoin": "Des icônes pixel de 64 × 64 dans la palette du canon : pièce, gemme, Muret, Mini-Tourelle, Tapis Collant, les 4 pings, le Colosse, la Maison, l'Établi, une flèche de bord et 2 icônes de modificateurs du Défi du Jour."
+    },
+    {
+      "de": "Game designer",
+      "besoin": "Valider l'absence de saut pour les Survivants (JumpPower 0), la portée de réparation et la règle de pose des défenses (devant le Survivant, position calculée par le serveur)."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "4 sons chiptune pour l'interface : gain de Pièces (limité à 1 toutes les 0,1 s), alerte de la Maison à 25 %, annonce du Colosse et ouverture de la Roue des Pings."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Valider la maquette du HUD et le contrat d'attributs avec le gameplay et le directeur créatif",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Monter la greybox du ScreenGui HUD (8 groupes ancrés, rectangles gris aux UDim2 du document) et la vérifier dans le Device Emulator en 740×360, 844×390, 1024×768 et 1920×1080",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Coder le LocalScript HudController : échelle UIScale, Bandeau Maison, minuteur de phase, Pièces, étourdissement et liaisons E/1-2-3/Q",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Coder les flèches de bord : pool de 8 ImageLabel, secteurs de 45°, flèches du Colosse, de la Maison et de l'Établi, rafraîchies à 10 Hz",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Intégrer la Roue des Pings et le repli de ChoixDefense, avec le badge x/3",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Habiller le HUD en Pixel-bloc : icônes 64×64, UIStroke, ombres (4, 4), rebond de 0,15 s, pulsation Alerte de la Maison",
+      "phase": 5,
+      "charge": "L"
+    },
+    {
+      "titre": "Construire le HUD du Laboratoire (HUDLabo) : Gemmes, jauge de la Foreuse, départ de Capsule, bouton Défi du Jour",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Mesurer le coût du HUD sur un Android de 3 Go avec 6 joueurs et 60 Zbires (MicroProfiler < 1 ms par image, 30 FPS tenus)",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Test de lisibilité avec 5 joueurs de 9 à 13 ans : lire les PV de la Maison, le Jour et les Pièces en moins de 3 s, et trouver le bouton Répare sans aide",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

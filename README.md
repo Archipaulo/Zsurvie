@@ -64,3 +64,12 @@ npx serve .
   fichier audio (tirs, impacts, pièces, gemmes, explosions, fanfares).
 - Fichiers : `index.html` (structure), `style.css` (interface et lobby),
   `game.js` (logique du jeu, rendu, équilibrage).
+
+## 🏗️ Atelier Roblox — le studio de 50 agents IA
+
+Le dossier [`studio/`](studio/README.md) contient un studio virtuel de 50 agents
+IA spécialisés dans la création de maps Roblox, et son application de suivi de
+projets (`studio/Atelier-Roblox.html`, à ouvrir d'un double-clic). À partir
+d'un seul brief, les 50 agents se coordonnent pour produire une bible de
+production complète. Exemple réel : l'adaptation de Zsurvie en jeu Roblox
+coopératif, dans [`studio/productions/zsurvie-roblox/`](studio/productions/zsurvie-roblox/BIBLE-COMPLETE.md).

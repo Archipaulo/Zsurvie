@@ -1,0 +1,67 @@
+{
+  "decisions": [
+    "On n'entre pas dans la Maison : on voit son intérieur par 3 baies (2 au sud, 1 à l'est), sur une bande de 5 studs derrière chaque baie. On découvre tout l'intérieur à la chute (le toit monte de 6 studs, la caméra plonge 3 s). Budget : 200 Parts, 0 Neon, 1 PointLight.",
+    "L'intérieur de la Maison suit l'attribut serveur Etat (1 à 3) de workspace.Maison. Seuils proposés : 66 % et 33 % des PV. Un LocalScript fait le rendu à partir des attributs EtatMin, EtatMax et Penche posés sur les Parts de Maison.Interieur.",
+    "Chaque Alcôve a 3 états (Libre, Emménagement, Installé) et 4 machines de recherche à 3 stades. Le serveur clone ces machines depuis ServerStorage.MachinesRecherche en lisant les attributs joueur Recherche_<Nom>. Seuils de stade provisoires : niveaux 1, 3 et 5.",
+    "Budget du lobby : 150 Neon (Cabinet 8, Alcôves 60, Quai 24, Galerie 20, Arbre des Recherches 38) et 12 PointLight (3 chacun pour le Cabinet, le Quai, la Galerie et l'Arbre).",
+    "Ajout au canon, à valider par Victor Lanoue : la Maison est l'ancienne maison d'enfance de Doc Boulon, où vivent 6 Survivants (6 couchettes, 6 bols). Une photo de Doc Boulon enfant sert d'œuf de Pâques.",
+    "Les secrets ne rapportent jamais de gemmes ni de pièces. Trouver les 5 peluches Mini-Gluant donne un badge et une peluche de Sac à dos gratuite, validés par le serveur (UpdateAsync, DataStore PeluchesSecretes_v1)."
+  ],
+  "besoins": [
+    {
+      "de": "Scripteur gameplay (Maison)",
+      "besoin": "Poser côté serveur les attributs Etat (1 à 3) et Jour sur workspace.Maison, avec les seuils à 66 % et 33 % des PV."
+    },
+    {
+      "de": "Programmeur données et progression",
+      "besoin": "Exposer sur chaque Player les attributs Recherche_TourelleDeToit, Recherche_BallesPerforantes, Recherche_ViseeCritique, Recherche_Foreuse (niveaux), ForeuseStock et Elim_<Zbire>. Dire aussi si le masque des peluches doit rejoindre le profil joueur."
+    },
+    {
+      "de": "Programmeur économie",
+      "besoin": "Brancher le prompt « Récolter » de la Foreuse : vérifier Proprietaire == UserId et le plafond de 8 h, puis créditer les gemmes côté serveur."
+    },
+    {
+      "de": "Directeur artistique",
+      "besoin": "Confirmer que ReplicatedStorage.Charte expose Creme et ToitOrange en Color3."
+    },
+    {
+      "de": "Scripteur caméra",
+      "besoin": "Réaliser le plan de chute de la Maison : toit soulevé de 6 studs en 0,6 s, puis plongée verticale de 3 s au-dessus de l'intérieur."
+    },
+    {
+      "de": "Game designer équilibrage",
+      "besoin": "Donner le niveau maximal de chaque recherche pour fixer les seuils des 3 stades visuels des machines."
+    },
+    {
+      "de": "Level designer lobby",
+      "besoin": "Placer dans le blocking l'anneau des 12 Alcôves (12 × 10 × 12 studs chacune), le Cabinet (16 × 12) et la Galerie (40 × 24)."
+    },
+    {
+      "de": "Scripteur lobby et Capsules",
+      "besoin": "Poser l'attribut Depart (heure serveur) sur chaque Capsule, et l'attribut du Zbire de la Semaine qui soulève la bâche de la Galerie."
+    },
+    {
+      "de": "Directeur créatif (Victor Lanoue)",
+      "besoin": "Valider l'histoire de la Maison (maison d'enfance de Doc Boulon, 6 Survivants) et la peluche de Sac à dos gratuite."
+    }
+  ],
+  "taches": [
+    { "titre": "Faire valider par Victor Lanoue l'histoire de la Maison et la récompense des peluches", "phase": 0, "charge": "S" },
+    { "titre": "Greyboxer les gabarits : Cabinet 16×12, Alcôve 12×10×12, cabine de Capsule 12×8×8, Galerie 40×24, intérieur de la Maison 14×14×8", "phase": 1, "charge": "M" },
+    { "titre": "Vérifier sur téléphone, caméra (0, 45, 28) et FieldOfView 50, que la bande de 5 studs derrière les baies de la Maison est lisible", "phase": 1, "charge": "S" },
+    { "titre": "Construire le Cabinet de Doc Boulon : 6 meubles, 8 Neon, bocal, bouton sous cloche", "phase": 3, "charge": "M" },
+    { "titre": "Construire le gabarit d'Alcôve (dossiers Slots, Machines, Bache, Cartons, Tapis, Plaque) et le dupliquer en 12 exemplaires", "phase": 3, "charge": "M" },
+    { "titre": "Modéliser les 12 machines-stades (4 recherches × 3 stades, 40 Parts au maximum chacune) dans ServerStorage.MachinesRecherche", "phase": 3, "charge": "L" },
+    { "titre": "Aménager les 3 cabines de Capsule : 6 Seat, hublot, panneau de compte à rebours, décor selon la palette", "phase": 3, "charge": "M" },
+    { "titre": "Aménager la Galerie : 8 socles, niche du Colosse, cartels SurfaceGui, socle bâché du Zbire de la Semaine", "phase": 3, "charge": "M" },
+    { "titre": "Meubler l'intérieur de la Maison (200 Parts au maximum) et poser les attributs EtatMin, EtatMax et Penche", "phase": 3, "charge": "M" },
+    { "titre": "Cacher et taguer les 5 peluches PelucheSecrete (Id de 1 à 5)", "phase": 3, "charge": "S" },
+    { "titre": "Intégrer et tester le script serveur Alcoves : attribution, stades, libération au départ du joueur", "phase": 4, "charge": "M" },
+    { "titre": "Intégrer le LocalScript InterieurMaison et tester les 3 états", "phase": 4, "charge": "S" },
+    { "titre": "Coder le script serveur des peluches (UpdateAsync, badge) et l'étoile client des peluches trouvées", "phase": 4, "charge": "M" },
+    { "titre": "Créer les animations locales : Gluant du bocal, bouton interdit, pop élastique et animations d'attente des machines", "phase": 4, "charge": "M" },
+    { "titre": "Régler la PointLight de la Maison et auditer les budgets du lobby (150 Neon, 12 PointLight)", "phase": 5, "charge": "S" },
+    { "titre": "Profiler sur Android 3 Go : lobby à 12 joueurs avec toutes les Alcôves équipées, Maison sous 200 Parts", "phase": 6, "charge": "M" },
+    { "titre": "Tester avec des 9-13 ans : fiches Zbires, bocal et calendrier doivent se comprendre sans explication", "phase": 6, "charge": "S" }
+  ]
+}

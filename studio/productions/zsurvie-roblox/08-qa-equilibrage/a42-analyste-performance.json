@@ -1,0 +1,94 @@
+{
+  "problemes": [
+    {
+      "gravite": "bloquant",
+      "agent": "a26",
+      "probleme": "Le rendu client des Zbires est décrit de quatre façons incompatibles. a24 livre 2 à 5 MeshParts. a25 en demande 12, reliées par Motor6D. La Forge de a30 soude jusqu'à 29 cubes par WeldConstraint. a38 anime 6 Motor6D et déplace chaque PrimaryPart par PivotTo. a26 annonce une seule Part par Zbire. Au pic, le pire cas est de 1 800 Parts déplacées et 60 Animator à chaque image sur l'Android 3 Go, et le budget de Parts ne peut pas être figé.",
+      "correction": "Figer le contrat dans ZbiresRendu. Créer un pool de 70 modèles pendant la phase d'Arrivée : Racine ancrée invisible + 3 à 5 MeshParts de a24 (700 triangles au plus), reliées à la Racine par Motor6D. Déplacer toutes les Racines par un seul workspace:BulkMoveTo(racines, cframes, Enum.BulkMoveMode.FireCFrameChanged) par image. Mettre CastShadow, CanCollide, CanQuery et CanTouch à false. Aucun Instance.new ni Destroy en combat. Coût visé : 360 Parts au lieu de 1 800. a30 adapte la Forge (MeshParts, 6 Parts au plus) et a25 corrige sa demande de 12 MeshParts."
+    },
+    {
+      "gravite": "bloquant",
+      "agent": "a11",
+      "probleme": "La Prairie n'a pas de budget de Parts consolidé. Cinq plafonds se concurrencent : a11 4 500, a21 5 000, a20 6 000, a25 6 800, a30 7 500. Les demandes s'additionnent : a16 400 + a17 1 200 + a18 205 + a20 6 000 + a23 2 500, soit environ 10 300 Parts statiques avant le premier Zbire, au-delà des 10 000 du canon. La forêt de la Lisière est construite quatre fois : par a17, par a20 (500 arbres de 4 Parts), par a21 et par a24.",
+      "correction": "Publier une seule table dans ServerStorage.Outillage.Gabarit, avec un attribut Budget sur chaque dossier de Workspace. Plafonner le statique à 6 500 Parts : sol a16 300, bâtiments et intérieur a21/a22 650, végétation Prairie et Lisière 2 200, props a23 1 200, tramages a20 350, météo a18 150, POI et énigmes 200, marge 1 450. a17 est le seul constructeur de la forêt : a20 fixe les hauteurs et les teintes, a21 et a24 ne posent plus d'arbres. Pic attendu : 6 500 + 360 Zbires + 30 Colosse + 450 défenses + 240 avatars + 300 pools, soit environ 7 900 Parts."
+    },
+    {
+      "gravite": "bloquant",
+      "agent": "a19",
+      "probleme": "Quatre LocalScripts écrivent dans Lighting sur la Prairie. CycleCiel (a19) règle ClockTime et 11 propriétés de Lighting et d'Atmosphere 20 fois par seconde, avec une nuit express de 21 h à 3 h. MeteoClient (a18) pose ClockTime 4 fois par seconde, de 9 à 14,5. AmbianceBiomes (a20) et AmbianceClient (a36) tweenent ClockTime et Atmosphere. Chaque changement de ClockTime déplace le soleil et relance la mise à jour des ombres et de l'éclairage : le coût est continu sur le téléphone, et l'image scintille quand les scripts se contredisent.",
+      "correction": "Un seul écrivain de Lighting et d'Atmosphere sur la Prairie : l'AmbianceClient de a36 (ClockTime 14 fixe, 17,5 le Jour du Colosse, un fondu de 8 s pendant le Répit qui le précède). Retirer CycleCiel de la Prairie et garder Charte.Ambiances pour le Laboratoire et les plans de caméra levée. Si le soleil-chronomètre est conservé : 4 paliers par horde (tween de 1 s toutes les 20 s), jamais d'écriture à 20 Hz, et pas de nuit. a18 et a20 transmettent leurs valeurs à AmbianceClient au lieu d'écrire dans Lighting. Cible au MicroProfiler : AmbianceClient à 0,2 ms au plus."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a18",
+      "probleme": "L'Orage est imposé le Jour du Colosse, qui est le scénario de charge de référence (60 Zbires et le Colosse). Deux voiles de pluie transparents de 32 × 16 et 60 × 28 studs, placés à 12 et 24 studs de la caméra, couvrent tout l'écran : cela fait deux surcouches alpha plein écran sur un GPU d'entrée de gamme, plus 2 émetteurs et les éclairs. Le mode léger ne mesure que les 5 premières secondes de la place, pendant l'atterrissage et sans Zbire : il ne se déclenche donc jamais au pic. Les Clouds du Laboratoire sont interdits par a19 et a36, et ils coûtent cher sur mobile.",
+      "correction": "Sur mobile, supprimer VoileLoin et réduire VoileProche à la moitié haute de l'écran ; aucun voile en mode léger. Calculer le mode léger en continu, sur une moyenne glissante de 3 s : bascule sous 27 FPS pendant 2 s, retour au-dessus de 45 FPS pendant 10 s. Le publier dans un attribut Qualite du LocalPlayer, partagé avec le réservoir de particules de a37. Retirer les Clouds du Laboratoire : la météo du Défi du Jour passe par le baromètre-bloc."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a18",
+      "probleme": "La Douve de Lisière compte 160 Parts transparentes (Transparency 0,35, Reflectance 0,1), avec une texture défilante mise à jour par le client, et 16 flaques à Reflectance 0,2. Les Parts transparentes sont triées et dessinées une à une, et l'anneau reste à l'écran dès qu'un Survivant approche du bord. Le Bassin en Terrain Water fait échouer le contrôle Terrain:CountCells() = 0 des audits de a16, a25 et a30, donc bloque la publication.",
+      "correction": "Rendre la Douve opaque (Transparency 0, Reflectance 0) et la construire en 16 segments MeshPart au même MeshId au lieu de 160 Parts, avec une Texture fixe. Mettre les flaques à Reflectance 0. Faire le Bassin de Doc Boulon en Eau-bloc de 1 stud, comme prévu en repli."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a38",
+      "probleme": "ZbireAnimateur crée un AnimationController, un Animator et jusqu'à 7 AnimationTrack (LoadAnimation) à chaque apparition, puis détruit le modèle après l'éclat. Les paquets de Zbires et les divisions de Gluants provoquent donc des pics d'allocation en pleine horde, contre les pools de a25 et de a28. Le LOD n'arrête la marche que hors champ ; or la caméra couvre environ 88 × 64 studs autour du Survivant, donc presque tous les Zbires restent animés. Enfin, le déplacement modèle par modèle par PivotTo contredit le BulkMoveTo unique.",
+      "correction": "Charger l'AnimationController et les pistes une seule fois sur les modèles du pool (voir le point a26). Remplacer Destroy par recycler(id), qui arrête les pistes et rend le modèle au pool. Laisser le déplacement au seul BulkMoveTo de ZbiresRendu. N'activer l'Animator que sur les 20 Zbires visibles les plus proches du Survivant local ; au-delà, arrêter la marche et appliquer un rebond procédural dans la CFrame. Budget mesuré : ZbiresRendu + ZbireAnimateur à 3 ms par image au plus sur l'Android 3 Go."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a27",
+      "probleme": "Chaque coup et chaque élimination passent par plusieurs canaux : Impact et Eclatement de a28 (un FireAllClients par coup), VfxRapide de a37, le RemoteEvent fiable de a26, ZbireVaincu de a27, plus les changements d'état demandés par a38 et a39. EtatZbires existe en trois formats (7, 9 et 10 octets). Au pic, environ 70 coups par seconde sont décodés et joués jusqu'à trois fois par client, avec des VFX et des sons en double. Un lot VfxRapide de 20 tables contenant 2 Vector3 approche 900 octets et se perd s'il les dépasse.",
+      "correction": "Dans ReplicatedStorage.Reseau, figer EtatZbires à 9 octets (format a27), à 10 Hz. Créer un seul UnreliableRemoteEvent Evenements à 10 Hz, encodé en buffer de 8 octets par fait (u8 code, u16 id, i16 x, i16 z, u8 argument), 100 faits par paquet au plus. VfxClient, Son, ZbireAnimateur et l'UI lisent ce flux. Supprimer Impact, Eclatement et les tables de VfxRapide. ProfilMaj n'envoie que les champs modifiés."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a39",
+      "probleme": "Son.Jouer clone un Sound et crée un Attachment dans Terrain pour chaque son, puis détruit les deux. En horde (jusqu'à 40 éclatements par seconde, plus les impacts et les pièces), des dizaines d'instances sont créées et détruites chaque seconde, contre le pool de 16 Sound de a25. La répartition des voix déborde aussi : 1 seule voix de musique alors que a40 en demande 3, 2 voix d'ambiance déjà prises par a18, et a20 ajoute 3 boucles d'ambiance, 4 bourdonnements de portail et le carillon de la Mine.",
+      "correction": "Créer au démarrage un pool par clé du catalogue, avec autant de copies que de voix dans le groupe de la clé. Chaque copie a son propre Attachment, déplacé par WorldPosition, sans Clone ni Destroy en combat. Publier la répartition des 16 voix : Musique 3, Ambiance 2, Joueur 3, Zbires 4, Monde 2, Interface 1, Alertes 1. a20 retire BoucleHorde, BoucleRepit et BoucleColosse (doublons de la musique de a40) et ne garde qu'un bourdonnement, celui du portail le plus proche."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a36",
+      "probleme": "CastShadow reste à true sur le Corps des 61 Zbires : cela fait 61 volumes mobiles redessinés dans la passe d'ombre à chaque image, alors que a26 veut des Zbires sans ombre et que a36 déclare ne confier aucune information aux ombres. Au Laboratoire, le mode Future et 2 lumières à Shadows true contredisent l'audit de a25. Les Brightness des portails et de la Maison sont modifiées à chaque Heartbeat. Enfin, a20, a21, a22 et a23 ajoutent leurs propres PointLight aux 12 sources de workspace.Lumieres.",
+      "correction": "Mettre CastShadow à false sur toutes les Parts des Zbires, et ajouter un disque plat opaque (Encre, 0,1 stud) sous le Volant et le Sauteur, compté dans leurs Parts. Passer le Laboratoire en ShadowMap avec Shadows à false ; garder Future seulement si 30 FPS sont mesurés à 12 joueurs sur l'Android 3 Go. Rafraîchir les lumières animées à 10 Hz, 2 à la fois au plus. Faire de workspace.Lumieres la seule liste des 12 sources : la lanterne de a20, les PointLight Or de a21, la lampe intérieure de a22 et les 4 PointLight du kit a23 sont supprimées ou deviennent des ancres de cette liste."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a21",
+      "probleme": "Les 3 états de la Maison sont des Models de 80 Parts échangés entre ServerStorage.EtatsMaison et Workspace. Chaque échange réplique 80 instances vers les 6 clients, qui doivent les créer et les enregistrer au rendu. Sans hystérésis, une réparation autour du seuil de 60 % fait basculer l'état plusieurs fois par seconde en pleine horde. Les seuils diffèrent aussi de ceux de a22 et a28 (66 % et 33 %).",
+      "correction": "Garder les 3 états dans la place (une base commune et 120 Parts de dégâts au plus, règle a25). Le client les affiche à partir de l'attribut serveur Maison.Etat, en jouant sur la Transparency ou le LocalTransparencyModifier des groupes de dégâts. Le serveur change d'état avec 5 points d'hystérésis : passage à Abîmée sous 66 %, retour à Intacte au-dessus de 71 %. Seuils communs à 66 % et 33 % avec a22 et a28."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a37",
+      "probleme": "Le plafond de 24 émetteurs actifs fixé par a25 est dépassé par addition. On compte : 8 portails (avec des émetteurs posés aussi par a20 à Rate 12 et par a21 à Rate 10), la Mine (a20 et B5), la fumée de la Maison (a21 à Rate 8 et M3), D2 sur chacun des 18 Tapis Collants possibles, les étoiles S1 des Survivants étourdis, la pluie et les lucioles de a17. Cela fait environ 40 émetteurs. L'éclatement d'un Zbire est en plus codé trois fois : par a25 (6 cubes et Emit 8), par a28 (pool de 90 cubes) et par a37 (Z1).",
+      "correction": "a37 devient seul propriétaire des ParticleEmitter de la Prairie. D2 est remplacé par une Texture fixe sur le Tapis Collant, les portails passent à Rate 6 (a20 et a21 retirent les leurs), une seule fumée est gardée, et les lucioles entrent dans le compte. Z1 est le seul éclatement : a28 retire son pool de cubes, a25 sa spécification. Ajouter à l'Auditeur de a30 le contrôle « 24 émetteurs Enabled au plus »."
+    },
+    {
+      "gravite": "mineur",
+      "agent": "a16",
+      "probleme": "SculpteurBloc active CastShadow sur toute Part de 2 studs ou plus, donc sur la berge, les gradins et les monts d'angle. Comme le soleil est côté caméra (a36), leurs ombres tombent au nord, hors de l'arène : elles ne font que charger la passe d'ombre.",
+      "correction": "Dans poser, fixer p.CastShadow = false pour tout Workspace.Arene.Sol (sol, relief et Canopée)."
+    },
+    {
+      "gravite": "mineur",
+      "agent": "a19",
+      "probleme": "Le Sky de la Prairie utilise 6 faces de 1024² pour 3 plans de caméra levée. Cela représente environ 24 Mo de texture non compressée, soit 40 % du plafond GraphicsTexture de 60 Mo fixé par a25, alors que le ciel n'est jamais visible en jeu.",
+      "correction": "Peindre le même motif (pixels de 16 px, soit 64 px logiques par face) en 256², agrandi 4 fois au plus proche voisin comme le veut a25 : 16 fois moins de mémoire pour un rendu quasi identique. Mettre StarCount à 0 sur la Prairie."
+    },
+    {
+      "gravite": "mineur",
+      "agent": "a40",
+      "probleme": "Le LocalScript Musique lance PreloadAsync sur tout SoundService.Pistes dans les deux places, dès l'arrivée. Cela fait environ 24 pistes, dont 6 pistes de horde stéréo de 80 s, Colosse et Bilan. Or les variantes B et C ne servent qu'à partir des jours 6 et 11, et a25 limite chaque place à 40 assets sonores.",
+      "correction": "Sur la Prairie : précharger HordeA, Repit et Colosse, charger HordeB pendant le Répit du jour 5 et HordeC pendant celui du jour 10, passer les couches _Tension en mono. Au Laboratoire : seulement les pistes Labo_* et Capsule. Contrôle dans la Developer Console, onglet Memory : Sounds à 15 Mo au plus."
+    },
+    {
+      "gravite": "mineur",
+      "agent": "a30",
+      "probleme": "L'Auditeur fixe le statique à 7 500 Parts en réservant 670 Parts aux défenses, aux pièces et aux effets (a25 en prévoit 750), et il oublie les 240 Parts d'avatars : le pic réel dépasse 10 000. La Canopée de a16 (cadre de ±108 à ±150) échouera au contrôle bloquant « arène ± 110 ».",
+      "correction": "Aligner le plafond statique sur la table de a11 (6 500). Calculer le pic comme statique + 60 × pire Zbire + 30 + 450 + 240 + 300. Exempter du contrôle d'arène les Parts taguées HorsArene (Canopée)."
+    }
+  ]
+}

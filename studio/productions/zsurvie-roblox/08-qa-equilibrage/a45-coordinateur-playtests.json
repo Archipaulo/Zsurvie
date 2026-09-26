@@ -1,0 +1,88 @@
+{
+  "problemes": [
+    {
+      "gravite": "bloquant",
+      "agent": "a09",
+      "probleme": "Le saut des Survivants sur la Prairie a quatre valeurs incompatibles : JumpHeight 5 (a09), 7,2 (a12, a29), 4,5 (a14) et 0 (a28, a32, a35). La vitesse diffère aussi : WalkSpeed 16 (a12) contre 18 (a09, a29). Avec le saut à 0 retenu par l'UI, le Muret de 3 studs « franchissable d'un saut » (a09, a12) enferme les Survivants derrière leurs propres défenses. Le build du test H2 ne peut pas être monté.",
+      "correction": "Publier un seul ModuleScript ReplicatedStorage.Config.Mouvement : WalkSpeed 18 en horde, 24 au Répit, 8 en réparation, et une valeur unique de JumpHeight. Si le saut à 0 est gardé, rendre le CollisionGroup Survivants non collidable avec le groupe Defenses (PhysicsService:CollisionGroupSetCollidable), pour que le Muret ne bloque que les Zbires. Fournir deux profils pour l'A/B de H2 (A : JumpHeight 0, B : JumpHeight 5), puis soumettre le gagnant à Victor Lanoue."
+    },
+    {
+      "gravite": "bloquant",
+      "agent": "a07",
+      "probleme": "Le niveau 1 de Dégâts coûte 25 pièces (base 25 × 1,45^0). Or l'onboarding (a10) vise un premier achat vers T 70 s avec 7 Marcheurs à 2 pièces, soit 14 pièces au mieux. Le premier achat, étape clé de H1, est impossible dans le temps prévu. De plus, la valeur en pièces de chaque Zbire n'est publiée nulle part.",
+      "correction": "Fixer la base de Dégâts à 10 pièces : 10 au niveau 1, environ 283 au niveau 10 avec la croissance × 1,45. Publier la valeur en pièces de chaque type de Zbire (Marcheur 2) dans ReplicatedStorage.Catalogue avant la vague 1."
+    },
+    {
+      "gravite": "bloquant",
+      "agent": "a08",
+      "probleme": "L'Arbre des Recherches n'affiche rien au niveau 1 et ne montre que la Foreuse aux niveaux 2 à 4. Or a07 en fait la recherche la plus chère (100 gemmes) et ne garantit qu'un plancher de 40 gemmes à la première run. Un novice qui rentre entre les niveaux 1 et 3 ne peut donc rien acheter. La promesse « on repart plus fort » (canon §4) et l'étape PremiereRecherche de a50 échouent.",
+      "correction": "Rendre la Tourelle de toit visible dès le niveau 1 : elle coûte 40 gemmes, soit exactement le plancher tutoriel de a07. Garder la Foreuse au niveau 2, la Visée critique au 6 et les Balles perforantes au 8. Au premier retour, Doc Boulon désigne la Tourelle de toit."
+    },
+    {
+      "gravite": "bloquant",
+      "agent": "a27",
+      "probleme": "Selon les agents, les gemmes sont écrites dans trois DataStores : Gemmes_v1 avec la clé J_UserId (a06), Zsurvie_Profils_v1 (a07 ; clé Joueur_<UserId> chez a29) et Zsurvie_Joueurs_v1 avec la clé J_<UserId> (a27). S'y ajoutent Boutique_v1, PeluchesSecretes_v1 et Cosmetiques_v1, tenus à part. Si la Prairie et le Laboratoire ne lisent pas le même profil, les gemmes gagnées disparaissent au retour et la bêta de 7 jours (H8) ne mesure rien.",
+      "correction": "Figer Zsurvie_Joueurs_v1, clé J_<UserId>, écrit dans les deux places par Donnees.Modifier (UpdateAsync). Publier un schéma unique qui contient les champs demandés par a07, a08, a10, a13, a15, a22, a46 et a50 ; les autres agents retirent leurs noms de store. Test d'acceptation : 20 allers-retours Laboratoire → Prairie → Laboratoire, sans aucun écart de solde."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a07",
+      "probleme": "Deux barèmes de gemmes coexistent. a06 : 2 + ⌊N ÷ 2⌋ par jour, +15 par Colosse, Mine à 1 gemme toutes les 30 s partagée et plafonnée à 4, Doré à 2. a07 : 5 + 2 × min(jour, 15), doublé aux jours 5, 10 et 15, Mine à 1 toutes les 20 s par Survivant, Doré à 4. a09 propose en plus une Mine à 1 toutes les 30 s par Survivant. Le gain d'une première run au Jour 6 varie du simple au double (environ 50 contre environ 100 gemmes) : H7 et H8 ne peuvent pas être calibrés.",
+      "correction": "Publier une seule table dans ReplicatedStorage.Catalogue (jour franchi, Colosse, Mine, Doré, plancher de 40), lue par Donnees.AjouterGemmes, avec la cible chiffrée de gemmes pour une première run au Jour 6. a06 et a09 retirent leurs chiffres."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a06",
+      "probleme": "La courbe de difficulté n'est pas figée. a26 applique des PV × 1,15^(jour − 1) ; a07 exige au moins +15 % par jour ; a06 ajoute +30 % de PV et de taille de paquet par jour dès J11, soit près de +50 % par jour au total. Le nombre de Zbires par jour reste une hypothèse (18 + 7 × jour chez a07, paquets de 3 à 5 chez a14). H7 (chute entre J8 et J11, aucune run au-delà de 25 min) ne peut pas être calibré.",
+      "correction": "Publier une table des jours 1 à 15 : multiplicateur de PV (Tension comprise), Zbires par jour, taille et fréquence des paquets. HordeService la lit via ZbiresDefs, et la vague 2 n'ajuste que cette table."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a13",
+      "probleme": "Les secrets versent jusqu'à 50 gemmes par jour et par joueur (Mini-Gluant 15, Dalles 10, Bornes 20 par run, Alcôve 13). Or le canon §6 limite les sources de gemmes à la Mine, au Doré, aux jours franchis, à la Foreuse et au Défi du Jour, et a15 comme a22 excluent toute gemme de secret. Cet écart n'est pas déclaré à Victor Lanoue. Il représenterait jusqu'à la moitié du revenu d'un novice et fausserait H8.",
+      "correction": "Remplacer ces gains par des cosmétiques, des badges et des pièces de run, comme le font a15 et a22, ou déclarer explicitement à Victor Lanoue l'écart sur les sources de gemmes. En attendant, le build de test désactive les gemmes des secrets."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a10",
+      "probleme": "L'onboarding déclare son propre entonnoir de 7 étapes via AnalyticsService:LogOnboardingFunnelStepEvent. Or a50 fige un entonnoir unique de 12 étapes et interdit tout appel à AnalyticsService hors de ServerScriptService.Telemetrie. Avec deux numérotations dans le même entonnoir, H1 devient illisible. D'autres valeurs divergent aussi : objectifs de rétention (J1 20 % et J7 7 %, contre 22 % et 8 % chez a50) et cadence de base supposée (3 tirs/s, contre 4 tirs/s dans BlasterStats).",
+      "correction": "Supprimer les appels directs et envoyer les jalons par Telemetrie, en les rattachant aux 12 étapes de a50 (PremierZbire, PremierAchatEtabli…). Reprendre les objectifs de rétention de a50 et recaler l'ouverture scriptée du Jour 1 sur ReplicatedStorage.Partage.BlasterStats."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a11",
+      "probleme": "Le plan de la Prairie diverge sur cinq points. Mine : au sud-est (a11, a14, a16) ou au nord-est (a20 en (24, 0, −24), a21 en (26, −14)). Établi : sur le Parvis sud (a11, a21) ou sur la façade est, à 10 studs du point d'atterrissage (a10). Apparition : en (8 ; 0,5 ; 16), en (0, 20) ou sur le chemin est. Portails : 4 ou 8, entre R 80 et R 86. Barrière : entre 70 et 74 studs. H1 (trajet de l'atterrissage à l'Établi) et H6 (Répit de 15 s) dépendent de ces distances.",
+      "correction": "Figer ReplicatedStorage.Plan v1 avant la vague 1 : Mine en X 20 → 32 et Z 20 → 32, 8 portails à R 80, barrière à R 72. Placer le point d'atterrissage à 10 studs au plus de l'Établi, et l'Établi à 6 s de course au plus de la Maison (a07). a10, a14, a17, a20, a21 et a36 s'alignent sur Plan."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a36",
+      "probleme": "Quatre agents pilotent ClockTime différemment. a36 le fixe à 14. a19 fait un cycle de 8,5 à 15,5 avec une nuit express de 21 h à 3 h pendant le Répit. a18 le fait passer de 9 à 15,5. Pour le Jour du Colosse, a20 et a36 basculent dès le Répit précédent, a19 en 4 s au début du jour. Le tout passe par 4 scripts clients (AmbianceClient, MeteoClient, AmbianceBiomes et celui de a19). La nuit tomberait pendant le Répit, le moment où l'enfant achète et répare : c'est un risque direct pour H4 et H6.",
+      "correction": "Comme responsable de Lighting, désigner un seul LocalScript qui écrit dans Lighting à partir des attributs serveur ; les autres scripts ne publient que des attributs (MeteoEtat, EtatPrairie). Build de test : ClockTime 14 en horde et au Répit, 17,5 le Jour du Colosse. La nuit express n'entre que comme variante A/B en vague 2."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a07",
+      "probleme": "« Joueur actif » a trois définitions : déplacement de plus de 4 studs dans les 60 s pour les gemmes (a07), déplacement de 20 studs pour l'XP (a08), 90 s pour le multiplicateur coop (a14). Comme le tir automatique est actif partout (a28), un enfant qui tient sa position près de la Maison perd des gemmes et de l'XP sans le savoir.",
+      "correction": "Un seul Economie.marquerActif, appelé aussi par a08 et a14. Il compte un déplacement cumulé de 4 studs, une réparation, une pose, un ping ou un tap de ciblage prioritaire, avec une fenêtre de 90 s partout. H3 vérifie qu'aucun joueur réellement actif n'est pénalisé."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a09",
+      "probleme": "Le sort des pièces non ramassées change selon l'agent : rapatriées au début du Répit (a09), disparues au bout de 15 s (a14), 20 s de vie (a28) ou aspirées à 50 % (a07). Le revenu par Répit, donc H6 et H7, n'est pas mesurable. Et une pièce qui disparaît sous les yeux d'un enfant de 9 ans est une frustration inutile.",
+      "correction": "Fixer une règle unique : une pièce non ramassée au bout de 20 s rejoint seule son propriétaire (aimant serveur), et tout reliquat est crédité au début du Répit. Aucune pièce n'est perdue, et le pool client de 60 pièces de a28 reste valable."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a35",
+      "probleme": "Cinq maquettes de boutons coexistent. a09 : Réparer 84, Établi 72, Défenses et Ping 64. a28 : 96, 72 et 72, avec les roues au centre. a31 : 72 minimum. a34 : 96 pour Réparer, Défenses et la Roue. a35 : Réparer 96 plus 4 boutons de 64 sur un arc. Elles reposent sur trois écrans de référence (780 × 360, 800 × 360, 1280 × 720), et a31 réserve encore la zone du saut. Le test H2 porte sur la grappe : elle doit exister en une seule version.",
+      "correction": "Publier une maquette unique au gabarit 800 × 360, alignée sur l'implémentation de a28 : Réparer 96, Poser 72, Pings 72, roues au centre, 12 px d'écart. a09, a31, a32 et a34 la reprennent. L'arc à 5 boutons n'entre qu'en variante A/B de H2."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a27",
+      "probleme": "Le changement de jour diffère : minuit heure de Paris (a06, a12, et a29 avec cleJourParis) ou 0 h UTC (a07, a08, a13, a15). Le Défi du Jour, le Calendrier, les secrets et les énigmes ne changeraient pas au même moment, ce qui fausse le journal de bord de H8 (« le Défi est nouveau mais pas le Calendrier »).",
+      "correction": "Exposer Temps.cleJour() et Temps.SecondesAvantDemain() en heure de Paris, avec la règle d'heure d'été et d'hiver calculée côté serveur, comme le Zbire de la Semaine du canon. Les imposer à tous les systèmes quotidiens."
+    }
+  ]
+}

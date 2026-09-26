@@ -1,0 +1,93 @@
+{
+  "revise": true,
+  "decisions": [
+    "Rythme de run : Arrivée de 20 s pour toutes les runs, puis jours de 80 s de horde et 15 s de Répit. Le Colosse sort du Grand Portail Nord aux J5, J10 et J15, 40 s après le début de la horde (7:20 au J5). Il entre en colère 60 s après son entrée (vitesse × 1,5, dégâts sur la Maison × 3) et le Jour du Colosse finit à sa chute. Fin garantie : victoire quand le Colosse du J15 tombe, fin de run forcée à 25:00 (LIMITE_RUN). Gemmes normales dans les deux cas. L'Arrivée et la victoire au J15 sont des ajouts au canon, soumis à Victor Lanoue.",
+    "BoucleDuJour écrit uniquement dans le Folder ReplicatedStorage.EtatRun : Jour, Phase (Arrivee, Horde, Repit), FinPhase (GetServerTimeNow ; au Jour du Colosse, l'instant de sa colère), JourColosse (vrai dès le Répit qui précède J5, J10 et J15), ColosseActif, Tension = max(0, jour − 10), ColosseAngle (publié 3 s avant l'entrée, en degrés depuis la Maison, 0 = Nord = −Z, 90 = Est = +X) et JourParfait (ajout proposé au contrat a28). Plus rien sur workspace, plus aucune écriture de Lighting : le ciel revient à MeteoServeur (demarrerRun, planifierJour pendant l'Arrivée et le Répit, debutJour). Telemetrie.fermerJour est appelée à chaque jour, avec l'issue.",
+    "BoucleDuJour ne verse plus rien lui-même : magasin, verserGemmes et Gemmes_v1 sont supprimés. Il appelle Economie.franchirJour(jour) à chaque jour franchi, avec le barème unique a07. Jour parfait : 25 % des Pièces gagnées dans le jour, versées par Economie.ajouterPieces (≈ 12 au J1, 60 au J5, 140 au J9). Mine : 1 gemme toutes les 20 s par Survivant actif, stock 6, vidée pour toute l'équipe au contact, codée par a09. 1re recherche à 40 gemmes, acquise dès le J4 franchi.",
+    "ZbiresDefs.JOURS (ModuleScript ReplicatedStorage.ZbiresDefs.Jours) est la seule table réglée en playtest, pour les jours 1 à 15. pv = 1,15^(jour − 1) × 1,3^max(0, jour − 10) (1,00 au J1, 3,52 au J10, 26,27 au J15). zbires = 18 + 7 × jour avant coop. Salves toutes les 10 s de 0 à 70 s, paquets de 3 à 5 Zbires du même type, au plus un paquet par portail actif. Portails : J1-3 un seul parmi Est, Ouest et Nord ; J4-8 deux ; J9-11 trois ; J12-15 quatre, Sud et diagonales permis. Colosse : 2 500 × 1,15^(jour − 1) PV (4 373, 8 795 et 17 689).",
+    "Écart assumé à la recommandation QA : la Tension n'agit que sur les PV, déjà intégrée à pv. HordeService ne la réapplique pas et ne grossit pas les paquets, qui restent à 3-5 selon la consigne du chef de projet (le plafond de 60 Zbires rendrait de plus gros paquets inopérants). L'attribut Tension sert au HUD et à la Météo.",
+    "Jour parfait (terme et règle soumis à Victor Lanoue avec l'Arrivée et la Tension) : tout vaincre avant 80 s ou, au Jour du Colosse, l'abattre avant sa colère. La Capsule Difficile s'ouvre au Record Jour 10 en Normale, sans autre condition ; son bonus de gemmes relève de a07."
+  ],
+  "besoins": [
+    {
+      "de": "Concepteur·rice économie (a07)",
+      "besoin": "Exposer Economie.piecesGagnees(joueur) : le cumul des Pièces gagnées pendant la run, non diminué par les achats, qui sert à calculer les 25 % du Jour parfait. Confirmer Economie.franchirJour(jour), avec l'anti-AFK et la sauvegarde UpdateAsync, et Economie.ajouterPieces(joueur, montant). Fixer le bonus de gemmes de la Capsule Difficile."
+    },
+    {
+      "de": "Scripteur gameplay HordeService (a26)",
+      "besoin": "Implémenter l'interface Horde : demarrer(jour), qui lit ZbiresDefs.JOURS ; stopperApparitions() ; toutVaincu(), file d'attente comprise ; lancerColosse(pv) par le Grand Portail Nord, avec la coop ; colosseVivant() ; enragerColosse() (vitesse × 1,5, dégâts sur la Maison × 3) ; vider() sans butin. Ne pas réappliquer la Tension. Tirer les portails dans choix. Dorés isolés à la salve de 40 s. Clés de type identiques aux noms du canon (\"Casqué\"). Ajouter JOURS = require(script.Jours) dans ZbiresDefs."
+    },
+    {
+      "de": "Responsable météo et lumière (a18)",
+      "besoin": "Confirmer les signatures MeteoServeur.demarrerRun(), planifierJour(jour, colosse) et debutJour(jour, colosse). planifierJour est appelée pendant l'Arrivée ou le Répit qui précède le jour ; debutJour au début de la horde. Passer au couchant (ClockTime 17,5) dès le Répit qui précède un Jour du Colosse."
+    },
+    {
+      "de": "Analyste télémétrie (a50)",
+      "besoin": "Accepter Telemetrie.fermerJour(jour, bilan), avec bilan.issue parmi \"franchi\", \"Maison\", \"Limite\" et \"Victoire\", plus bilan.parfait et bilan.duree en secondes."
+    },
+    {
+      "de": "Responsable du contrat réseau (a28) et designer UI mobile (a32)",
+      "besoin": "Ajouter JourParfait (booléen) au contrat EtatRun. Côté HUD : au Jour du Colosse, FinPhase donne l'instant de sa colère ; une fois ce cap passé, afficher « COLÈRE ! » tant que ColosseActif est vrai. Flèche Alerte vers ColosseAngle (0 = Nord = −Z). Bannière Or du Jour parfait avec le montant. Écran de fin avec 3 titres selon l'issue. Boutons de 60 px minimum."
+    },
+    {
+      "de": "Level designer de la Prairie",
+      "besoin": "Poser dans workspace.Lisiere les 8 portails nommés Nord, Sud, Est, Ouest, NordEst, NordOuest, SudEst, SudOuest, plus GrandPortailNord, avec le Nord sur l'axe −Z de la Maison. Établi collé à la façade. Trajet Maison → Lisière en moins de 5 s. Mine à 12 studs, visible depuis tout le cercle central."
+    },
+    {
+      "de": "Directeur créatif (Victor Lanoue)",
+      "besoin": "Valider l'Arrivée de 20 s, le Jour parfait (25 % des Pièces du jour, Colosse abattu avant sa colère), la Tension (× 1,3 par cran sur les PV dès J11) et la victoire quand le Colosse du J15 tombe."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Soumettre à Victor Lanoue l'Arrivée de 20 s, le Jour parfait, la Tension et la victoire au J15, puis reporter sa réponse dans le livrable",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Publier ReplicatedStorage.ZbiresDefs.Jours (J1 à J15) et le relire avec a26 et a07 : quota par salve de 3 à 5 par portail, vérifié jour par jour",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Greybox : poser les 8 portails et GrandPortailNord (Nord = −Z), chronométrer Maison → Lisière (moins de 5 s), Maison → Mine et Maison → Établi",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Réécrire le ModuleScript BoucleDuJour : EtatRun seul, Colosse en colère à 60 s, LIMITE_RUN à 25:00 en vraie fin de run, victoire au J15, appels Economie, MeteoServeur et Telemetrie",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Script d'orchestration de la Prairie : lancer la run quand tous les Survivants sont arrivés, écran de fin selon l'issue, Record Normale, retour au Laboratoire",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Banc de test Studio avec une Horde et des dépendances factices : suite Arrivee → Horde → Repit, un seul franchirJour par jour franchi, Colosse à 440 s, coupure à 25:00",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "HUD de rythme avec a32 : bandeau Jour et FinPhase, « COLÈRE ! », flèche ColosseAngle, bannière Jour parfait avec le montant",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Écran de fin de 8 s avec 3 titres selon l'issue, recherche conseillée, et panneau « Demain » au Laboratoire",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Vérifier que le bonus du Jour parfait permet 2 achats au Répit suivant, du J1 au J9",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Playtests chronométrés (20 runs, en solo et à 6) : chute entre J8 et J11, aucune run au-delà de 25 min, 1re recherche après la 1re run. Ajuster uniquement ZbiresDefs.Jours",
+      "phase": 6,
+      "charge": "L"
+    }
+  ]
+}

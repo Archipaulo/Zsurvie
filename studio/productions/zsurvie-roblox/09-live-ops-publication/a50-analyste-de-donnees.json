@@ -1,0 +1,101 @@
+{
+  "decisions": [
+    "Toute la télémétrie passe par un seul ModuleScript serveur ServerScriptService.Telemetrie, publié en Package dans le Laboratoire et la Prairie : aucun autre script n'appelle AnalyticsService et le client n'émet jamais d'événement (les étapes purement UI arrivent par un RemoteEvent limité à 1 requête par seconde, sans aucune récompense associée).",
+    "Entonnoir d'accueil figé en 12 étapes LogOnboardingFunnelStepEvent (ArriveeLabo, DocBoulonParle, CapsuleMontee, ArriveePrairie, PremierZbire, PremierAchatEtabli, PremiereDefense, ColosseVu, MaisonTombee, RetourLabo, PremiereRecherche, DeuxiemeCapsule) ; la dernière étape est persistée dans le profil (clé accueilEtape, attribut AccueilEtape) et aucun numéro d'étape ni nom d'événement ne change après le lancement.",
+    "Économie : les Pièces de la Horde et les Gemmes de la Mine et du Doré sont cumulées par Survivant et envoyées en un seul LogEconomyEvent à la fin de chaque jour ; les dépenses à l'Établi, les recherches et les autres sources de Gemmes (JourFranchi, Foreuse, DefiDuJour) sont loguées à chaque mouvement ; le reliquat de Pièces perdu en fin de run est logué en puits PerteFinRun.",
+    "Champs personnalisés limités à 3 et toujours en tranches : mode (Normale, Difficile, Jour), équipe (solo, 2-3, 4-6), jour (J1-4, J5-9, J10-14, J15+), durée de run (<12, 12-18, 18-25, >25 min). Identifiants techniques sans accents (Dore, Etabli), ce qui n'est pas un écart au canon.",
+    "Une run est identifiée par game.JobId du serveur réservé ; le mode de Capsule est lu côté serveur (MemoryStoreService, clé game.PrivateServerId) et jamais depuis la TeleportData, qui ne sert qu'au champ analytique de provenance.",
+    "Objectifs du premier mois (lus filtrés sur Téléphone) : 300 000 visites, rétention J1 22 %, J7 8 %, J30 3,5 %, session moyenne 18 min, durée médiane de run 12 à 18 min, runs de plus de 25 min au plus 2 %, 70 % des premières runs qui voient le Colosse, 60 % des runs à 2 Survivants ou plus, conversion payeur 1,2 %."
+  ],
+  "besoins": [
+    {
+      "de": "Lead scripting gameplay (Prairie)",
+      "besoin": "Des points d'accroche serveur appelant Telemetrie : Zbire éliminé, pièces ramassées (cumuler), jour franchi (fermerJour + étape Run), achat validé à l'Établi, défense posée, ping de la Roue des Pings, étourdissement, issue de chaque Colosse, Maison tombée, PlayerRemoving en cours de run avec l'état visuel de la Maison (3 états)."
+    },
+    {
+      "de": "Scripteur Laboratoire et interface",
+      "besoin": "Les signaux serveur de fin du dialogue de Doc Boulon, ouverture de l'Arbre des Recherches, recherche payée, Capsule montée, quittée et partie (avec secondes passées au Labo), récolte de la Foreuse, et la gestion de TeleportService.TeleportInitFailed avec 3 essais de TeleportAsync."
+    },
+    {
+      "de": "Ingénieur sauvegarde et DataStore",
+      "besoin": "Ajouter la clé accueilEtape au profil, la charger dans l'attribut AccueilEtape au PlayerAdded et la réécrire dans chaque UpdateAsync ; fournir le solde de Gemmes après chaque écriture pour l'endingBalance des événements d'économie."
+    },
+    {
+      "de": "Game designer équilibrage",
+      "besoin": "La courbe cible du jour atteint et de la durée de run par mode et par taille d'équipe, et les PV du Colosse en solo, pour comparer aux données RunFin et Colosse dès la première semaine."
+    },
+    {
+      "de": "Game designer tutoriel (Doc Boulon)",
+      "besoin": "Un tutoriel qui impose l'ordre des étapes d'accueil : premier achat à l'Établi au premier Répit, première défense demandée au Répit du Jour 2, recherche la moins chère désignée au retour au Laboratoire."
+    },
+    {
+      "de": "Responsable Live Ops",
+      "besoin": "Le calendrier des Défis du Jour (modificateurs) et des Zbires de la Semaine, et les dates de chaque mise à jour, pour corréler les pics et creux de rétention."
+    },
+    {
+      "de": "Responsable monétisation",
+      "besoin": "La liste figée des identifiants de produits et passes (cosmétiques, serveurs privés) pour l'entonnoir Boutique et le suivi de la conversion payeur."
+    },
+    {
+      "de": "QA mobile",
+      "besoin": "Des sessions de test sur Android 3 Go à 6 joueurs et 60 Zbires, publiées en privé, pour valider que chaque événement remonte et recouper le FPS avec l'onglet Performance."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Figer le plan de marquage (12 étapes d'accueil, entonnoirs VisiteLabo, Run, Boutique, 12 événements, tranches de champs) et le faire valider par le lead scripting",
+      "phase": 0,
+      "charge": "M"
+    },
+    {
+      "titre": "Fixer le tableau des objectifs du premier mois et des seuils d'alerte avec le Live Ops et le game design",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Coder et publier en Package le ModuleScript ServerScriptService.Telemetrie (pcall, tranches, cumul par jour, accueil persisté)",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Instrumenter l'entonnoir d'accueil sur le Laboratoire et la Prairie et vérifier le passage de l'attribut AccueilEtape entre les places",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Instrumenter la run sur la Prairie : entonnoir Run par jour, RunFin, RunQuitte, Colosse, PingsRun, DefensesRun, EtourdiRun",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Instrumenter l'économie Pièces et Gemmes (sources cumulées par jour, dépenses Établi et recherches, PerteFinRun, Foreuse en TimedReward)",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Instrumenter VisiteLabo, CapsulePartie, TeleportEchec, ForeuseRecolte, DefiDuJour, ZbireSemaine, GalerieVariante et l'entonnoir Boutique",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Configurer les vues du Creator Dashboard filtrées sur Téléphone (entonnoirs, économie, événements, Performance par appareil)",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Recette analytique sur version publiée privée : 3 runs par taille d'équipe (solo, 2-3, 4-6), chaque événement et étape vérifié dans le tableau de bord",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Lancer un test A/B d'icône et de vignettes pendant les deux premières semaines et retenir la variante au meilleur QPTR",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Assurer la revue quotidienne et le rapport hebdomadaire des décrochages du jour 1 au jour 30 avec une recommandation chiffrée par marche",
+      "phase": 6,
+      "charge": "L"
+    }
+  ]
+}

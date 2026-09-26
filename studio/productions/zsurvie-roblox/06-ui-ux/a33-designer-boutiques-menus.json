@@ -1,0 +1,91 @@
+{
+  "decisions": [
+    "Toute action tient en 3 taps au maximum, sur 2 niveaux d'écran au plus (un panneau, puis une fiche). La fenêtre d'achat native de Roblox n'est pas comptée. Seule exception : le Serveur privé, qu'aucune API Roblox ne permet de déclencher (un guide en 3 images le remplace).",
+    "Établi : le panneau s'ouvre tout seul à 10 studs ou moins de workspace.Etabli, et un seul tap sur une carte achète, sans confirmation. Le serveur (RemoteFunction AcheterAmelioration) vérifie la distance (14 studs au plus), la cadence (0,25 s) et le solde (attribut Pieces). Les niveaux de Solidité, Réparation et Régénération sont stockés en attributs de Workspace (Niv_<id>), les autres niveaux sur le joueur.",
+    "La Boutique Robux n'existe que dans la place Laboratoire, pas sur la Prairie. Elle ne vend que des cosmétiques, en Developer Products traités par un ProcessReceipt idempotent. Le serveur vérifie la possession avant d'appeler PromptProductPurchase. Aucun objet aléatoire, aucun pack de Gemmes, aucun compte à rebours, aucune pastille ni pop-up commerciale.",
+    "Écart au canon : les cosmétiques possédés sont rangés dans un écran nommé « Vestiaire », nom nouveau soumis à Victor Lanoue. Le mot « inventaire » est banni de l'UI pour respecter le §9. J'interprète aussi les variantes de la Galerie comme des objets à exposer dans l'Alcôve : c'est aussi à valider.",
+    "Recherches : on lance une recherche en maintenant le bouton 0,5 s, pour protéger les Gemmes sans ajouter d'écran. La caméra fait ensuite un travelling de 2 s vers l'Alcôve pour montrer la nouvelle machine.",
+    "Fin de run : écran en 3 temps, avec un texte positif (« La Maison a tenu X jours ! ») et le détail des gemmes par source. Un seul bouton « Laboratoire », avec retour automatique au bout de 20 s. À l'arrivée au Laboratoire, les cartes passent dans une file stricte (Foreuse, puis Défi du Jour), jamais pour vendre."
+  ],
+  "besoins": [
+    {
+      "de": "Game designer économie",
+      "besoin": "Les prix définitifs de l'Établi (prix de base, croissance x1,45 proposée, niveaux maximums), le barème des gemmes par source pour l'écran de fin de run et les gammes de prix Robux par catégorie de cosmétiques."
+    },
+    {
+      "de": "Level designer Prairie",
+      "besoin": "Un Model workspace.Etabli posé sur une zone plane de 8 x 8 studs, à 20 studs au plus de la Maison et hors des 4 chemins, pour que le panneau s'ouvre sans gêner la circulation."
+    },
+    {
+      "de": "Level designer Laboratoire",
+      "besoin": "Une CFrame de caméra par Alcôve (12) pour le travelling de recherche, et un ProximityPrompt sur l'Arbre des Recherches et sur chaque figurine de la Galerie."
+    },
+    {
+      "de": "Directeur créatif (Victor Lanoue)",
+      "besoin": "Valider le nom « Vestiaire », les catégories de cosmétiques (Survivant, Blaster, Traînée, Alcôve) et l'exposition des variantes de la Galerie dans l'Alcôve."
+    },
+    {
+      "de": "Développeur back-end / sauvegarde",
+      "besoin": "Fusionner le store Cosmetiques_v1 dans le profil joueur (UpdateAsync). Au PlayerAdded, exposer les attributs Gemmes et Possede_<offre>, puis envoyer le RemoteEvent RecapRun avec les données calculées par le serveur."
+    },
+    {
+      "de": "Artiste 2D / icônes",
+      "besoin": "Environ 40 icônes pixel-bloc de 128 x 128 px (8 améliorations, recherches, 3 défenses, 6 onglets, cadenas, coche) aux couleurs de ReplicatedStorage.Charte."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "6 sons chiptune d'UI : clic, achat réussi, refus, tick de compteur, récompense et fanfare de fin de run, chacun sous 0,6 s sauf la fanfare."
+    },
+    {
+      "de": "Designer HUD",
+      "besoin": "Laisser libre la zone droite de l'écran (60 % x 72 %) pour le panneau de l'Établi sur la Prairie, et la colonne de 4 boutons de 72 px au Laboratoire."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Valider avec le directeur créatif l'arborescence et la matrice des parcours en 3 taps",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Wireframes 844 x 390 px des 6 écrans : Établi, Recherches, Boutique, Vestiaire, fin de run, accueil du Labo",
+      "phase": 0,
+      "charge": "M"
+    },
+    {
+      "titre": "Prototype greybox cliquable dans Studio (Frames grises), à tester avec 3 enfants de 9 à 12 ans",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Script serveur de l'Établi (RemoteFunction AcheterAmelioration) avec tests des 5 refus : inconnu, trop vite, trop loin, max, pièces",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Boutique serveur : DemandeAchatCosmetique et ProcessReceipt idempotent, vérifiés avec des achats test dans Studio",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Service de récapitulatif de fin de run (RemoteEvent RecapRun) et file des cartes d'accueil du Labo (Foreuse, puis Défi du Jour)",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Construire les ScreenGui finales avec la Charte, UIScale, ScreenInsets et l'animation élastique de 0,15 s",
+      "phase": 5,
+      "charge": "L"
+    },
+    {
+      "titre": "Animer les écrans de récompense : compteur de 1,2 s, travelling vers l'Alcôve, confettis en cubes (Rate 20)",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Test chronométré des parcours sur Android 3 Go avec 10 testeurs : 3 taps au plus et moins de 6 s par parcours",
+      "phase": 6,
+      "charge": "M"
+    }
+  ]
+}

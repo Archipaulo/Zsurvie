@@ -1,0 +1,107 @@
+{
+  "decisions": [
+    "Style Pixel-bloc en particules : 8 textures (cube, etoile, anneau, nuage, plus, trait, piece, gemme) dessinées en 8 x 8 pixels et agrandies x 8 (PNG 64 px) ; les particules rétrécissent au lieu de fondre (Transparency 0, Size -> 0) ; LightInfluence 0 partout pour garder le code couleur au ClockTime 17,5 du Jour du Colosse ; taille minimale 0,5 stud.",
+    "Budget mobile : Rate <= 20 sur les émetteurs continus (8 au plus dans le champ) ; les salves passent par :Emit() dans un réservoir client de 300 particules/s sur mobile et 600 sur PC, divisé par 2 sous 28 FPS ; effets ignorés à plus de 90 studs de la caméra ; 0 Part Neon et 3 PointLight sur 12 côté VFX. Précision du canon : Rate ne borne pas :Emit(), ce réservoir s'en charge.",
+    "Autorité serveur : le module ServerScriptService.Vfx n'envoie que des effets déjà validés, par lots à 10 Hz, via l'UnreliableRemoteEvent Remotes.VfxRapide (impacts, morts, tirs des coéquipiers) et le RemoteEvent Remotes.VfxImportant (Colosse, chute de la Maison, jour franchi). Seuls le flash et la traçante du tireur local sont prédits ; pièces et gemmes ne s'animent qu'après le crédit serveur, visibles du seul propriétaire.",
+    "Code couleur des effets : Zbires = Violet horde + accent du type (Doré Or, Casqué Ardoise, Gluant Violet lumière, Costaud Violet ombre) ; nos tirs, réparations et défenses en Toit orange et Crème ; Or réservé aux pièces (le critique est une étoile Crème) ; Gemme cyan réservé aux gemmes ; Alerte réservé aux télégraphes et à la Maison en danger, jamais sur un Zbire vaincu.",
+    "Lisibilité du pilier 1 : un coup non critique sur le Casqué déclenche un ricochet d'étincelles Ardoise, un critique une grande étoile Crème ; le Gluant éclate et 2 Mini-Gluants jaillissent en arc ; le Sauteur est annoncé 0,6 s avant par un disque Alerte au sol ; le Survivant étourdi porte 2 s d'étoiles qui tournent.",
+    "Public jeune : aucun sang ni corps qui reste (un Zbire vaincu éclate en cubes et en pièces), 3 flashs plein écran par seconde au maximum, secousse caméra (0,3 stud au pas du Colosse, 0,6 stud à la chute de la Maison) désactivable dans les options."
+  ],
+  "besoins": [
+    {
+      "de": "Programmeur gameplay (combat et Zbires)",
+      "besoin": "Appeler Vfx.signaler(code, position, teinte) après chaque touche, ricochet sur Casqué, critique, mort, division, atterrissage du Sauteur et gerbe du Doré validés par le serveur, Vfx.signaler(0, canon, UserId, impact) pour chaque tir, et Vfx.important pour le Colosse, la chute de la Maison et le jour franchi ; afficher les Zbires côté client pour que je puisse les teinter 0,06 s et les écraser x 0,8 à l'impact ; poser l'attribut Etourdi sur le Survivant pendant 2 s."
+    },
+    {
+      "de": "Programmeur économie et butin",
+      "besoin": "Envoyer par FireClient au seul propriétaire la position des pièces lâchées et chaque crédit de pièces ou de gemmes, pour déclencher B1 à B4 sans que le client décide de rien."
+    },
+    {
+      "de": "Directeur artistique",
+      "besoin": "Valider la planche des 8 textures pixel et confirmer les clés du module ReplicatedStorage.Charte (VioletHorde, Or, Ardoise, GemmeCyan, ToitOrange et leurs variantes Lumiere et Ombre) utilisées par VfxClient."
+    },
+    {
+      "de": "Éclairagiste",
+      "besoin": "Me réserver 3 PointLight sur les 12 du plafond (flash d'explosion, arrivée du Colosse, chute de la Maison) et me dire combien de Parts Neon restent libres près des portails et de la Mine."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "Un son chiptune par effet P0, déclenché par le même code d'effet que VfxClient (RAPIDES et IMPORTANTS), dans la limite de 16 sons simultanés."
+    },
+    {
+      "de": "Programmeur caméra et UI",
+      "besoin": "Brancher VfxClient.secouer(amplitude, duree) sur la caméra Scriptable avec une option « Secousses » dans les réglages, et déclencher l'effet S3 depuis la Roue des Pings."
+    },
+    {
+      "de": "Testeur QA performance",
+      "besoin": "Test de charge sur Android d'entrée de gamme 3 Go : 6 joueurs, 60 Zbires et le Colosse, avec relevé des FPS et des particules émises par seconde."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Figer avec le programmeur gameplay la table des codes d'effet (tir 0, RAPIDES 1-11, IMPORTANTS 1-4) et des teintes 0-4",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Écrire le module serveur ServerScriptService.Vfx (lots à 10 Hz, 20 effets par paquet, 120 par tick au plus)",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Écrire le ModuleScript VfxClient : ancre, pool d'Attachments, 8 traçantes recyclées, réservoir 300/600 particules/s, qualité adaptative, culling à 90 studs",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Créer Remotes.VfxRapide (UnreliableRemoteEvent) et Remotes.VfxImportant, puis brancher les 20 effets P0 sur les événements serveur",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Dessiner et uploader les 8 textures pixel (64 px, flipbooks piece et gemme en 128 px Grid2x2)",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Monter dans ReplicatedStorage.VFX.Emetteurs un Attachment par effet avec ses ParticleEmitter réglés selon le catalogue (attributs Nombre et Teintable)",
+      "phase": 5,
+      "charge": "L"
+    },
+    {
+      "titre": "Régler les Beams et Trails : traçante, perforante, réparation, pings, arrivée du Colosse, aspiration des pièces, départ des Capsules",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Produire les séquences Colosse (arrivée, pas, défaite) et chute de la Maison avec secousses et PointLight en pool",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Poser les émetteurs continus dans la map : portails de la Lisière (Rate 6), Mine (Rate 4), Tapis Collant (Rate 2), fumée de la Maison en état 3 (Rate 3)",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Réaliser les effets du Laboratoire : Capsules, recherche lancée, récolte de la Foreuse",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Test de charge Android 3 Go (6 joueurs, 60 Zbires, Colosse) : au moins 30 FPS avec tous les P0, sinon baisser les attributs Nombre",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Test de lisibilité avec 5 joueurs de 9 à 13 ans : reconnaître sans explication le critique, le ricochet sur Casqué, la division du Gluant et le télégraphe du Sauteur",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Vérifier la photosensibilité (3 flashs plein écran par seconde au plus) et l'option Secousses",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "problemes": [
+    {
+      "gravite": "bloquant",
+      "agent": "a06",
+      "probleme": "Jour 1, HUD : BoucleDuJour publie Jour, Phase et FinPhase sur workspace, alors que le HUD (a32) et le contrat a28 lisent ReplicatedStorage.EtatRun. Le bandeau reste figé sur « JOUR 1 · 0:00 ». Le module verse aussi ses propres gemmes (2 + ⌊N/2⌋, store Gemmes_v1, clé J_) en parallèle d'Economie (a07). Enfin, le bonus Jour parfait fait SetAttribute('Pieces') sans passer par Economie : les +10 disparaissent au ramassage suivant et ne peuvent pas être dépensés.",
+      "correction": "Écrire Jour, Phase, FinPhase et Colosse dans ReplicatedStorage.EtatRun. Appeler Economie.franchirJour(jour) et Economie.ajouterPieces(joueur, 10). Supprimer magasin et verserGemmes de BoucleDuJour."
+    },
+    {
+      "gravite": "bloquant",
+      "agent": "a10",
+      "probleme": "T ≈ 60-70 s : à 10 pièces, la balise et la main or désignent la carte Dégâts, mais elle coûte 25 (a07) ou 20 (a33). La carte reste grise et le premier achat échoue. L'Établi « façade est » n'existe pas : ReplicatedStorage.Plan (a11) le place en (−12, 14), à 35 studs du point d'atterrissage (+20, 0), de l'autre côté de l'angle de la Maison.",
+      "correction": "PRIX_PREMIER_ACHAT = Economie.prixEtabli('Degats', 1) au lieu de 10. Faire atterrir le novice sur le Parvis, à 10 studs au plus de Plan.ETABLI. L'ouverture passe par les chemins Est et Ouest, car depuis le Parvis la Maison masque le chemin Nord."
+    },
+    {
+      "gravite": "bloquant",
+      "agent": "a32",
+      "probleme": "Combat : le HUD de la Prairie existe en quatre dispositions incompatibles (Grappe en arc chez a35, rangée Répare/Poser/Ping chez a32, bouton Ping en haut à droite chez a09, coin de 110 × 110 réservé au saut chez a31). Le ping a trois touches possibles (Q, G, T). Le bouton Réparer de HudController envoie un seul DemandeReparation:FireServer(), alors que a09 attend DemandeReparation(true) puis (false) pendant le maintien : la réparation ne démarre pas ou ne s'arrête plus. Le bouton Sac à dos que a10 fait pulser au premier Répit et le cadenas « Niv. X » des défenses (a08) n'apparaissent dans aucune maquette.",
+      "correction": "Publier une maquette unique. En bas à droite, la Grappe de a35 : Réparer en 96 px dans le coin, puis Muret, Mini-Tourelle, Tapis Collant et Ping en 64 px sur l'arc. En haut au centre, le bandeau Maison de a32. Touches E, 1-2-3, Q et F (Établi). Réparer lié à InputBegan et InputEnded. Cadenas « Niv. X » sur les défenses verrouillées. a10 fait pulser le bouton Muret."
+    },
+    {
+      "gravite": "bloquant",
+      "agent": "a08",
+      "probleme": "Premier retour au Laboratoire : la Tourelle de toit (40 gemmes chez a07) n'est visible qu'au niveau 5. Un novice qui tombe au Colosse du Jour 5 a environ 1 100 XP (440 pour les jours, 500 pour les éliminations, 160 pour le tutoriel), soit le niveau 4. Il ne voit que la Foreuse, à 100 gemmes, avec 74 gemmes en poche : rien à acheter, alors que le pilier 3 promet une machine dès le premier retour.",
+      "correction": "Rendre la Tourelle de toit visible dès le niveau 1. Faire apparaître les recherches dans l'ordre des prix de a07 : Tourelle de toit, Visée critique, Balles perforantes, Foreuse."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a10",
+      "probleme": "Atterrissage : l'ouverture scriptée lance le premier Marcheur à A+3, alors que a06 prévoit 20 s d'Arrivée calme. Le minuteur du HUD affiche la phase Arrivée en plein combat, et le Jour 1 finit à A+80 chez a10 contre A+100 chez a06.",
+      "correction": "Compter les t d'Onboarding.OUVERTURE depuis le début de la horde du Jour 1 (A+20). Utiliser les 20 s d'Arrivée pour l'anneau de portée et le joystick fantôme. Le premier éclatement tombe alors vers T 57 s, toujours sous la minute."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a14",
+      "probleme": "Jour 1 en solo : Portails.nouveauJour ouvre les 4 portails des chemins et interdit deux paquets de suite au même portail. Un paquet sur quatre arrive donc par le Sud, où l'écran ne montre que 22 studs. a06 prévoyait 1 seul chemin jusqu'au Jour 3. De plus, RAYON_PORTAIL vaut 86 alors que ReplicatedStorage.Plan place les arches à 80 : les Zbires sortent de la forêt, derrière l'arche.",
+      "correction": "Suivre la rampe de a06 : 1 chemin aux jours 1 à 3 (jamais le Sud avant le Jour 4), 2 chemins aux jours 4 à 8, 3 ou 4 dès le Jour 9. Lire les positions avec Plan.positionPortail au lieu de RAYON_PORTAIL."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a09",
+      "probleme": "Pendant la horde, les règles de ramassage se contredisent. Les pièces au sol disparaissent au bout de 12 s (a06), 15 s (a14) ou 20 s (a28), ne se perdent jamais (a09), ou sont aspirées à 50 % au Répit (a07). La Mine est soit une réserve d'équipe de 4 gemmes vidée par un seul joueur (a06), soit 10 gemmes personnelles (a09), à raison d'une gemme toutes les 20 s (a07) ou 30 s. Le joueur ne sait pas s'il doit courir ramasser.",
+      "correction": "Écrire une règle unique dans ReplicatedStorage.Partage, appliquée par a06, a07, a14 et a28 : aimant serveur de 8 studs ; pièces au sol jusqu'au Répit, puis 50 % du reste aspirés avec un « +X » gris ; Mine commune (a06), 1 gemme toutes les 30 s, 4 au maximum, créditée à tous dès qu'un Survivant la touche."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a11",
+      "probleme": "Mine : HordeService (a26) fait avancer les Zbires en ligne droite du portail à la Maison, et l'axe du portail SE (135°) traverse la Mine (X 20 → 32, Z 20 → 32). Les Zbires passent à travers le rocher et étourdissent le Survivant qui vide la Mine. Les Trois Rochers de a14, en (−34, 0, −34), sont eux aussi sur l'axe NO.",
+      "correction": "Décaler le portail SE à 155° dans Plan.ANGLES_PORTAILS : son axe passe alors à 5 studs du coin de la Mine. Tant que les Zbires n'ont pas de champ de flux, interdire toute Part de palier C (Mine, rochers) sur les 8 axes portail → Maison."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a33",
+      "probleme": "Répit et horde près de la Maison : le panneau de l'Établi s'ouvre seul à 10 studs de workspace.Etabli, une zone qui chevauche celle de réparation. En (−6, 10), on est à 11,7 studs de la Maison et à 7,2 de l'Établi. Le panneau (60 % × 72 %) remplace la Grappe : Réparer disparaît, et un tap destiné à Réparer achète une carte, sans confirmation.",
+      "correction": "Ouvrir l'Établi par un bouton contextuel de 72 px (F, ButtonY). Réserver l'ouverture automatique au Répit. Ignorer les taps pendant 0,8 s à l'ouverture. Garder le bouton Réparer visible au-dessus du panneau."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a33",
+      "probleme": "Établi : le CATALOGUE du script serveur contredit a07. Dégâts et Cadence y coûtent 20 au lieu de 25 ; Portée plafonne au niveau 8 au lieu de 10, Butin au niveau 8 au lieu de 5, Balles explosives au niveau 5 au lieu de 10. Solidité, Réparation et Régénération sont payées par un seul joueur au prix solo, sans la cagnotte × (0,5 + 0,5 × joueurs) de a07.",
+      "correction": "Supprimer CATALOGUE et appeler Economie.prixEtabli(ligne, niveau). Dessiner la carte cagnotte des améliorations d'équipe : jauge, têtes des contributeurs, et un tap qui verse ce qui manque dans la limite du solde."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a09",
+      "probleme": "Premier Répit, défenses : la 4e pose détruit la plus ancienne sans remboursement. Au Jour 7, un tap distrait efface une Mini-Tourelle payée 114 pièces. Le fantôme et le serveur suivent quatre limites différentes (60 studs chez a09, 66 chez a11, 50 chez a14, 64 chez a21) : le fantôme s'affiche orange, puis la pose est refusée sans explication.",
+      "correction": "Refuser la 4e pose avec l'icône PoseInterdite. Permettre de reprendre une défense en la touchant (50 % rendus, a07). Faire appeler Plan.posePermise (a11) à la fois par le fantôme client et par le serveur."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a09",
+      "probleme": "Défenses sans saut : la Prairie n'a pas de saut (CharacterJumpHeight = 0 chez a28, a32 et a35), mais a09 compte sur un saut de 5 studs pour franchir le Muret de 3 studs. À 6 joueurs, 18 Murets suffisent à murer la Maison ou à enfermer un coéquipier.",
+      "correction": "Créer le groupe de collision Defenses, non collidable avec Survivants. Les Zbires, simulés par le serveur, restent arrêtés par la règle. Inscrire CharacterJumpHeight = 0 pour la Prairie dans le tableau des 3C."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a15",
+      "probleme": "Répit après un jour pair : les buissons Nid du Panier renversé sont entre 75 et 85 studs, derrière la barrière des Survivants (72 studs chez a11, 74 chez a14). On suit les empreintes jusqu'au mur invisible, et le prompt (10 studs) ne s'affiche pas. FilonQuiChante attend ReplicatedStorage.Partie, qui ne figure pas dans le contrat de a28 (ReplicatedStorage.EtatRun) : le script reste bloqué et le Filon ne démarre jamais.",
+      "correction": "Placer les 12 buissons entre 58 et 66 studs, hors des chemins. Lire Phase et Jour dans ReplicatedStorage.EtatRun."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a10",
+      "probleme": "Retour au Laboratoire après la première run : RunsTerminees vaut 1, donc les dalles et l'hologramme de Doc Boulon ont disparu. Le joueur arrive sur la Voie d'arrivée (0, −55), et les cartes d'arrivée (a33) parlent de la Foreuse et du Défi du Jour, qu'il n'a pas encore. Rien ne le conduit à l'Arbre des Recherches pour sa première recherche.",
+      "correction": "Prolonger l'onboarding jusqu'à l'étape PremiereRecherche : dalles cyan de la Voie d'arrivée au pupitre de l'Arbre des Recherches, main or sur le nœud Tourelle de toit, et aucune carte d'arrivée pour un novice."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a08",
+      "probleme": "Deuxième run, Quai des Capsules : la Capsule Difficile se débloque au niveau 10 (a08) ou au Record Jour 10 en Normale (a06). La Capsule du Jour s'ouvre au niveau 3, alors que le Défi du Jour et ses 150 gemmes ne se débloquent qu'au premier Colosse repoussé (a07). Le cadenas affiché ne correspond pas à la règle appliquée par le serveur.",
+      "correction": "Fixer une seule condition par Capsule et l'afficher sur son SurfaceGui : Capsule Difficile au Record Jour 10 en Normale, Capsule du Jour au niveau 3. a07 aligne le déblocage du Défi du Jour sur ce même niveau."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a13",
+      "probleme": "Secrets : le Mini-Gluant fugueur (15 gemmes par jour), les Dalles chantantes (10), les Bornes des 4 Vents (20 par run) et l'Alcôve 13 (10) rapportent jusqu'à 50 gemmes par jour. Le canon ne prévoit que 5 sources de gemmes (Mine, Doré, jours franchis, Foreuse, Défi du Jour), et cet écart n'est pas déclaré. Une journée de secrets paie la première recherche (40).",
+      "correction": "Récompenser les secrets uniquement en cosmétiques, badges et pièces de run. Si des gemmes sont conservées, les faire passer par une source du canon (par exemple une gerbe de la Mine comptée dans la source Mine) et déclarer l'écart à Victor Lanoue."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a13",
+      "probleme": "Secrets de la Prairie : le Colosse endormi, en (−62, 0, 62), est à 87,7 studs, derrière la barrière (72 ou 74) : impossible de le chatouiller. Le Pique-nique abandonné, en (32, 0, 30), empiète sur la Mine (X 20 → 32, Z 20 → 32). Les Dalles chantantes sont devant la Mine, à l'emplacement du Filon qui chante de a15, avec d'autres notes.",
+      "correction": "Avancer la clairière pour que le nez du Colosse endormi soit à 78 studs, tourné vers la Maison, avec un prompt de 8 studs atteignable depuis la barrière. Déplacer le Pique-nique hors de l'emprise de la Mine. Installer les Dalles chantantes sur le Quai des Capsules, là où joue le jingle de départ."
+    },
+    {
+      "gravite": "mineur",
+      "agent": "a10",
+      "probleme": "Premier Colosse : la Roue des Pings (55 % de l'écran, au centre) s'ouvre seule pendant 2 s. Elle cache le Colosse au moment critique et ses bulles tombent sous le pouce droit, alors que le ping « Colosse ! » part déjà automatiquement (a14).",
+      "correction": "Ne pas ouvrir la roue : faire pulser le bouton Ping pendant 2 s avec l'icône PingColosse."
+    },
+    {
+      "gravite": "mineur",
+      "agent": "a12",
+      "probleme": "Horde sur les diagonales : les Ressorts de retour (4 × 4 studs, à 58 studs) se trouvent sur la route des Zbires des portails diagonaux, là où l'on se bat. Un pas de travers renvoie le joueur au rayon 22 en pleine horde. Sans saut sur la Prairie, les îlots de 3 studs prévus pour être sautés deviennent des obstacles.",
+      "correction": "Ne déclencher un Ressort que si le Survivant court vers la Maison (produit scalaire entre sa direction et la direction de la Maison > 0,7). Limiter à 1 stud de haut les îlots situés entre 45 et 66 studs."
+    },
+    {
+      "gravite": "mineur",
+      "agent": "a07",
+      "probleme": "Anti-AFK : après 60 s sans réparation, pose, ping ni déplacement de 4 studs, les gemmes de la Mine, des Dorés et du jour franchi sont perdues sans aucun signal. Les autres livrables utilisent d'autres seuils (20 studs chez a08, 90 s chez a14).",
+      "correction": "Adopter un seuil unique, partagé avec a08 et a14. À 45 s, afficher un « Zzz » au-dessus du Survivant et jouer un bip. Ajouter une ligne « inactif » sur l'écran de fin de run."
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+{
+  "decisions": [
+    "Prairie : StreamingEnabled reste désactivé (canon). Au pic, les 10 000 Parts se répartissent ainsi : décor statique 6 800 au maximum, Zbires 1 800, Colosse 30 (en MeshParts, règle des 30 Parts respectée), défenses 450, avatars 240, pools client 300, marge 380. À l'écran sur mobile : 120 000 triangles et 500 draw calls au maximum.",
+    "Laboratoire : j'active StreamingEnabled, un point que le canon ne tranche pas et que Victor Lanoue doit valider. Réglages : ModelStreamingBehavior Improved, StreamingIntegrityMode MinimumRadiusPause, StreamingMinRadius 96, StreamingTargetRadius 256, StreamOutBehavior Opportunistic. Doc Boulon et les 3 Capsules sont en Persistent, chaque Alcôve en PersistentPerPlayer pour son propriétaire avec LevelOfDetail StreamingMesh. L'empreinte du lobby est limitée à 240 x 240 studs et à 13 000 Parts.",
+    "Zbires : le serveur ne crée aucune Part. Il diffuse 10 octets par Zbire à 10 Hz dans un buffer via UnreliableRemoteEvent, soit environ 6 Ko/s par client. Chaque client affiche les Zbires depuis un pool, déplacés par workspace:BulkMoveTo, avec un LOD à 3 paliers selon la distance au Survivant local : moins de 50 studs, 50 à 100 studs, plus de 100 studs.",
+    "Textures : une seule palette Charte_Palette de 128 x 128 (33 teintes de ReplicatedStorage.Charte) sert à tous les MeshParts de décor. Les 10 visages de Zbires tiennent dans un atlas de 512 x 512. Le pixel art est agrandi 4 fois au plus proche voisin avant l'import, et l'interface est en ResampleMode Pixelated. SurfaceAppearance et textures de plus de 1024 px sont interdits.",
+    "Chaque zone a sa part des 150 Parts Neon et des 12 lumières : Maison 16/2, Mine 30/2, portails 24/4, Mini-Tourelles 18/0, Établi 6/1, Colosse 6/1. Les Zbires, les tirs et les pièces n'ont ni Neon ni lumière, et toutes les lumières sont en Shadows false.",
+    "Règles pour tout le studio : un objet répété plus de 10 fois devient un MeshPart au même MeshId, pas d'UnionOperation dans la Prairie. Décor en Anchored, avec CanTouch false et CanQuery false, CastShadow false sous 2 studs, CollisionFidelity Box. Un seul système par famille via CollectionService, aucun Humanoid. Le script d'audit bloque la publication."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif (Victor Lanoue)",
+      "besoin": "Valider l'activation de StreamingEnabled au Laboratoire, sur lequel le canon ne dit rien, avec StreamingMinRadius 96 et StreamingTargetRadius 256."
+    },
+    {
+      "de": "Lead scripting gameplay",
+      "besoin": "Adopter le rendu des Zbires côté client : pas de Part de Zbire sur le serveur, état envoyé dans un buffer de 10 octets par Zbire à 10 Hz par UnreliableRemoteEvent, tirs validés par sphère de collision sur les données serveur. Appeler le module StreamingLabo à l'attribution des Alcôves."
+    },
+    {
+      "de": "Modeleur de personnages et de Zbires",
+      "besoin": "Livrer chaque Zbire en 12 MeshParts (30 au maximum) et 1 000 triangles au maximum, le Colosse en 30 MeshParts et 5 000 triangles au maximum, avec greedy meshing, UV sur l'atlas de visages de 512 x 512 et membres reliés par Motor6D."
+    },
+    {
+      "de": "Level designer du Laboratoire",
+      "besoin": "Tenir l'empreinte du lobby à 240 x 240 studs, regrouper chaque Alcôve dans un Model nommé Alcove_01 à Alcove_12 (500 Parts au maximum, machines comprises), et taguer les machines MachineAnimee."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "Livrer 40 assets au maximum par place : effets en mono de 1,5 s au maximum, musiques en boucles de 60 s au maximum, rangés dans 3 SoundGroup (Musique, Effets, Interface)."
+    },
+    {
+      "de": "Éclairagiste",
+      "besoin": "Respecter la répartition des 12 lumières en Shadows false, ne pas utiliser DepthOfFieldEffect ni SunRaysEffect, garder BloomEffect.Size à 24 au maximum, et choisir une Lighting.Technology qui tient 30 FPS sur l'Android de 3 Go."
+    },
+    {
+      "de": "Testeur QA performance",
+      "besoin": "Disposer d'un Android de 3 Go et de 6 comptes de test pour un Jour du Colosse à 60 Zbires, avec relevé des FPS, de Stats:GetTotalMemoryUsageMb() et des draw calls."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Publier dans le document de design le tableau des budgets par zone (Parts, triangles, Neon, lumières, sons, textures) pour la Prairie et le Laboratoire",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Régler les propriétés de Workspace des deux places : Prairie avec StreamingEnabled false, Laboratoire avec StreamingEnabled true, MinRadius 96, TargetRadius 256, MinimumRadiusPause et Opportunistic",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Passer le greybox de la Prairie au script d'audit et confirmer 6 800 Parts de décor statique au maximum",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Créer la texture Charte_Palette de 128 x 128 et le kit de 4 arbres de la Lisière en MeshPart de 300 triangles au maximum",
+      "phase": 2,
+      "charge": "M"
+    },
+    {
+      "titre": "Convertir en MeshParts partageant le même MeshId tous les objets répétés plus de 10 fois, supprimer les Unions de la Prairie et appliquer CanTouch, CanQuery, CastShadow et CollisionFidelity",
+      "phase": 3,
+      "charge": "L"
+    },
+    {
+      "titre": "Valider chaque Zbire (30 Parts et 1 000 triangles au maximum) et le Colosse (30 Parts et 5 000 triangles au maximum), ainsi que les 3 états de la Maison (base commune plus 120 Parts de dégâts au maximum)",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Régler ModelStreamingMode et LevelOfDetail des modèles du Laboratoire et intégrer le module StreamingLabo (AddPersistentPlayer, RequestStreamAroundAsync)",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Coder avec le scripting le LOD client des Zbires à 3 paliers avec BulkMoveTo, les pools d'éclats (120 au maximum) et de pièces (40 au maximum) et le pool de 16 sons",
+      "phase": 4,
+      "charge": "L"
+    },
+    {
+      "titre": "Contrôler les effets : ParticleEmitter.Rate à 20 au maximum, 24 émetteurs actifs au maximum, 20 BillboardGui au maximum en MaxDistance 60, répartition des Neon et des lumières",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Tester sur Android 3 Go avec 6 joueurs, 60 Zbires et le Colosse : 30 FPS ou plus, moins de 800 Mo, 500 draw calls au maximum, 50 Ko/s reçus au maximum",
+      "phase": 6,
+      "charge": "L"
+    },
+    {
+      "titre": "Dérouler et signer la checklist avant publication dans les deux places",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

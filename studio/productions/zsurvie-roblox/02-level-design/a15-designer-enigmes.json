@@ -1,0 +1,106 @@
+{
+  "decisions": [
+    "4 énigmes sans texte, facultatives et faisables en solo : le Circuit du Réacteur (Laboratoire, ProximityPrompt), les Ombres de la Galerie (Galerie des Zbires, ClickDetector), le Filon qui chante (Mine, Touched) et le Panier renversé (de la Prairie à la Lisière, ProximityPrompt maintenu).",
+    "En run, une énigme n'existe que pendant le Répit de 15 s : le Filon après un jour impair, le Panier après un jour pair. Aucune énigme après les jours 4, 9, 14… pour laisser l'équipe préparer le Colosse.",
+    "Aucune nouvelle source de gemmes : le Filon double la production de la Mine pendant le jour suivant et le Panier ajoute un Doré, compté dans le plafond de 60 Zbires. Les énigmes du lobby ne donnent que des cosmétiques (chapeaux pixel ; Tampons : skin de Blaster à 7, costume à 30), une fois par jour UTC.",
+    "Contrat serveur : chaque énigme expose un attribut `Etat` (Inactive, Annonce, Ouverte, Resolue, Echec). Les énigmes lisent `ReplicatedStorage.Partie` (attributs `Phase` et `Jour`) et écrivent `Workspace.Mine.Filon` et `Partie.DoreBonus`, consommés par les services de la Mine et d'apparition.",
+    "Écart de nommage déclaré : Réacteur à gemmes, Machine à Chapeaux, Tampon, Filon, Nid du Doré et Panier renversé sont des noms de décor de travail, hors canon, à valider par Victor Lanoue.",
+    "Mobile : ProximityPrompt en `Style = Custom` avec une icône de 80 px sans texte. `ClickDetector` est réservé au lobby, car la caméra `Scriptable` de la run rend les petits objets difficiles à viser."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif",
+      "besoin": "Valider les noms de décor de travail (Réacteur à gemmes, Machine à Chapeaux, Tampon, Filon, Nid du Doré, Panier renversé) et les récompenses cosmétiques (12 chapeaux pixel, skin de Blaster « Figurine », costume « Gardien de la Galerie »)."
+    },
+    {
+      "de": "Lead scripteur gameplay",
+      "besoin": "Exposer `ReplicatedStorage.Partie` avec les attributs `Phase` (\"Horde\" ou \"Repit\") et `Jour` (pendant le Répit, le jour qui vient de finir). Le service de la Mine doit lire `Mine.Filon` au passage en horde, doubler la production 80 s puis remettre l'attribut à false. Le service d'apparition doit consommer `Partie.DoreBonus`."
+    },
+    {
+      "de": "Designer économie",
+      "besoin": "Valider l'impact du Filon (Mine × 2 pendant 80 s, au plus un jour sur deux) et du Doré bonus sur le gain moyen de gemmes par run."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "Fournir en chiptune 8-bit les 4 notes du Filon (Do, Mi, Sol, Do aigu), la fanfare, le buzz d'échec, le hoquet du Panier et la bouffée du mauvais buisson, à 3 sons simultanés au plus par énigme."
+    },
+    {
+      "de": "Designer UI mobile",
+      "besoin": "Créer le style Custom des ProximityPrompt : icône de 80 px sans texte (rotation, main qui maintient) avec une jauge de maintien pour HoldDuration."
+    },
+    {
+      "de": "Animateur",
+      "besoin": "Animer Doc Boulon qui pointe une dalle, les animations signature des 9 figurines de la Galerie (réveil, refus, défilé de 3 s) et le buisson Nid à effet élastique."
+    },
+    {
+      "de": "Ingénieur données",
+      "besoin": "Ajouter au profil DataStore les champs `chapeaux`, `jourChapeau`, `tampons` et `jourTampon`, écrits par UpdateAsync, avec une récompense au plus par jour UTC."
+    },
+    {
+      "de": "Artiste environnement",
+      "besoin": "Construire la frise Encre sur Crème de la Galerie (silhouettes des 9 figurines), les 3 gabarits d'empreintes (Marcheur, Sauteur, Doré), le panier de pique-nique et les 12 buissons Nid de la Lisière."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Valider avec le directeur créatif les 4 fiches énigmes et les noms de décor de travail",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Greyboxer la grille du Circuit (3 × 3 dalles de 4 × 4 studs) entre Doc Boulon et l'Arbre des Recherches",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Greyboxer les 4 plaques du Filon devant la Mine, les 4 points de chute du Panier à 35 studs de la Maison et les 12 buissons Nid entre 75 et 85 studs",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Construire les 4 cristaux (1 à 4 cubes, 4 studs au plus), la frise de silhouettes de la Galerie et les 3 gabarits d'empreintes",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Intégrer et tester le script FilonQuiChante (Touched, suite de 3 à 5 notes, 3 essais, attribut Mine.Filon)",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Scripter le Circuit du Réacteur : ProximityPrompt par dalle, rotation anti-spam de 0,4 s, parcours en largeur, disposition du jour UTC",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Scripter les Ombres de la Galerie : ClickDetector, état par joueur, RemoteEvent GalerieRetour, paires pièges dès le 3e Tampon",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Scripter le Panier renversé : 3 pistes (30 Parts clonées et détruites), Nid actif, validation serveur et Partie.DoreBonus",
+      "phase": 4,
+      "charge": "L"
+    },
+    {
+      "titre": "Enregistrer chapeaux et Tampons par UpdateAsync, avec au plus une récompense par jour UTC",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Créer le style Custom des ProximityPrompt (icône de 80 px sans texte) et les indices clients (pulsation Prochain, étincelles, pas japonais)",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Playtester avec des 9-13 ans : taux de résolution cible de 60 à 80 %, résolution en moins de 12 s dans le Répit",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Vérifier sur Android 3 Go le budget Neon, les 16 sons simultanés et la destruction des 30 empreintes en fin de Répit",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

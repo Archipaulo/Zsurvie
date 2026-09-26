@@ -1,0 +1,108 @@
+{
+  "decisions": [
+    "Plan de masse de la Prairie : la Maison est centrée en (0, 0, 0) et toutes les façades regardent vers +Z, du côté de la caméra (0, 45, 28). La Mine est en (26, -14), avec 12 studs libres depuis le mur est de la Maison. L'Établi est en (-22, 16), l'apparition en (0, 20). Les 8 portails violets sont à r = 86 ; celui du nord est agrandi à 20 x 24 pour le Colosse. Une barrière invisible à r = 72 retient les Survivants.",
+    "La Maison mesure 16 x 16 x 14 : murs de Y 1 à 8, toit en 4 gradins orange de Y 8 à 12, cheminée ou Tourelle de toit jusqu'à Y 14. Ses 3 états (Intacte, Abîmée, Critique) sont 3 Models de 80 Parts au plus, échangés entre Workspace et ServerStorage.EtatsMaison. Seuils proposés : > 60 %, 31 à 60 %, <= 30 % des PV. L'ancre du « Record : Jour X » est en (0, 18, 0).",
+    "Interprétation du canon : la règle des 6 studs se mesure à l'horizontale depuis le centre de la Maison, et la Maison (14 studs) en est la seule exception. Dans la moitié sud de la Lisière, la hauteur est plafonnée à 1,6 x l'écart en Z avec la barrière, pour que la caméra ne masque jamais un Survivant.",
+    "Laboratoire : Rotonde de 80 studs de diamètre intérieur, divisée en 16 travées (12 Alcôves de 12 x 16 x 16 et 4 passages). L'Arbre des Recherches occupe le centre, avec une antenne à Y 44. Le Quai des Capsules est au sud (3 Capsules de 12 studs de diamètre sous des tubes de 40 studs, embarquement par dalle), la Galerie des Zbires au nord, le spawn à l'est face à Doc Boulon. « Sas d'arrivée » et « Balcon des Rendez-vous » sont des noms de travail hors canon, à valider par Victor Lanoue.",
+    "Budgets de la Prairie : 5 000 Parts pour le décor fixe, 2 860 pour le dynamique (Zbires 1 800, éclats 550, défenses 360, Colosse 150), 2 140 en réserve. Neon : 30 pour les structures, 70 pour les Zbires et le Colosse, 50 en réserve. PointLight : 11 fixes et 1 pour le Colosse. Le Laboratoire est plafonné à 8 000 Parts (proposition).",
+    "Dimensions des défenses : Muret 8 x 3 x 2, Mini-Tourelle 4 x 5 x 4, Tapis Collant 8 x 0,2 x 8. La pose est autorisée entre le parvis (24 x 24) et r = 64, à plus de 4 studs de la Mine, de l'Établi et de l'apparition, et le serveur la valide."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif",
+      "besoin": "Valider les interprétations (12 studs libres entre la Maison et la Mine, règle des 6 studs mesurée depuis le centre de la Maison) ainsi que les noms de travail « Sas d'arrivée » et « Balcon des Rendez-vous »."
+    },
+    {
+      "de": "Modeleur de personnages",
+      "besoin": "Un Colosse de 14 studs de large et 18 de haut au maximum, pour qu'il passe le portail nord (voile 16 x 20). Les Zbires et le Colosse doivent tenir ensemble dans 70 Parts Neon."
+    },
+    {
+      "de": "Game designer",
+      "besoin": "Confirmer les seuils des 3 états de la Maison (> 60 %, 31 à 60 %, <= 30 % des PV) et la distance de réparation (parvis de 4 studs, tolérance serveur de 6 studs)."
+    },
+    {
+      "de": "Scripteur gameplay",
+      "besoin": "Attribuer les Alcôves avec l'attribut Proprietaire et détecter les dalles des Capsules avec GetPartBoundsInBox toutes les 0,5 s. Valider côté serveur les zones de pose des défenses. Brancher l'échange des états de la Maison sur les PV serveur."
+    },
+    {
+      "de": "Artiste environnement",
+      "besoin": "Fournir une texture en damier de 2 tons de Prairie pour la plaque de 220 x 220, et des arbres-cubes qui respectent le plafond sud de la Lisière (hauteur <= 1,6 x l'écart en Z avec la barrière)."
+    },
+    {
+      "de": "Designer UI",
+      "besoin": "Le BillboardGui « Record : Jour X » sur AncreRecord en (0, 18, 0), le bouton Établi de 60 px à moins de 10 studs, les SurfaceGui des Capsules (« 3/6 · départ 12 s ») et les cartels de la Galerie."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Faire valider par le directeur créatif les plans de masse de la Prairie et du Laboratoire (coordonnées, interprétations, noms de travail)",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Greybox de la Prairie : plaque de 220 x 220, Maison, parvis, Mine, Établi, apparition, 4 chemins, 8 portails et barrière à r = 72, aux coordonnées du plan",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Greybox du Laboratoire : Rotonde à 16 travées, Arbre des Recherches, 12 Alcôves, Quai des 3 Capsules, Galerie, Balcon et spawn à l'est",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Tester la caméra (0, 45, 28), FieldOfView 50, sur la greybox : aucun objet ne masque un Survivant collé à la barrière au sud",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Construire la Lisière et le Fond en arbres-cubes selon le plafond sud, avec 4 000 Parts au maximum",
+      "phase": 2,
+      "charge": "L"
+    },
+    {
+      "titre": "Modéliser la Maison, ses 3 états (80 Parts au plus chacun) et la Tourelle de toit, sans dépasser Y 14",
+      "phase": 3,
+      "charge": "L"
+    },
+    {
+      "titre": "Modéliser la Mine (butte à 3 gradins, 8 cristaux Neon, wagonnet, tête de Foreuse), sommet à 6 studs au plus",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Modéliser l'Établi (comptoir 12 x 3 x 4, auvent rayé, 8 casiers) et les 3 défenses posables aux dimensions fixées",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Modéliser les 8 portails violets et le portail nord agrandi à 20 x 24",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Construire la Rotonde (dôme à 5 gradins, oculus), l'Arbre des Recherches (24 nœuds) et les 12 Alcôves à 6 socles",
+      "phase": 3,
+      "charge": "L"
+    },
+    {
+      "titre": "Construire le Quai des Capsules (verrière, 3 Capsules, tubes, dalles) et la Galerie des Zbires (9 piédestaux)",
+      "phase": 3,
+      "charge": "L"
+    },
+    {
+      "titre": "Livrer le ModuleScript ServerStorage.OutilsArchi.Verificateur (hauteurs, grille, budgets, matériaux)",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Placer les PointLight et les Neon des structures dans les budgets, puis vérifier le rendu du Jour du Colosse (ClockTime 17,5)",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Passer le Vérificateur à chaque livraison, puis mesurer 30 FPS et moins de 800 Mo sur Android 3 Go avec 6 joueurs et 60 Zbires",
+      "phase": 6,
+      "charge": "M"
+    }
+  ]
+}

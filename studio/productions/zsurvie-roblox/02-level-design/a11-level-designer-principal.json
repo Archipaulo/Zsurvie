@@ -1,0 +1,119 @@
+{
+  "decisions": [
+    "ReplicatedStorage.Plan v1 est la seule source de coordonnées de la Prairie et du Laboratoire. Il fixe : RACINE 'Arene' ; HIERARCHIE Workspace.Arene.{Sol, Decor, Props, Maison, Mine, Etabli, Portails, Defenses} ; Maison centrée à l'origine, porte au Sud (+Z) ; Établi en (-12, 14) ; SpawnLocation d'atterrissage de 8 × 1 × 8 en (-3 ; 0,5 ; 16) ; Mine en X 20 → 32, Z 20 → 32. La Mine porte une coiffe invisible : 4 WedgePart avec Transparency 1 et CanCollide true, plus Humanoid.MaxSlopeAngle à 45. La barrière est à R 72 (groupe LimiteSurvivants) et les 8 portails, tagués PortailZbire, sont à R 80.",
+    "Écarts à la consigne du chef de projet : ANGLES_PORTAILS = {0, 90, 180, 270, 45, 160, 250, 315}. Le portail SE passe à 160° au lieu de 155° : à 155°, son axe passe à 4,6 studs du coin (20, 32) de la Mine, sous la marge de 6 ; à 160°, il passe à 7,9 studs. Le portail SO passe à 250° au lieu de 225°, car l'axe à 225° traverse l'Établi imposé (à 2,8 studs). L'Établi passe à 6 × 3 × 5 et se trouve ainsi à 6,6 studs de l'axe SO.",
+    "Règle des paliers (A : sol ; B : décor de 1,5 stud au plus, non collidable ; C : tout le reste) : aucun palier C à moins de 6 studs des 8 axes portail → Maison. Les îlots entre R 45 et R 66 font 1 stud de haut au plus. Les Trois Rochers de a14 passent de (-34, -34) à (-33, -14). Le Verger est supprimé. Il reste 4 repères de quartier : Trois Rochers, Potager (37, -15), Pique-nique (-36, 22) et Wagonnet (36, 22).",
+    "Le budget est consolidé dans ServerStorage.Outillage.Gabarit, avec les attributs Budget et BudgetNeon sur chaque dossier. Statique : 6 500 Parts, soit Sol 300, Maison/Mine/Etabli/Portails 650 (360/80/50/160), Vegetation 2 200, Props 1 200, Tramages 350, Meteo 150, POI 200 et marge 1 450. Neon : 150 au total. a17 est le seul constructeur de la forêt. L'audit lit Plan.HIERARCHIE et refuse tout dossier sans Budget.",
+    "Plan.posePermise(type, cframe) sert à la fois au fantôme client et à la validation serveur. Une pose est refusée au-delà de R 66, sur la Maison + 4 studs, sur le Parvis, à moins de 6 studs devant la porte, sur la Mine + 4 studs et sur les 4 zones de 6 × 6 des Ressorts en (0, ±40) et (±40, 0). Deux Mini-Tourelles doivent être à 8 studs l'une de l'autre.",
+    "Laboratoire : Alcove_01 à Alcove_12 (pivot au centre, R 43), avec une caméra par Alcôve via Plan.LABO.cameraAlcove(k). Plafond à Y 40. Sols tagués ZoneJouable. SpawnNovice en (0 ; 0,5 ; -64), à 12 studs de la Capsule Normale. Dalles chantantes derrière les Capsules. Cabine d'Essayage réservée en X 12 → 24, Z 58 → 70, sous réserve de validation par Victor Lanoue."
+  ],
+  "besoins": [
+    {
+      "de": "Chef de projet",
+      "besoin": "Valider les écarts à ta consigne : portail SE à 160° au lieu de 155°, portail SO à 250° au lieu de 225°, et Établi de 6 × 3 × 5. Les deux angles d'origine placent la Mine et l'Établi à moins de 6 studs d'un axe de horde."
+    },
+    {
+      "de": "Directeur créatif (Victor Lanoue)",
+      "besoin": "Valider la caméra Custom au Laboratoire (CameraMaxZoomDistance 30), la Cabine d'Essayage de 12 × 12 réservée près de l'Entrée, la suppression du Verger et les noms de sous-zones : Parvis, Ronde, Grand Portail, Voie d'arrivée, Colosse endormi et Nid du Volant."
+    },
+    {
+      "de": "Scripteur gameplay (a26, HordeService)",
+      "besoin": "Faire apparaître les Zbires aux portails tagués PortailZbire (Plan.positionPortail), en ligne droite jusqu'à la Maison ; le Colosse sort toujours de l'index 1. Appeler Plan.posePermise dans la validation serveur des poses. Régler Humanoid.MaxSlopeAngle à 45 sur la Prairie."
+    },
+    {
+      "de": "Responsable des Ressorts (a12)",
+      "besoin": "Confirmer les 4 zones d'atterrissage de 6 × 6 en (0, -40), (40, 0), (0, 40) et (-40, 0), ou corriger leurs valeurs dans Plan.ZONES_SANS_POSE uniquement."
+    },
+    {
+      "de": "Auteur de a14 (Trois Rochers et contrôles)",
+      "besoin": "Déplacer les Trois Rochers en (-33, 0, -14). Lire Plan.dossier(\"Maison\") au lieu de Workspace.Maison, et RAYON_BARRIERE = 72."
+    },
+    {
+      "de": "Auteur de a15 (Panier)",
+      "besoin": "Poser les 12 Nids du Panier aux positions de Plan.POI.NidsPanier (R 58 à 66), 1 stud de haut au plus, dans le budget Decor.POI."
+    },
+    {
+      "de": "Artiste environnement végétation (a17)",
+      "besoin": "Être le seul constructeur de la forêt : 2 200 Parts, dont 16 Neon de Champignons. Laisser libres les couloirs de 12 studs sur les 8 axes et une clairière de Ø 16 à chaque portail. En Lisière Sud, rester à 8 studs au plus."
+    },
+    {
+      "de": "Artiste météo et Douve (a18)",
+      "besoin": "Construire la Douve de R 73 à R 77, avec 4 ponts de 8 studs sur les chemins et 4 gués en sol plein sur les axes diagonaux, dans le budget Sol. Tenir la météo sous 150 Parts."
+    },
+    {
+      "de": "Artistes bâtiments (a21/a22) et props (a23)",
+      "besoin": "Tenir les budgets Maison 360, Mine 80 (coiffe comprise), Etabli 50 (6 × 3 × 5), Portails 160 et Props 1 200. Poser le PanneauRecord en SurfaceGui (PixelsPerStud 50, LightInfluence 0). Aucun palier C à moins de 6 studs d'un axe."
+    },
+    {
+      "de": "Scripteur caméra du Laboratoire (a33)",
+      "besoin": "Utiliser Plan.LABO.cameraAlcove(k) pour cadrer Alcove_01 à Alcove_12, sans dépasser le plafond à Y 40."
+    },
+    {
+      "de": "Responsable performance",
+      "besoin": "Mesurer le pic d'environ 7 900 Parts (6 500 statiques + Zbires, Colosse, défenses, avatars et pools) sur l'Android 3 Go de référence, avec 60 Zbires et 6 joueurs."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Publier ReplicatedStorage.Plan v1 : HIERARCHIE, coordonnées, ANGLES_PORTAILS, distanceAxe, posePermise, POI et LABO, avant le 29/09",
+      "phase": 0,
+      "charge": "M"
+    },
+    {
+      "titre": "Faire valider les écarts SE 160°, SO 250° et Établi 6 × 3 × 5 par le chef de projet, puis la caméra Custom, la Cabine d'Essayage et les noms de sous-zones par Victor Lanoue",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Créer ServerStorage.Outillage.Gabarit : dossiers qui reproduisent Arene, avec les attributs Budget et BudgetNeon (6 500 Parts et 128 Neon statiques)",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Greybox de la Prairie à partir d'un clone du Gabarit : sol, chemins, Ronde, Parvis, Maison, Établi, atterrissage, Mine et sa coiffe, 8 portails PortailZbire, barrière R 72",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Greybox du Laboratoire : plafond à Y 40, Alcove_01 à Alcove_12, Quai et SpawnNovice, Galerie, Entrée, Cabine réservée, sols tagués ZoneJouable",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Test caméra sur téléphone depuis 12 points de la Prairie : la Maison, un chemin ou un chevron doit toujours rester à l'écran",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Réserver en blocs gris les emprises des POI (Pique-nique, Colosse endormi, Nid du Volant, 12 Nids, Douve), poser les chevrons et les voiles ForceField des couloirs",
+      "phase": 2,
+      "charge": "S"
+    },
+    {
+      "titre": "Habiller les 4 repères de quartier et les 8 portails dans les budgets Decor.POI et Portails",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Brancher Plan.posePermise sur le fantôme client et sur le serveur, régler les CollisionGroups LimiteSurvivants et Survivants, MaxSlopeAngle 45 et OmbreMaison",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Intégrer le PanneauRecord (SurfaceGui 12 × 3, PixelsPerStud 50, LightInfluence 0) et l'anneau de l'Établi qui clignote pendant le Répit",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Passer l'audit avant chaque publication (budgets du Gabarit, hauteurs, îlots, marge de 6 studs autour des axes) : objectif 0 faute",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Playtest à 6 sur mobile : atterrissage → Établi en moins de 1 s, aller-retour Établi → front en moins de 15 s, aucun Zbire ne traverse la Mine ni l'Établi",
+      "phase": 6,
+      "charge": "M"
+    }
+  ],
+  "revise": true
+}

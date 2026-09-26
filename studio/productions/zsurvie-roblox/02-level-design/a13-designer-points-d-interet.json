@@ -1,0 +1,120 @@
+{
+  "decisions": [
+    "11 POI : 4 au Laboratoire (Mini-Gluant fugueur, Atelier secret de Doc Boulon, Alcôve 13, Capsule Zéro) et 7 en run (Pompon, Girouette-Zbire, Pique-nique abandonné, Bornes des 4 Vents, Dalles chantantes, Nid du Volant, Colosse endormi). Tous sont suivis sur le Mur des Curiosités de la Galerie des Zbires.",
+    "Emplacements réservés en run, dans un repère où la Maison est en (0, 0, 0) et le Nord vers −Z : Pompon (0 ; 0,5 ; 9,5), Pique-nique (32, 0, 30), Bornes à 68 studs au bout des 4 chemins, Dalles devant la Mine, Nid (55, 0, −55), Colosse endormi (−62, 0, 62). Rien ne dépasse 6 studs à moins de 60 studs de la Maison, et chaque secret porte son signal sur sa face supérieure pour la caméra (0, 45, 28) FOV 50.",
+    "Économie des secrets : 50 gemmes au plus par jour et par joueur (Mini-Gluant 15 par jour, Dalles 10 par jour, Bornes 20 par run, Alcôve 13 10 par mise à jour). Le reste se gagne en cosmétiques, en badges et en pièces de run. Aucun bonus de combat ne survit à la run ; le Pique-nique donne Butin +50 % jusqu'à la fin du jour en cours.",
+    "Autorité serveur : ProximityPrompt.Triggered ou Touched lus par le serveur, avec contrôle de distance et marques dans profil.secrets. Le tirage du jour, Random.new((os.time() // 86400) * 7919 + sel), est identique dans le Laboratoire et la Prairie : le Tableau noir de l'Atelier secret donne l'ordre des Bornes.",
+    "Écart à valider par Victor Lanoue : nouveaux noms (Pompon, le chat de la Maison ; Capsule Zéro ; Alcôve 13 ; Mur des Curiosités) et lore proposé (la Mine chante et attire les Zbires, le Colosse dort 4 jours sur 5 dans la Lisière).",
+    "Budget effets des secrets : 11 Parts Neon sur la Prairie, 8 au Laboratoire, 0 PointLight, ParticleEmitter.Rate ≤ 20."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif (Victor Lanoue)",
+      "besoin": "Valider les noms Pompon, Capsule Zéro, Alcôve 13 et Mur des Curiosités, ainsi que le lore proposé (la Mine chante, le Colosse dort 4 jours sur 5, la photo de Doc Boulon avec un bébé Colosse)."
+    },
+    {
+      "de": "Ingénieur données / sauvegarde",
+      "besoin": "Fournir le module ServerScriptService.Donnees.Profils avec get(player), ajouterGemmes(player, n, raison) en UpdateAsync et un champ secrets = { trouves = {}, jour = 0, gemmesDuJour = 0 }. Aligner le changement de jour (minuit UTC) sur la remise à zéro du Défi du Jour."
+    },
+    {
+      "de": "Programmeur gameplay / économie de run",
+      "besoin": "Fournir le BindableEvent ServerStorage.Evenements.PluieDePieces (n pièces par joueur, qui tombent autour de la Maison), le bonus Butin +50 % valable jusqu'à la fin du jour, le versement des 3 × 15 pièces du Nid et un signal serveur émis 5 s avant l'apparition d'un Doré, avec son portail, pour la Girouette."
+    },
+    {
+      "de": "Programmeur IA des Zbires",
+      "besoin": "Faire ignorer Pompon par le ciblage, ajouter un waypoint des Volants par l'arbre du Nid (55, 0, −55) et vider la clairière (−62, 0, 62) du Colosse endormi le Jour du Colosse."
+    },
+    {
+      "de": "Level designer Prairie et Lisière",
+      "besoin": "Réserver les coordonnées des POI de run, faire aboutir les 4 chemins à 68 studs, et garder une clairière dégagée de 20 studs en (−62, 0, 62) et un arbre de cubes de 12 studs en (55, 0, −55)."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "Produire en chiptune 8-bit : couinement du Mini-Gluant, ronron et miaou de Pompon, grincement de la Girouette, 5 notes (Do, Ré, Mi, Sol, La) calées sur le jingle de départ des Capsules, ronflement et éternuement du Colosse, buzz d'erreur des Bornes."
+    },
+    {
+      "de": "Designer UI",
+      "besoin": "Concevoir le Mur des Curiosités (11 cadres gris puis colorés), la notification « Secret trouvé ! » reçue par le RemoteEvent ReplicatedStorage.Remotes.SecretTrouve (id, gain) et la SurfaceGui du Tableau noir (Case1 à Case4, chacune avec 4 Frames : Soleil, Lune, Eclair, Coeur)."
+    },
+    {
+      "de": "Artiste props et personnages",
+      "besoin": "Modéliser en Pixel-bloc Pompon (30 Parts au maximum), la figurine du Mini-Gluant, le Colosse endormi couvert de mousse, la Capsule Zéro rouillée et la Girouette en forme de Marcheur."
+    },
+    {
+      "de": "Producteur / publication",
+      "besoin": "Créer les badges (Atelier secret, Curieux, Capsule Zéro) et enregistrer les cosmétiques (Lunettes de Doc, Casque de pilote d'essai, Oreilles de Pompon, Bonnet de nuit du Colosse)."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Faire valider par Victor Lanoue les nouveaux noms et le lore des 11 POI",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Arrêter avec l'économie la table de récompenses des secrets et le plafond de 50 gemmes par jour et par joueur",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Greyboxer les 7 POI de run aux coordonnées réservées et vérifier chaque signal depuis la caméra (0, 45, 28) FOV 50",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Greyboxer l'Atelier secret (16 × 12 studs), l'Alcôve 13, la Capsule Zéro et les 8 Parts CacheMiniGluant au Laboratoire",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Aménager la clairière du Colosse endormi (−62, 0, 62) et l'arbre du Nid (55, 0, −55) dans la forêt de cubes de la Lisière",
+      "phase": 2,
+      "charge": "M"
+    },
+    {
+      "titre": "Construire en Pixel-bloc Pompon, la Girouette-Zbire, le Pique-nique, les 4 Bornes, les 5 Dalles et le Colosse endormi",
+      "phase": 3,
+      "charge": "L"
+    },
+    {
+      "titre": "Construire la bibliothèque coulissante, le Tableau noir, la Capsule Zéro (6 Seat, 6 ampoules) et le socle vide de la Galerie",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Implémenter ServerScriptService.Secrets (reclamer, plafond, tirage du jour) en Package partagé entre le Laboratoire et la Prairie",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Scripter les mécaniques : Bornes en 20 s, mélodie des Dalles, Capsule Zéro à 4 passagers, Pompon au Répit, Girouette annonçant le Doré, Nid et Colosse endormi",
+      "phase": 4,
+      "charge": "L"
+    },
+    {
+      "titre": "Brancher le Mur des Curiosités sur profil.secrets.trouves",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Ajouter les retours : sons chiptune, particules (Rate ≤ 20), animations élastiques de 0,15 s, notification « Secret trouvé ! »",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Playtest de découverte : mesurer le taux de découverte par POI (cible : 80 % pour Pompon, 10 à 20 % pour les Bornes) et ajuster les indices",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Tester l'anti-farm : double déclenchement, Touched hors de portée, reconnexion, changement de jour UTC, plafond de 50 gemmes",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Vérifier sur Android à 3 Go de RAM la taille et le tap des prompts, et le budget Neon et particules des secrets",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

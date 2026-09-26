@@ -1,0 +1,110 @@
+{
+  "decisions": [
+    "Maquette HUD unique au gabarit 800 × 360 : UIScale = clamp(min(X/800, Y/360), 1, 1,4) partagé par UIKit.echelle, ScreenInsets CoreUISafeInsets. Pièces en haut à gauche (140 × 44 px), bandeau Maison de a32 en haut au centre (280 × 66 px : Jour, minuteur FinPhase − GetServerTimeNow à 5 Hz, PV « MAISON 850 / 1 000 », jauge Colosse), têtes des Survivants en haut à droite (6 × 32 px), bouton Réglages de 60 px sous les Pièces.",
+    "Grappe bas droite de 230 × 230 px (marge 12 px) : RÉPARER 96 px dans le coin, puis Muret, Mini-Tourelle, Tapis Collant et Ping en 64 px sur un arc de 150 px (180°, 210°, 240°, 270°, 13,6 px entre boutons). Cadenas « Niv. X » lu dans Player.Verrou<Cle>. Aucun bouton de saut (état Jumping coupé sur l'Humanoid local). Touches E, 1-2-3, Q, F et ButtonY. Réparer : InputBegan → DemandeReparation(true), InputEnded → DemandeReparation(false). L'ancienne rangée POSER 72 / PINGS 72 devient la variante B de H2 quand Player.TestH2 vaut « B ».",
+    "Le client ne tire plus : un tap ou un clic appelle ZbiresRendu.chercher(ecran, 56) puis BlasterControleur.definirCiblePrioritaire(id) de a26 ; le marqueur suit ZbiresRendu.position. Impact, Eclatement, les traceurs et le pool de 90 cubes sont supprimés ; les nombres de dégâts lisent le flux Evenements (type Degats) et l'éclatement est le Z1 de a37.",
+    "Place reconnue par Workspace.TypePlace (Laboratoire ou Prairie), état de run lu dans ReplicatedStorage.EtatRun, Maison et Établi lus dans Plan.MAISON et Plan.ETABLI. Workspace.Zbires et Workspace.Maison ne sont plus utilisés. Chaque WaitForChild passe par UIKit.attendre : 10 s puis warn, et le script s'arrête proprement.",
+    "Établi : bouton contextuel de 72 px à 10 studs au plus de Plan.ETABLI (sortie à 12 studs), ouverture automatique seulement pendant le Répit, taps ignorés 0,8 s, panneau latéral droit de 55 % arrêté 24 px au-dessus de RÉPARER (DisplayOrder 3 contre 2). DemandeAchat(cle, niveauVise) avec prix Catalogue.prix et état Attente jusqu'à ProfilMaj ou Annonce (filet 4 s). Carte cagnotte lue dans EtatRun.Cagnotte* ; la part versée est fixée par le serveur.",
+    "Pièces retirées à l'heure expireA du serveur : clignotement à 2,5 Hz pendant 3 s, puis envol vers Plan.MAISON ; « +X » gris sur Annonce PiecesMaison au Répit. Réglages TirAuto, Secousses, EffetsReduits, Musique et Effets envoyés par DemandeReglage et affichés seulement une fois écrits dans Player.Reglages. Toutes les secousses passent par VfxClient.secouer (plafond 0,8 stud). Crochets a10 : UIKit.pulser(Muret ou Ping, actif, PingColosse)."
+  ],
+  "besoins": [
+    {
+      "de": "Scripteur état de run serveur (a27)",
+      "besoin": "Créer ReplicatedStorage.EtatRun (Configuration) sur la Prairie à la place des attributs de Workspace, et y publier : Jour, Phase (Horde ou Repit), FinPhase (heure GetServerTimeNow), Colosse, MaisonPV, MaisonPVMax, ColossePV, ColossePVMax, NivSolidite, NivReparation, NivRegeneration, ainsi que CagnotteCle, CagnotteMontant, CagnotteObjectif et CagnotteContributeurs (UserId séparés par des virgules)."
+    },
+    {
+      "de": "Scripteur combat & Zbires (a26)",
+      "besoin": "Placer ZbiresRendu et BlasterControleur dans ReplicatedStorage.Client et BlasterStats dans ReplicatedStorage. Confirmer ces signatures, appelées avec un point : ZbiresRendu.chercher(positionEcran, tolerancePx) → id ou nil (coordonnées d'InputObject.Position), ZbiresRendu.position(id) → Vector3 ou nil, BlasterControleur.definirCiblePrioritaire(id), BlasterStats.portee(niveau) et BlasterStats.cadence(niveau). Lire Player.Reglages.TirAuto. Publier le flux Evenements (UnreliableRemoteEvent) en lots de tables {type = Degats, position, valeur, critique, auteur, reduit}."
+    },
+    {
+      "de": "Artiste VFX (a37)",
+      "besoin": "Livrer VfxClient dans ReplicatedStorage.Client avec VfxClient.secouer(amplitude). Le décalage doit s'appliquer dans un BindToRenderStep à RenderPriority.Camera + 2 (après CameraPrairie), plafonné à 0,8 stud, et rester sans effet si Player.Reglages.Secousses vaut false. Le Z1 d'éclatement lit Evenements et respecte EffetsReduits."
+    },
+    {
+      "de": "Scripteur économie de run (a14)",
+      "besoin": "Ajouter expireA (heure GetServerTimeNow) à chaque entrée de PiecesLachees. Envoyer Annonce(PiecesMaison, {montant}) au début du Répit pour les 50 % crédités. Traiter DemandeAchat(cle, niveauVise) : refuser si niveauVise ≠ niveau + 1, verser à la cagnotte min(solde, reste), puis envoyer ProfilMaj, ou Annonce(Refus, {action = Achat, raison, cle}). Exposer Catalogue.prix(cle, niveauVise) dans ReplicatedStorage.Catalogue (nil au niveau MAX), défenses comprises."
+    },
+    {
+      "de": "Level designer (a11)",
+      "besoin": "Poser l'attribut Workspace.TypePlace (Laboratoire ou Prairie) sur chacune des deux places. Livrer le ModuleScript ReplicatedStorage.Plan avec ETABLI et MAISON (Vector3 ou CFrame, au sol, au centre de l'objet)."
+    },
+    {
+      "de": "Designer UI (a32)",
+      "besoin": "Valider l'implémentation du bandeau Maison : 280 × 66 px, cartouche de 30 px, jauge PV de 20 px, jauge Colosse de 8 px. Livrer dans ReplicatedStorage.Charte une table Icones contenant Reglages et PingColosse (rbxassetid, 64 × 64 px)."
+    },
+    {
+      "de": "Designer onboarding & tutoriel (a10)",
+      "besoin": "Appeler depuis le tutoriel UIKit.pulser(Muret, true ou false) et UIKit.pulser(Ping, true, PingColosse). Fixer les niveaux de déblocage des défenses, que le serveur écrit dans Player.Verrou<Cle> (0 = débloqué)."
+    },
+    {
+      "de": "Scripteur serveur profil & sauvegardes",
+      "besoin": "Créer Player.Reglages (Configuration) chargé avec le profil, avec ces valeurs par défaut : TirAuto true, Secousses true, EffetsReduits false, Musique 1, Effets 1. Valider DemandeReglage (clé connue ; booléen, ou 0 / 0,5 / 1 ; 5 demandes par seconde au plus), écrire l'attribut et le sauvegarder. Écrire aussi Player.TestH2 (A ou B) dans la seconde qui suit l'arrivée sur la Prairie."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "Créer les SoundGroup SoundService.Musique et SoundService.Effets. Ranger dans Effets les sons de SoundService.SonsUI (Clic, Bip, Piece, Achat, Pose, Refus, Alerte, Ping, Etourdi, Tink), chacun de 0,4 s au plus."
+    },
+    {
+      "de": "Victor Lanoue (directeur créatif)",
+      "besoin": "Valider deux écarts : l'absence de saut sur la Prairie, et le réglage TirAuto activé par défaut sur tous les appareils (le canon §8 ne le prévoit que sur mobile)."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Figer avec a26, a27, a14 et a37 le contrat v2 (EtatRun, Evenements, PiecesLachees.expireA, ProfilMaj, Reglages, signatures ZbiresRendu, BlasterControleur et VfxClient) et le versionner dans le dépôt",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Remplacer la boucle de tir par la désignation (tap ou clic → ZbiresRendu.chercher à 56 px → BlasterControleur.definirCiblePrioritaire) et vérifier au MicroProfiler qu'un seul flux de tir tourne",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Brancher l'Établi sur Plan.ETABLI, Catalogue.prix, DemandeAchat(cle, niveauVise), ProfilMaj et la cagnotte, puis tester l'état Attente, les refus et le filet de 4 s avec des remotes factices",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Tester les pièces avec a14 : expireA respecté, clignotement 3 s avant, envol vers Plan.MAISON, « +X » gris au Répit, aucune pièce fantôme",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Lancer chaque place sans EtatRun, Remotes, Plan ou TypePlace et vérifier un warn après 10 s, sans aucune erreur Lua",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Monter la maquette HUD et la contrôler au Device Emulator (800 × 360, 732 × 412, iPhone SE, iPad) : aucun chevauchement, boutons de 60 px minimum, RÉPARER visible quand l'Établi est ouvert",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Intégrer le panneau Réglages et les SoundGroup Musique et Effets, et vérifier que chaque valeur n'apparaît qu'après son écriture par le serveur",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Livrer à a10 une place de démonstration des crochets UIKit.pulser (Muret, Ping avec PingColosse) dans les variantes A et B",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Vérifier le test H2 : variante A ou B selon Player.TestH2, mêmes touches dans les deux, aucun bouton de saut",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Profiler sur Android 3 Go avec 6 joueurs et 60 Zbires : scripts a28 sous 1,5 ms par frame, 30 FPS tenus",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Test d'exploit avec l'équipe serveur : DemandeAchat avec un niveauVise faux, DemandeReglage hors liste et DemandeReparation en rafale doivent tous être refusés",
+      "phase": 6,
+      "charge": "S"
+    }
+  ],
+  "revise": true
+}

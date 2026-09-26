@@ -1,0 +1,97 @@
+{
+  "decisions": [
+    "Écran de référence 780 × 360 px en paysage (StarterGui.ScreenOrientation = LandscapeSensor) ; chaque zone de ScreenGui porte un UIScale = math.clamp(ViewportSize.Y / 360, 1, 1.5) ; cibles tactiles de 60 px minimum, 72 px pour Réparer, Poser et Ping ; les zones de 220 × 180 px en bas à gauche (joystick) et de 110 × 110 px en bas à droite (saut) restent vides.",
+    "Polices : Enum.Font.LuckiestGuy pour les affiches (40) et les titres (28), FredokaOne pour les boutons (22 / 18) et les onglets, Arcade pour les chiffres (16, 24 ou 32 uniquement), BuilderSansBold pour le corps (16) et les légendes (14). Aucun texte sous 14 px.",
+    "Jetons de couleur dans ReplicatedStorage.Charte.Interface, calculés depuis Charte.Palette (ombre = base × 0,8, lumière = Lerp vers Crème à 0,2) : bouton principal Toit orange #EF7A2F, secondaire Ardoise #4A4560, panneaux Crème #F6E7C1 en run et Nuit labo #2A3263 au Laboratoire, libellés Crème avec contour Encre de 2 px. Ajout au canon : Prairie #6CC24A = réussite.",
+    "Autorité serveur côté interface : les compteurs ne lisent que les attributs Pieces et Gemmes du Player ; chaque bouton d'achat est lié à une RemoteFunction qui renvoie (accepte, raison), passe en état Attente pendant l'appel et ne déduit jamais rien localement.",
+    "Arborescence et DisplayOrder : HUD 10, RouePings et Capsule 20, Panneaux 30, Notifications 40, FinDeRun 50, Tutoriel 60, Transition 100 ; ResetOnSpawn = false ; composants partagés dans le Package ReplicatedStorage.Interface. En run, l'Établi s'ouvre en panneau latéral droit de 55 % sans masquer la barre de la Maison.",
+    "Écart à valider par Victor Lanoue : sur un bouton plus de 2 fois plus large que haut, le ressort canon passe à un étirement × 1,05 (au lieu de × 1,2) pour ne pas chevaucher les voisins ; les panneaux du Laboratoire ont un contour cyan #29ABC0."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif (Victor Lanoue)",
+      "besoin": "Valider les trois écarts et ajouts : étirement × 1,05 pour les boutons larges, vert Prairie = réussite, contour cyan des panneaux du Laboratoire."
+    },
+    {
+      "de": "Programmeur gameplay / lead technique",
+      "besoin": "Le module ReplicatedStorage.Charte doit exposer Charte.Palette avec 11 Color3 aux clés Encre, Prairie, TerreBattue, Creme, ToitOrange, Or, GemmeCyan, VioletHorde, Alerte, NuitLabo et Ardoise. Charte.Interface en dépend."
+    },
+    {
+      "de": "Programmeur gameplay",
+      "besoin": "Attributs répliqués posés par le serveur : Pieces et Gemmes sur le Player, PV et PVMax sur la Maison, jour courant et phase (horde ou Répit). Les RemoteFunctions DemandeAmelioration, DemandeRecherche et DemandePose renvoient toujours (accepte: boolean, raison: string?), plus un RemoteEvent serveur vers client pour les notifications."
+    },
+    {
+      "de": "Game designer",
+      "besoin": "Dire si le saut est conservé (sinon la zone réservée en bas à droite est libérée) et fournir des libellés de 2 mots maximum pour les 8 améliorations, les 4 recherches et les 3 défenses, avec leurs prix."
+    },
+    {
+      "de": "Illustrateur 2D / icônes",
+      "besoin": "Icônes pixel de 64 × 64 px en PNG transparent, dans la palette de la Charte : pièce, gemme, cadenas, croix, marteau (Réparer), Muret, Mini-Tourelle, Tapis Collant, ping, les 8 améliorations et les 4 recherches."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "5 sons d'interface chiptune de 0,3 s maximum : clic, validé, refusé, notification, danger."
+    },
+    {
+      "de": "Designer UX",
+      "besoin": "Wireframes des flux Établi, Arbre des Recherches, Capsule, Roue des Pings et Fin de run, pour y appliquer les composants."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Faire valider par Victor Lanoue les jetons de couleur, les 4 polices et les écarts du design system",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Maquetter en 780 × 360 les 8 écrans clés : HUD de run, Établi, Roue des Pings, Fin de run, HUD du Laboratoire, Capsule, Arbre des Recherches, Galerie des Zbires",
+      "phase": 0,
+      "charge": "L"
+    },
+    {
+      "titre": "Créer ReplicatedStorage.Charte.Interface et le Package ReplicatedStorage.Interface avec les modules Bouton, Panneau, Onglet et Notification",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Écrire le LocalScript StarterPlayerScripts.EchelleInterface : un UIScale par zone, recalculé sur ViewportSize",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Construire les 6 ScreenGui de la place Prairie selon l'arborescence et les DisplayOrder",
+      "phase": 5,
+      "charge": "L"
+    },
+    {
+      "titre": "Construire les 6 ScreenGui de la place Laboratoire, dont le compte à rebours de Capsule et les bulles de Doc Boulon",
+      "phase": 5,
+      "charge": "L"
+    },
+    {
+      "titre": "Passer les ProximityPrompt en Style Custom au gabarit du bouton secondaire et styliser le BillboardGui « Record : Jour X »",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Intégrer les icônes pixel et les 5 sons d'interface dans les composants",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Écrire un script d'audit pour la barre de commande : Color3 noir ou blanc purs, TextSize inférieur à 14, GuiButton de moins de 60 px, polices hors des 4 retenues",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Tester sur un Android de 3 Go en 780 × 360 : accents (é, è, à, ç, œ) des 4 polices, zones joystick et saut libres, 30 FPS avec l'Établi ouvert et 60 Zbires",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Passer les captures des écrans au simulateur de deutéranopie et de protanopie",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

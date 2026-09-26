@@ -1,0 +1,115 @@
+{
+  "decisions": [
+    "Écart DA à valider par Victor Lanoue : le canon interdit le Terrain lisse, donc la Prairie n'a aucun voxel et toute son eau est en Parts « Eau-bloc » (SmoothPlastic, grille de 4 studs). Seul le Bassin de Doc Boulon au Laboratoire (24 × 8 × 16 studs) utilise Terrain Water : WaterColor (41, 171, 192), WaterTransparency 0,55, WaterWaveSize 0,05, WaterWaveSpeed 6, WaterReflectance 0,25. Si Victor refuse, le Bassin devient de l'Eau-bloc de 1 stud de fond.",
+    "La caméra de run (0, 45, 28, FieldOfView 50) ne montre jamais le ciel, donc aucun budget Sky ni Clouds sur la Prairie. La météo se lit au sol (voile de pluie devant la caméra, flaques, cubes de brume), dans Atmosphere et dans le ColorCorrectionEffect « CorrectionMeteo », et au son. Atmosphere.Density est plafonnée à 0,45 pour qu'un Zbire à 82 studs de la caméra reste lisible.",
+    "La météo est 100 % cosmétique et c'est le serveur qui la décide : le ModuleScript MeteoServeur publie les attributs MeteoEtat, MeteoDebut, MeteoGraine, JourNumero et JourDebut sur ReplicatedStorage, et le LocalScript MeteoClient la dessine. Aucun RemoteEvent, aucun effet sur les PV, les pièces ou les gemmes. Elle ne change que pendant le Répit, avec un fondu de 8 s.",
+    "Calendrier : Clair les jours 1 et 2 et les veilles de Colosse ; Orage le Jour du Colosse, à ClockTime 17,5 comme le veut le canon. Les autres jours sont tirés avec la graine de la run : Clair 50 %, Averse 30 %, Brume 20 %, jamais 3 Averses ou 3 Brumes de suite. La Neige n'apparaît que si le Défi du Jour ou l'événement d'hiver l'impose. ClockTime passe de 9 à 14,5 pendant la horde et de 14,5 à 15,5 pendant le Répit ; hors Colosse, elle ne dépasse jamais 16.",
+    "Nouvel élément de décor de la Lisière, pas une nouvelle zone : la Douve de Lisière, un anneau d'Eau-bloc entre 71 et 75 studs du centre, franchi par 4 ponts-bloc de 8 studs sur les chemins. Les Zbires au sol y font « plouf », le Volant la survole sans éclabousser.",
+    "Code couleur et sécurité des jeunes joueurs : l'eau est en ombre de Gemme cyan #29ABC0, mate, jamais en Neon ni scintillante, car le cyan lumineux reste réservé aux gemmes. Les éclairs sont espacés de 10 à 16 s, avec un flash de +0,25 de Brightness et un tonnerre chiptune au volume 0,35 ; l'attribut EffetsReduits du Player coupe les flashs. Un mode léger se déclenche tout seul sous 27 FPS."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif (Victor Lanoue)",
+      "besoin": "Valider l'écart Terrain Water limité au Bassin de Doc Boulon, la Douve de Lisière comme nouvel élément de décor, et la couleur d'eau mate #29ABC0."
+    },
+    {
+      "de": "Level designer",
+      "besoin": "Réserver l'anneau entre 71 et 75 studs pour la Douve, avec 4 ponts-bloc de 8 studs sur les chemins ; prévoir 16 emplacements de flaques sur les chemins et 24 emplacements de brume entre 78 et 96 studs ; placer le centre de la Prairie à l'origine ; réserver 24 × 8 × 16 studs au Laboratoire pour le Bassin."
+    },
+    {
+      "de": "Programmeur gameplay (Directeur de run)",
+      "besoin": "Appeler MeteoServeur.demarrerRun(graine, meteoForcee), puis MeteoServeur.debutJour(jour) au début de chaque horde et MeteoServeur.planifierJour(jour + 1) au premier instant du Répit. Dans le script client qui lisse les Zbires, déclencher le plouf quand un Zbire non volant franchit le rayon 73."
+    },
+    {
+      "de": "Programmeur outils (module Charte)",
+      "besoin": "Exposer en Color3 dans ReplicatedStorage.Charte : Creme, CremeOmbre, ArdoiseLumiere, NuitLabo, NuitLaboLumiere, ToitOrangeLumiere, VioletHordeOmbre et GemmeCyanOmbre."
+    },
+    {
+      "de": "Éclairagiste",
+      "besoin": "Garder Lighting.Technology, Ambient et OutdoorAmbient cohérents pour ClockTime entre 9 et 17,5, et me laisser Atmosphere et CorrectionMeteo, séparés de ta propre ColorCorrection."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "Fournir des boucles chiptune de pluie et de vent, un tonnerre avec montée progressive (volume 0,35 au maximum) et un plouf 8-bit, tous dans le SoundGroup Ambiance ; la météo utilise 2 voix simultanées au maximum."
+    },
+    {
+      "de": "Artiste VFX",
+      "besoin": "Fournir les textures pixel en rbxassetid : traits de pluie 64 × 64, vaguelettes 32 × 32, goutte 8 × 8 et flocon-cube."
+    },
+    {
+      "de": "UI designer",
+      "besoin": "Ajouter dans les réglages un interrupteur « Effets réduits » qui pose l'attribut EffetsReduits sur le Player local (la sauvegarde passe par le serveur), et dessiner le baromètre-bloc du Quai des Capsules."
+    },
+    {
+      "de": "Game designer",
+      "besoin": "Confirmer qu'un modificateur du Défi du Jour peut imposer la météo (Brume ou Neige) et que la météo reste sans effet sur le gameplay."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Faire valider par Victor Lanoue l'écart Terrain Water du Bassin et la Douve de Lisière",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Greybox de la Douve (anneau de 71 à 75 studs, 4 ponts de 8 studs) et du Bassin de 24 × 8 × 16 studs au Laboratoire",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Construire la Douve en Eau-bloc : 160 Parts au maximum, surface #29ABC0 à Transparency 0,35, lit Nuit labo, Texture de vaguelettes",
+      "phase": 2,
+      "charge": "M"
+    },
+    {
+      "titre": "Remplir le Bassin avec Terrain:FillBlock calé sur la grille de 4 studs et régler les 5 propriétés Water de Workspace.Terrain",
+      "phase": 2,
+      "charge": "S"
+    },
+    {
+      "titre": "Poser 16 flaques avec le tag Flaque et 24 cubes de brume avec le tag BrumeCube, en Transparency 1 par défaut",
+      "phase": 2,
+      "charge": "S"
+    },
+    {
+      "titre": "Écrire le ModuleScript MeteoServeur et le brancher au Directeur de run",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Écrire le LocalScript MeteoClient : profils, cycle de ClockTime, voiles, éclairs synchronisés, mode léger",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Coder le plouf quand un Zbire non volant franchit la Douve, 6 par seconde au maximum",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Monter KitMeteo : VoileProche, VoileLoin, Part Emetteurs (Pluie1, Pluie2, Neige1, Neige2) et son Tonnerre",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Régler sur téléphone, avec l'éclairagiste, Atmosphere et CorrectionMeteo pour les 5 états",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Brancher le ciel du Laboratoire sur la météo du Défi du Jour (Clouds Cover 0,5, graine = date UTC)",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Test sur Android 3 Go : 30 FPS en Orage avec 6 joueurs et 60 Zbires, et bascule en mode léger sous 27 FPS",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Test de lisibilité : un Zbire au bord haut de l'écran reste identifiable dans les 5 états, et deux éclairs ne sont jamais à moins de 10 s d'écart",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

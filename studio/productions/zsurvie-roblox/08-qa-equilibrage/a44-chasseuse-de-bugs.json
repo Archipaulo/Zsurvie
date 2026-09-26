@@ -1,0 +1,112 @@
+{
+  "problemes": [
+    {
+      "gravite": "bloquant",
+      "agent": "a27",
+      "probleme": "Quatre contrats réseau sont incompatibles : a26 (`ReplicatedStorage.Partage.Reseau`), a27 (`Tir`, `PoserDefense`, 3 RemoteFunction), a28 (11 remotes) et a29 (`ReglesRemotes`, aucune RemoteFunction). `Reseau.Initialiser` (a27) et `Validation` (a29) créent chacun un nouveau dossier `ReplicatedStorage.Remotes`, et le client se bloque sur `WaitForChild` s'il tombe sur le mauvais. Si a26 réutilise le dossier de a29, `DemandeTir` reçoit deux connexions : l'`OnServerEvent` brut de `BlasterService` et `Validation.brancher`. Un même tir est alors traité deux fois, dont une fois sans validation.",
+      "correction": "Garder un seul module `ReplicatedStorage.Reseau`, généré depuis la table `ReglesRemotes` de a29 : noms `Demande*`, RemoteEvent uniquement, réponses envoyées par `Annonce`. a26 branche `DemandeTir` et le message pret de `EvenementsZbires` via `Validation.brancher`. Au démarrage du serveur, un `assert` vérifie qu'il n'existe qu'un seul enfant nommé `Remotes`."
+    },
+    {
+      "gravite": "bloquant",
+      "agent": "a27",
+      "probleme": "Les gemmes s'écrivent dans trois stores : `Zsurvie_Joueurs_v1`, clé `J_<UserId>` (a27, profil complet sous verrou), `Zsurvie_Profils_v1`, clé `Joueur_<UserId>` (a29, `Transactions.crediterRun`) et `Survivant_<UserId>` (a15, chapeaux). Les gemmes créditées sur la Prairie par a29 n'existent pas pour `LancerRecherche` (a27) : l'enfant croit les avoir perdues. Rien ne dit non plus si `FinDeRun` (plafond de 1 500) exclut les jours déjà versés par la source `Jour` : les mêmes jours risquent d'être payés deux fois.",
+      "correction": "Garder un seul store, celui de a27. Y intégrer l'idempotence de a29 avec `Donnees.CrediterRun(joueur, runId, totalRun)`, qui verse `totalRun − RunsCreditees[runId]` à l'intérieur de `Modifier`. `FinDeRun` ne verse que ce reliquat. Supprimer le store de `Transactions`. Passer `SchemaJoueur` en version 2, avec migration, en ajoutant les champs `Secrets` (a13) et `Chapeaux` (a15)."
+    },
+    {
+      "gravite": "bloquant",
+      "agent": "a29",
+      "probleme": "`GardienMouvement` attend `workspace.Carte` sans délai et ne cherche le sol que dans ce dossier, alors que a11 range tout le décor dans `Workspace.Arene`. Sans `Carte`, le `require` ne rend jamais la main : `Demarrage` n'enregistre pas le groupe `Survivants`, et les joueurs peuvent de nouveau s'éjecter entre eux. Si `Carte` existe sans le sol, le raycast renvoie `math.huge` et « Vol » se déclenche toutes les 0,75 s. Chaque déclenchement vaut 6 points : chaque joueur est exclu en 5 s environ.",
+      "correction": "Lire le nom du dossier racine dans `ReplicatedStorage.Plan` (valeur fixée par a11), avec `WaitForChild(nom, 10)` et un `warn`. Un sol introuvable ne compte jamais comme une faute. Test d'acceptation : 2 clients, 3 min de horde, score de suspicion à 0."
+    },
+    {
+      "gravite": "bloquant",
+      "agent": "a28",
+      "probleme": "`UIKit.surLaPrairie` exige `ReplicatedStorage.EtatRun`, que personne ne crée : a27 publie `Jour`, `Phase` et `FinPhase` sur Workspace. `Controles` attend `Workspace.Zbires` avec un attribut `Id` (a26 dessine dans `ZbiresAffiches`, sans `Id`) et `Workspace.Maison` (a11 la range dans `Arene`). Résultat sur mobile : pas de bouton RÉPARER, POSER ou PINGS, et pas d'Établi. `Portee` et `Cadence` ne sont jamais écrits, car a26 écrit `NivPortee` et `NivCadence`. Enfin, le tir automatique tourne deux fois : une boucle chez a26, une chez a28.",
+      "correction": "S'appuyer sur `ZbiresRendu.chercher`, `ZbiresRendu.position` et `BlasterStats` de a26. Supprimer la boucle de tir de a28 : un tap sur un Zbire le transmet à `BlasterControleur` comme cible prioritaire. Reconnaître la place par l'attribut `TypePlace` de Workspace. Mettre un délai et un `warn` sur chaque `WaitForChild`."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a26",
+      "probleme": "Un joueur coincé ne peut pas se débloquer : `ResetButtonCallback` vaut false, personne ne meurt, et une run dure jusqu'à 25 min. Or `Plan.posePermise` ne teste que le centre de la défense. Trois Murets de 8 × 3 × 2, centrés en (−13, 0, ±4) et (−18, 0, 0), sont tous valides car espacés de plus de 4 studs, et ferment pourtant une poche contre le mur ouest de la Maison. Sans saut (a28), le Survivant enfermé y reste.",
+      "correction": "Passer à `ResetButtonCallback` un `BindableEvent` qui envoie `DemandeDeblocage` (1 toutes les 10 s). Le serveur replace alors le joueur sur le `SpawnLocation` libre le plus proche via `GardienMouvement.teleporter`. Ranger les défenses dans un groupe `Defenses` non collidable avec `Survivants` : les Zbires sont simulés, donc la collision ne sert qu'à piéger les joueurs. Refuser toute pose dont l'emprise touche un Survivant."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a26",
+      "probleme": "`StatsSurvivant` impose `JumpHeight` 5 à chaque apparition et à la fin de chaque étourdissement. Cela écrase le `CharacterJumpHeight` 0 de a28 et fait revenir le bouton de saut natif sous RÉPARER (96 px). De plus, `definirVitesse(24)` au Répit n'informe pas `GardienMouvement`, qui suppose 18 : son budget baisse de 2,4 studs/s. Un Ressort et 10 s de course suffisent pour un retour en arrière et 4 points.",
+      "correction": "Donner un seul propriétaire à `WalkSpeed` et `JumpHeight` : `StatsSurvivant` délègue à `GardienMouvement.definirVitesse` et `GardienMouvement.etourdir`. La hauteur de saut vient de `Config.SAUT_SURVIVANT`, une valeur unique arbitrée par Victor Lanoue. Test : 15 s de Répit à 24 et un Ressort, pour 0 correction."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a29",
+      "probleme": "Le gardien produit de faux positifs. `RayonPlace` vaut 74, exactement le rayon de la barrière chez a12 et a14 : aucune marge pour une jointure de polygone ou un retard de réplication, alors que chaque sortie de zone vaut 6 points et que l'exclusion tombe à 40. La valeur par défaut de 74 place hors zone le Quai des Capsules (Z −88) et la Galerie (X −100) du Laboratoire de a11. Enfin, la Grimpe du Colosse (24 studs) et les Ressorts de a12 (racine à 16,8 studs) dépassent `SOL_ABSOLU` (14) pendant la montée.",
+      "correction": "Fixer `RayonPlace` au rayon de la barrière + 4 studs, et corriger sans points quand une barrière physique existe. Au Laboratoire, délimiter la zone par des Parts taguées `ZoneJouable` plutôt que par un disque. Ignorer le contrôle de vol en état `Climbing` et pendant `GardienMouvement.accorderEnvol(joueur, 1.5)`, appelé par les Ressorts côté serveur."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a12",
+      "probleme": "`surChute` appelle `PivotTo` sans passer par `GardienMouvement.teleporter` et garde la vitesse de chute, qui peut faire traverser la Part de 1 stud du checkpoint. Si le saut dépasse le budget du gardien, celui-ci renvoie l'enfant sur le filet, qui le téléporte de nouveau : jusqu'à 8 points par boucle, jusqu'à l'exclusion. Si `reprise` vaut nil (arrivée sur la Tuyauterie sans passer par CP0), rien ne se passe. Enfin, avec `CHRONO_MIN` à 15 s, un hack de vitesse × 1,3 peut prendre la tête du Record du Jour.",
+      "correction": "Appeler `GardienMouvement.teleporter(joueur, cp.CFrame + Vector3.new(0, 4, 0))`, qui annule la vitesse, avec un repli sur CP0. Déclencher les Ressorts côté serveur. Imposer un temps minimal par segment, égal à 0,9 × le temps expert, soit 22 s au total."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a27",
+      "probleme": "Un double tap achète deux niveaux. `LancerRecherche(nom)` n'indique pas le niveau visé, et le seau de 2 jetons laisse passer deux appels dans la même image : l'enfant paie 40 puis 90 gemmes. `DemandeAchat` à l'Établi a la même faille : l'anti-rebond côté client n'est que de 0,25 s, et a29 accorde 4 jetons.",
+      "correction": "Ajouter un argument `niveauVise` aux deux demandes. Le serveur refuse sans rien débiter si `niveau + 1 ~= niveauVise`, et renvoie `Refus`. Déclarer ce nouvel argument dans `ReglesRemotes` (a29)."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a27",
+      "probleme": "Une déconnexion en pleine run est définitive : aucun chemin ne ramène au serveur réservé, et la fiche `Capsules` en MemoryStore expire au bout de 900 s alors qu'une run dure jusqu'à 25 min. De plus, le téléport part même si `Liberer` a échoué. Dans ce cas, la session est effacée, le serveur suivant force le verrou 30 s plus tard et recharge l'ancien profil, sans les gains de fin de run.",
+      "correction": "À l'arrivée sur la Prairie, écrire côté serveur `RunEnCours_<UserId>` (code d'accès, TTL de 1 800 s). Le Laboratoire propose alors « Rejoindre la run », via `TeleportAsync` avec `ReservedServerAccessCode`. Ne téléporter qu'après un `Liberer` réussi (3 essais). Sinon, garder la session et afficher « Sauvegarde… »."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a14",
+      "probleme": "`Portails.lancerPaquet` suppose que `creer` renvoie un Model. Or `HordeService` (a26) n'a aucun Model côté serveur et, au-delà de 60 Zbires, met en file sans rien renvoyer. `zbire:SetAttribute` sur nil plante alors dans `task.delay`, et le reste du paquet est perdu. `BlasterService` ignore `Ciblable`. Enfin, avec la hiérarchie de a11, le `WaitForChild` sur `Workspace.Prairie.Portails` ne rend jamais la main.",
+      "correction": "Appeler `HordeService.ajouterALaFile(type, n, cframe)`, avec un paramètre de position à ajouter par a26. Stocker `ciblableA` dans la table du Zbire et faire respecter ce délai par `BlasterService`. Trouver les portails par le tag `PortailZbire`."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a15",
+      "probleme": "Le Filon attend `ReplicatedStorage.Partie`, que personne ne crée (a27 publie `Phase` sur Workspace). Il lit aussi `Charte.Gemme.Lumiere`, qui n'existe dans aucune version de la Charte : `allumer` plante et l'énigme reste bloquée sur `Annonce`. Tout coéquipier qui marche sur une plaque, ou sur les Dalles chantantes de a13 placées au même endroit, fait perdre un des 3 essais. Enfin, les buissons Nid prévus entre 75 et 85 studs sont hors d'atteinte au-delà de 82 studs, derrière la barrière.",
+      "correction": "Lire les attributs du Workspace. Prendre `Charte.Couleurs.GemmeCyan` et en calculer les 3 teintes. Ne compter que le Survivant qui a touché la 1re plaque, et espacer les plaques de 2 studs. Placer les Nids à 66 studs au plus et éloigner les Dalles de a13."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a13",
+      "probleme": "Les secrets versent jusqu'à 50 gemmes par jour : c'est une source hors canon §6, et l'écart n'est pas déclaré. Le code plante aussi : `ServerScriptService.Donnees.Profils` n'existe pas, le champ `profil.secrets` manque au schéma, et `AjouterGemmes` refuse la source `secret:*`. Côté placement, le Pique-nique en (32, 30) chevauche la Mine (X 20→32, Z 20→32), et le Colosse endormi, à R 88, est hors de portée de son prompt. Enfin, le Tableau noir garde l'ordre du jour où le serveur a démarré.",
+      "correction": "Remplacer les gemmes par des cosmétiques et des Pièces, ou soumettre l'écart à Victor Lanoue. Écrire via `Donnees.Modifier`. Placer les POI de run à 66 studs au plus et hors de la Mine. Recalculer l'ordre des Bornes à chaque changement de jour."
+    },
+    {
+      "gravite": "majeur",
+      "agent": "a30",
+      "probleme": "La Forge range les Zbires dans `ReplicatedStorage.Zbires`, alors que `ZbiresRendu` (a26) les cherche dans `ReplicatedStorage.Modeles.Zbires`. Faute de modèle, il affiche des cubes provisoires sans aucune alerte : le jeu peut sortir avec des cubes. L'Auditeur ne contrôle pas ce dossier.",
+      "correction": "Utiliser un seul chemin, `ReplicatedStorage.Modeles.Zbires`, pour la Forge, l'Auditeur et le Package. Faire signaler par l'Auditeur, comme bloquant, l'absence de l'un des 10 types. Demander à a26 un `warn` dans `ZbiresRendu` pour chaque type sans modèle."
+    },
+    {
+      "gravite": "mineur",
+      "agent": "a27",
+      "probleme": "`SchemaJoueur.Reconcilier` remet à sa valeur par défaut (0) un champ `Gemmes` ou `Recherches` qui n'a pas le bon type. L'autosave rend ensuite la perte définitive.",
+      "correction": "Sur les champs de valeur, tenter `tonumber`. En cas d'échec, refuser le chargement sans rien écrire, journaliser l'incident, puis restaurer via `ListVersionsAsync`."
+    },
+    {
+      "gravite": "mineur",
+      "agent": "a28",
+      "probleme": "Une pièce reste 20 s à l'écran, mais seulement 15 s côté serveur (a14) : l'enfant court vers une pièce fantôme.",
+      "correction": "Ajouter `expireA` (heure `GetServerTimeNow`) à `PiecesLachees`, faire clignoter la pièce 3 s avant, puis la retirer à l'heure fixée par le serveur."
+    },
+    {
+      "gravite": "mineur",
+      "agent": "a14",
+      "probleme": "L'inactivité compte le tir, que le tir automatique envoie en continu : un joueur absent reste compté. Et comme le contact d'un Zbire ne porte qu'à 4 studs à la verticale, la Mine en gradins (a16, sommet à 6 studs, grimpable) devient un perchoir intouchable.",
+      "correction": "Définir l'activité comme a07 : déplacement de plus de 4 studs, réparation, pose ou ping. Rendre le sommet de la Mine impossible à escalader, avec une Part invisible inclinée, ou porter le contact vertical à 7 studs."
+    },
+    {
+      "gravite": "mineur",
+      "agent": "a11",
+      "probleme": "Le script d'audit lit `arene.Maison`, alors que a14, a28 et a30 attendent `Workspace.Maison` : il plante dès qu'une Part dépasse 6 studs. `posePermise` n'exclut pas les zones d'atterrissage des Ressorts (a12). La barrière est à 72 studs ici, contre 74 chez a12 et a14.",
+      "correction": "Publier dans `Plan` une hiérarchie unique (dossier racine, Maison, portails), `RAYON_BARRIERE` = 72 pour tous, et les 4 zones de 6 × 6 studs où la pose est interdite."
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "decisions": [
+    "Titre de lancement : « Zsurvie : Défense en Coop » (FR) / « Zsurvie: Co-op Defense » (EN). Le nom officiel reste en tête. Tag [MAJ] / [UPDATE] pendant 7 jours au maximum à chaque mise à jour, puis test du titre « Zsurvie : Défends la Maison ! » à J+21.",
+    "Genre Stratégie > Tower Defense et mot-clé « tower defense » dans la description, toujours cadré par « l'arme principale, c'est toi » pour respecter le pilier « pas un tower defense immobile ». À valider par le directeur créatif.",
+    "Écart de canon (localisation EN) : Zsurvie, Zbires, Doc Boulon et Blaster restent tels quels. Tous les autres noms officiels sont traduits (Coins, Gems, House, Lab, Meadow, Treeline, Workbench, Colossus, Low Wall, Mini-Turret, Sticky Mat, Daily Challenge, Zbire of the Week, Ping Wheel…) via une LocalizationTable « Canon » unique, partagée par la page et le jeu. Validation de Victor Lanoue requise.",
+    "« zombie », « horror », « simulator », « idle », « tycoon », « free robux » et les noms d'autres expériences sont bannis des métadonnées. Aucune liste de tags en fin de description : chaque mot-clé apparaît 1 ou 2 fois dans une vraie phrase.",
+    "Paramètres : Téléphone, Tablette et Ordinateur oui, Console et VR non. Laboratoire MaxPlayers 12 avec 2 places réservées aux amis. Prairie MaxPlayers 6 sans accès direct. Maturité Léger (Mild). Chat vocal désactivé. Pas de lien Discord.",
+    "Le Zbire de la Semaine est publié comme Événement d'expérience récurrent, chaque samedi à 17:00 (Europe/Paris), sur la page du jeu. Les descriptions FR (903 caractères) et EN (≈ 870) laissent environ 97 caractères pour la ligne de mise à jour."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif",
+      "besoin": "Valider le glossaire FR -> EN des noms officiels (Colossus, Treeline, Meadow, Low Wall, Helmet, Brute…) et l'usage du mot-clé « tower defense » dans le titre de réserve et la description."
+    },
+    {
+      "de": "Game designer",
+      "besoin": "Liste des modificateurs du Défi du Jour pour la v1.2, durée de l'Événement Zbire de la Semaine et Zbire mis en vedette le premier samedi."
+    },
+    {
+      "de": "Directeur artistique",
+      "besoin": "Icône 512 × 512 sans texte et 5 vignettes 1920 × 1080 (horde sur la Prairie, Colosse au crépuscule ClockTime 17,5, Laboratoire et Alcôves, coop à 4 Survivants, vue mobile), avec une version FR et une version EN si une vignette porte du texte."
+    },
+    {
+      "de": "Designer UI",
+      "besoin": "Mettre AutoLocalize = true sur tous les TextLabel et TextButton, et créer le panneau « Nouveautés » de Doc Boulon au Laboratoire. Les boutons de 60 px doivent tenir 30 % de texte en plus pour l'espagnol et le portugais."
+    },
+    {
+      "de": "Scripteur gameplay",
+      "besoin": "Afficher « Record : Jour X » au-dessus de la Maison via translator:FormatByKey(\"maison.record\", { jour }) côté client, la valeur du jour étant fournie par le serveur."
+    },
+    {
+      "de": "Responsable monétisation",
+      "besoin": "Confirmer ou corriger le prix des serveurs privés (100 Robux par mois proposé)."
+    },
+    {
+      "de": "Responsable Live Ops",
+      "besoin": "Dates de sortie des v1.0, v1.1 et v1.2, et accès en écriture aux Analytics Acquisition pour le test de titre à J+21."
+    },
+    {
+      "de": "QA",
+      "besoin": "Vérifier sur un Android d'entrée de gamme la troncature des textes EN, ES et PT-BR, et que la page affiche bien le titre et la description traduits selon la langue du compte."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Faire valider par le directeur créatif le glossaire FR -> EN des 52 noms du canon et le titre de lancement n° 3",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Créer la LocalizationTable « Canon » avec le script fourni dans les places Laboratoire et Prairie, et vérifier les 52 entrées",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Rédiger et intégrer en FR et EN les textes du panneau « Nouveautés » de Doc Boulon pour les v1.0, v1.1 et v1.2",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Saisir dans le Creator Hub le titre, les descriptions FR et EN, le genre, les appareils, le remplissage des serveurs et le questionnaire de maturité (Léger)",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Créer l'Événement d'expérience récurrent « Zbire de la Semaine » (samedi 17:00 Europe/Paris) en FR et EN",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Traduire le nom et la description en espagnol et en portugais (Brésil) à partir du glossaire pour la v1.1",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Lancer à J+21 le test du titre n° 2 contre le n° 3 (2 semaines chacun) et comparer impressions et taux de clic « Recherche » dans Analytics > Acquisition",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Poser puis retirer après 7 jours le tag [MAJ] / [UPDATE] et la ligne de mise à jour à chaque version",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

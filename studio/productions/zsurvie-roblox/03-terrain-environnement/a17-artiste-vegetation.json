@@ -1,0 +1,93 @@
+{
+  "decisions": [
+    "Écart par rapport à la mission : pas de Terrain Decoration ni de voxel Terrain (Workspace.Terrain.Decoration = false). Le canon interdit le Terrain lisse, et l'herbe animée n'est dessinée que près de la caméra (qui est à 53 studs du Survivant) ; elle disparaît aussi aux niveaux graphiques bas des téléphones. L'herbe devient des Touffes-cubes en MeshPart instanciées.",
+    "Budget de végétation pour la Prairie : 1 200 BaseParts au maximum, 1 080 visés environ (12 % du plafond de 10 000). Ce total inclut 16 Neon pour les ronds de Champignons des clairières. Laboratoire, Quai des Capsules et Galerie des Zbires : 150 BaseParts. Si le plafond est atteint, les Touffes sautent en premier.",
+    "Toute la végétation est Anchored, avec CanCollide, CanQuery et CanTouch à false, et CastShadow à false sauf pour les houppiers de 4 studs ou plus. Elle n'arrête ni les tirs, ni les Zbires, ni les poses de défense, et aucun raycast serveur ne la touche. La limite de l'arène doit donc être un mur invisible.",
+    "Hauteurs : aucune végétation entre 0 et 20 studs de la Maison, 1 stud au maximum jusqu'à 45, 2 studs au maximum jusqu'à 70. La Lisière est en amphithéâtre : côté caméra (+Z), CheneNain de 9 studs ; sur les flancs, 14 studs ; au nord, 15. Autour de chaque portail, aucun arbre dans un rayon de 14 studs ; les chemins restent libres sur 6 studs de chaque côté de l'axe.",
+    "La végétation n'utilise que Prairie, Terre battue, Crème et Ardoise, chacune dans ses 3 teintes de la Charte. Jamais d'or, de cyan, de violet ni de rose-rouge : ces couleurs sont réservées aux pièces, aux gemmes, aux Zbires et au danger.",
+    "La végétation vivante est gérée uniquement côté client et reste cosmétique. Les Fleurs éclosent à chaque jour franchi (attribut Workspace « Jour »). Les arbres du secteur d'où vient le Colosse frissonnent 3 s avant son arrivée (attribut « ColosseAngle »). L'herbe s'écrase sous les défenses posées (tag « Defense »)."
+  ],
+  "besoins": [
+    {
+      "de": "Level designer (Prairie)",
+      "besoin": "Confirmer les points suivants : 8 portails à 85 studs, un tous les 45°, dont 4 au bout des chemins ; chemins de 8 studs de large sur les axes X et Z ; sol plat regroupé dans Workspace.Carte.Sol ; décor dans Workspace.Decor ; mur invisible à 70 studs. Indiquer aussi l'emprise de l'Établi, car le générateur laisse vide seulement le rayon de 0 à 20 studs."
+    },
+    {
+      "de": "Programmeur gameplay",
+      "besoin": "Appeler Workspace:SetAttribute(\"Jour\", n) à chaque jour franchi, et Workspace:SetAttribute(\"ColosseAngle\", angle) 3 s avant l'apparition du Colosse (angle en radians autour de la Maison, mesuré avec math.atan2(z, x)). Ajouter le tag CollectionService « Defense » sur chaque Model de Muret, Mini-Tourelle et Tapis Collant posé."
+    },
+    {
+      "de": "Programmeur outils (Charte)",
+      "besoin": "Exposer dans ReplicatedStorage.Charte les Color3 Prairie, Creme, TerreBattue et Ardoise sous ces noms exacts."
+    },
+    {
+      "de": "Directeur artistique",
+      "besoin": "Valider l'écart sur la Terrain Decoration et réserver 16 des 150 Parts Neon pour les ronds de Champignons des clairières."
+    },
+    {
+      "de": "Artiste personnages (Zbires)",
+      "besoin": "Donner la hauteur du plus petit Zbire, le Mini-Gluant, pour confirmer que les buissons de la Prairie peuvent monter jusqu'à 2 studs."
+    },
+    {
+      "de": "Éclairagiste",
+      "besoin": "Valider les teintes du feuillage au ClockTime 17,5 du Jour du Colosse, et prévoir 4 ParticleEmitter de lucioles (Rate 3) dans le budget d'effets."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Faire valider par le directeur artistique la fiche du kit : 12 gabarits avec tailles et couleurs, et la convention de nommage Houppier/Cime",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Greybox : placer 8 volumes de clairière de 14 studs de rayon, puis vérifier la ligne de visée avec la caméra (0, 45, 28), FieldOfView 50, Survivant à (0, 0, 68), face à des blocs de 9, 14 et 15 studs",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Modéliser les MeshParts Touffe, Fleur et Fougere en cubes de 0,5 stud (RenderFidelity Performance, CollisionFidelity Box, sans TextureID)",
+      "phase": 2,
+      "charge": "M"
+    },
+    {
+      "titre": "Construire les 12 gabarits Model dans ServerStorage.KitVegetation, avec le PrimaryPart au sol et les parties nommées Houppier/Cime",
+      "phase": 2,
+      "charge": "M"
+    },
+    {
+      "titre": "Lancer GenerateurVegetation.generer(2026), vérifier qu'il génère 1 120 BaseParts au plus, puis retoucher les bosquets à la main",
+      "phase": 2,
+      "charge": "M"
+    },
+    {
+      "titre": "Poser à la main les 8 ronds de 4 Champignons, avec 16 cubes Neon Crème au total",
+      "phase": 2,
+      "charge": "S"
+    },
+    {
+      "titre": "Habiller de végétation le Laboratoire, le Quai des Capsules et la Galerie des Zbires, dans la limite de 150 BaseParts",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Intégrer le LocalScript VegetationVivante, puis tester la floraison, le frisson du Colosse et l'herbe écrasée avec 6 clients",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Ajouter 4 lucioles en ParticleEmitter (Rate 3, Lifetime 4, Size 0,3, couleur Crème) et ajuster les teintes au ClockTime 17,5",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Profiler sur un Android de 3 Go avec 6 joueurs et 60 Zbires : masquer Workspace.Decor.Vegetation doit faire gagner 2 FPS au plus, sinon passer les Touffes au pas de 6",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Audit de lisibilité : aucune pièce ni aucun Zbire masqué, et aucune pièce végétale avec CanCollide ou CanQuery à true",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

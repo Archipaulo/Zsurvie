@@ -1,0 +1,116 @@
+{
+  "decisions": [
+    "Trois paliers de hauteur fixent qui passe et ce que les tirs traversent. A (1 stud ou moins) : tout le monde passe. B (3 studs) : bloque les Zbires au sol sauf le Sauteur, les tirs passent. C (6 studs) : bloque tout sauf le Volant, et arrête les tirs (dossier BloqueTir). Côté Survivants : Humanoid.JumpHeight à 4,5. Un Zbire touche s'il est à 3 studs ou moins à l'horizontale et à 4 studs ou moins à la verticale.",
+    "8 portails au rayon 86 (N, NE, E, SE, S, SO, O, NO), dans des trouées de 22 studs, avec un cadre de 4 barres Neon (32 Neon, 0 PointLight). 32 murs invisibles du groupe de collision LimiteSurvivants arrêtent les Survivants au rayon 74 : personne n'est étourdi quand un Zbire apparaît, et personne ne peut camper un portail.",
+    "ServerScriptService.Horde.Portails gère les apparitions. Alerte de 1,5 s avant chaque paquet (4 s pour le Colosse), puis 0,8 s où le Zbire ne peut pas être visé (attribut Ciblable). Paquets de 3 à 5 Zbires du même type. Jours 1 et 2 : seuls les 4 portails des chemins s'ouvrent. Ensuite : clamp(2 + 2 × Survivants, 4, 8) portails, qui changent chaque jour. Le tirage est pondéré et ne reprend jamais deux fois de suite le même portail.",
+    "Avec la caméra (0, 45, 28) et un FOV de 50, on ne voit que 22 studs environ derrière le Survivant. Le Colosse sort donc au Jour 5 par le portail N à t = 40 s (8e minute), puis jamais par S, SE ou SO. Les arbres de la Lisière sud sont plafonnés à 8, 20 puis 30 studs selon le rayon. La Maison passe en LocalTransparencyModifier 0,6 quand elle cache le Survivant local.",
+    "Anti-camping. La Maison reste fermée. Les défenses se posent entre le Couloir (4 studs autour des murs) et le rayon 50, à au moins 4 studs de tout palier C. Les Mini-Tourelles sont espacées d'au moins 8 studs. Les pièces disparaissent au bout de 15 s et tombent au plus au rayon 68. Chaque étourdissement est suivi de 1,5 s d'immunité.",
+    "Points à valider par Victor Lanoue. Écart au canon : le multiplicateur coop ne compte que les Survivants actifs (un joueur inactif depuis 90 s n'est plus compté). Propositions : le Rapide contourne les Murets, et la Course au Doré (le serveur verse les gemmes à tous). Mine centrée en (20, 0, 20), en lisant « à 12 studs » comme environ 12 studs du coin de la Maison. Les noms d'anneaux et d'îlots restent internes et ne sont jamais affichés."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif (Victor Lanoue)",
+      "besoin": "Valider ou refuser : le multiplicateur coop limité aux Survivants actifs, le Rapide qui contourne les Murets, la Course au Doré et la Mine en (20, 0, 20)."
+    },
+    {
+      "de": "Game designer équilibrage",
+      "besoin": "Des vitesses de Zbires adaptées aux 78 studs entre un portail et la Maison (Marcheur environ 10 s, Rapide 5 s ou plus, Colosse environ 30 s), le nombre de Zbires par jour, les PV des Murets et la valeur en gemmes du Doré."
+    },
+    {
+      "de": "Scripteur IA des Zbires",
+      "besoin": "Une fonction Horde.Zbires.creer(typeZbire, CFrame) qui renvoie le Model et gère la file d'attente au-delà de 60 Zbires. Un champ de flux sur une grille de 4 studs. Le respect de l'attribut Ciblable. Un contact à 3 studs à l'horizontale et 4 à la verticale. Le bond du Sauteur à 4 studs et le vol du Volant à 8 studs."
+    },
+    {
+      "de": "Designer UI mobile",
+      "besoin": "Des flèches en bord d'écran pour les portails en alerte hors champ, et des chevrons Alerte pour tout Zbire hors écran à 40 studs ou moins, lisibles sur téléphone (60 px minimum)."
+    },
+    {
+      "de": "Artiste environnement (Lisière)",
+      "besoin": "Une forêt de cubes avec 8 trouées de 22 studs. Au sud, arbres de 8 studs maximum jusqu'au rayon 80, 20 studs jusqu'au rayon 90 et 30 studs au-delà."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "Un son d'alerte « wouip » 8-bit (1,5 s), une annonce du Colosse (4 s) et une version de la musique accélérée de 10 % pour le rush final (60 à 75 s), sans dépasser 16 sons simultanés."
+    },
+    {
+      "de": "Designer du Colosse (personnages)",
+      "besoin": "Une emprise au sol du Colosse de 20 × 20 studs maximum, pour qu'il sorte d'un cadre de portail agrandi à 22 × 22."
+    },
+    {
+      "de": "Architecte de la Maison",
+      "besoin": "Une porte décorative qu'on ne peut pas franchir, une collision pleine, un toit à 14 studs, et des Parts regroupées pour la transparence locale et le chevron de face attaquée."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Faire valider par Victor Lanoue le multiplicateur coop limité aux Survivants actifs, le Rapide qui contourne les Murets, la Course au Doré et la position de la Mine",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Monter la greybox de la Prairie : Couloir de 4 studs, 4 chemins de 8 studs, 4 îlots aux centres prévus, 8 trouées de 22 studs, 32 murs LimiteSurvivants au rayon 74",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Mesurer dans la greybox, sur un téléphone 16:9, ce que montre la caméra (0, 45, 28) avec un FOV de 50 : environ 41 studs devant, 22 derrière, 44 sur les côtés, et la zone cachée par la Maison",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Planter la forêt de cubes de la Lisière avec ses 8 trouées et les hauteurs maximales au sud (8, 20 et 30 studs)",
+      "phase": 2,
+      "charge": "M"
+    },
+    {
+      "titre": "Construire en Pixel-bloc les 4 îlots (400 Parts au maximum, hauteurs exactes des paliers A, B et C) et les 8 cadres de portail à 4 barres Neon",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Implémenter ServerScriptService.Horde.Portails et le brancher sur Horde.Zbires, file d'attente du plafond de 60 comprise",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Créer le groupe de collision LimiteSurvivants et le dossier BloqueTir, puis limiter le tir automatique aux cibles visibles qui ont l'attribut Ciblable à true",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Faire vérifier les poses par le serveur : entre le Couloir et le rayon 50, à 4 studs minimum des paliers C, de la Mine et de la Maison, Mini-Tourelles à 8 studs l'une de l'autre, 3 défenses maximum",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Coder l'immunité de 1,5 s après chaque étourdissement de 2 s, et retirer du multiplicateur coop tout Survivant inactif depuis 90 s",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Calculer un champ de flux sur une grille de 4 studs (55 × 55 cases), plus un second champ pour le Rapide recalculé à chaque pose ou destruction de Muret",
+      "phase": 4,
+      "charge": "L"
+    },
+    {
+      "titre": "Animer les portails côté client : Violet horde vers Alerte en 1,5 s (4 s et cadre 22 × 22 pour le Colosse), extinction de Neon vers SmoothPlastic Ardoise",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Passer la Maison en LocalTransparencyModifier 0,6 quand elle cache le Survivant local, et afficher un chevron Alerte au-dessus d'une face attaquée hors de vue",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Tester à 1, 3 et 6 Survivants sur un Android de 3 Go : écart de paquets entre portails de 15 % maximum, aucun étourdissement à l'apparition, 30 FPS tenus",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Parcourir chaque îlot avec un JumpHeight de 4,5 et des Murets posés partout, pour vérifier qu'aucun perchoir hors de portée des Zbires n'est accessible",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

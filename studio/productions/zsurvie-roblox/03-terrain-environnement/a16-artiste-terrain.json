@@ -1,0 +1,88 @@
+{
+  "decisions": [
+    "Zéro cellule de Terrain voxel dans le Laboratoire et la Prairie, conformément au canon (pas de Terrain lisse). Sol et relief sont des Parts Block SmoothPlastic rangées dans Workspace.Arene.Sol, générées par ServerStorage.OutilsMap.SculpteurBloc (cellules de 8 studs) ou posées à la main. Le Terrain Editor ne sert qu'à Create > Clear, avec un contrôle workspace.Terrain:CountCells() = 0. C'est un écart avec l'intitulé de la mission (matériaux Terrain), pas avec le canon.",
+    "Sol de la Prairie en dalles de 8 × 8 centrées sur l'axe des chemins. Cœur (r < 30) en damier Prairie base et lumière, selon la spec a04. Champ (r < 70) en damier Prairie base et ombre. Lisière (70 à 100) en Prairie ombre uni. Ces anneaux en escalier remplacent les 3 cylindres de sol de la greybox a11.",
+    "Tout sol foulé (r < 100, trouées comprises) a son dessus entre Y = 0 et 0,2 : le serveur fixe Y = 0 pour les Zbires au sol, sans raycast. Couches : sol de base 0 ; dalles et Lisière 0,05 ; pads violets et déblais 0,1 ; chemins et Ronde 0,15 ; Couloir et Parvis 0,2 ; chevrons 0,25 et plus. Seuls le sol de base et la Mine ont CanCollide et CanQuery.",
+    "Relief seulement au-delà de r = 100. Au nord, gradins de 4 studs (r < 116) et de 8 studs (r < 128), puis monts d'angle de 12 ou 18 studs. Au sud (z > 20), berge plafonnée à 8 studs (a11), hors champ. Trouées de 24 studs dans l'axe des chemins pour le cadre 22 × 22 du Colosse (a14), et alcôves de 24 studs derrière les portails diagonaux. La Canopée (4 Parts, de ±108 à ±150) est hors arène, pour que la caméra ne montre jamais le vide.",
+    "Mine : roche Ardoise de 12 × 12 × 3 puis 8 × 8 × 3 (sommet à 6 studs), sur X 20 → 32, Z 20 → 32 comme dans a11, et non en (20, 0, 20) comme dans a14. Elle repose sur des déblais de 20 × 20 en Terre battue ombre. Pads violets sous les 8 portails à R 80 (a11 ; a14 propose 86), dont un Grand Portail Nord en 24 × 12.",
+    "Budget du lot sol et relief : 400 Parts au plus (environ 300 prévues), à prendre sur les 4 500 Parts décor de a11. 9 teintes Charte, aucune eau, ni Union ni MeshPart. Règle d'occlusion au sud : aucun décor au-dessus de 1,6 × (r − 74) studs."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif (Victor Lanoue)",
+      "besoin": "Valider que « pas de Terrain lisse » signifie zéro Terrain voxel. Valider aussi le damier à deux tons (Cœur base/lumière, Champ base/ombre), la Canopée hors des 220 × 220 studs et le Socle flottant du Laboratoire."
+    },
+    {
+      "de": "Level designer principal",
+      "besoin": "Trancher avec le designer des zones de combat le rayon des portails (80 ou 86) et la position de la Mine (X 20 → 32, Z 20 → 32, ou centre en (20, 0, 20)), puis publier ces valeurs dans ReplicatedStorage.Plan. Poser la Ronde en escalier de blocs de 2 studs, dessus à 0,15."
+    },
+    {
+      "de": "Scripteur IA des Zbires",
+      "besoin": "Fixer Y = 0 pour les Zbires au sol, sans raycast (Sauteur +4, Volant +8). Caler le champ de flux sur une grille de 4 studs alignée sur 0 (54 × 54 cases, de −108 à 108) : ainsi les bords des cases tombent sur ceux des chemins et des trouées. Traiter la roche de la Mine comme un obstacle."
+    },
+    {
+      "de": "Artiste environnement (Lisière)",
+      "besoin": "Poser la forêt de cubes sur le tapis de Lisière (dessus à 0,05) en laissant libres les trouées et les alcôves de 24 studs. Au sud, garder chaque arbre sous 1,6 × (r − 74) studs, soit 8 à r 79, 20 à r 86 et 30 à r 93. Les plafonds a14 (20 dès r 80, 30 dès r 90) masquent le Survivant arrêté à la barrière."
+    },
+    {
+      "de": "Architecte de la Maison et de la Mine",
+      "besoin": "Habiller ma roche de Mine de 12 × 12 × 6 sans dépasser 6 studs : entrée au nord-ouest, tournée vers la Maison, wagonnet, et cristaux Neon comptés dans le quota. Poser la Maison au centre du Couloir de 24 × 24 (dessus à 0,2)."
+    },
+    {
+      "de": "Responsable performance",
+      "besoin": "Valider le budget de 400 Parts pour Workspace.Arene.Sol, puis mesurer la Canopée et les gradins sur l'Android 3 Go de référence, avec 6 joueurs et 60 Zbires."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Faire valider par Victor Lanoue le zéro Terrain voxel, le damier à deux tons, la Canopée hors arène et le Socle du Laboratoire",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Arrêter avec a11 et a14 le rayon des portails et la position de la Mine, puis reporter ces valeurs dans les couches fixes et dans SculpteurBloc",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Vider le Terrain des 2 places (Create > Clear, Decoration = false) et vérifier que workspace.Terrain:CountCells() renvoie 0",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Lancer SculpteurBloc sur la greybox. Vérifier sur un téléphone 16:9, depuis 8 points de la barrière, qu'on ne voit jamais le vide et que la berge nord se lit",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Finaliser le sol de la Prairie : SculpteurBloc (damiers, Lisière, trouées, alcôves, gradins, monts d'angle), puis couches fixes posées à la main (sol de base, chemins, Couloir, Parvis, 8 pads, Canopée). Objectif : 400 Parts au plus et 0 écart à l'audit Charte",
+      "phase": 2,
+      "charge": "L"
+    },
+    {
+      "titre": "Sculpter la roche de la Mine (12 × 12 × 3 puis 8 × 8 × 3) et ses déblais de 20 × 20, puis la livrer à l'architecte",
+      "phase": 2,
+      "charge": "S"
+    },
+    {
+      "titre": "Construire le Socle du Laboratoire : plateau en dalles de 8, 3 falaises de 8 studs, Quai en surplomb et mer de nuages, 60 Parts au plus",
+      "phase": 2,
+      "charge": "M"
+    },
+    {
+      "titre": "Faire une revue avec l'artiste environnement : forêt posée sur le tapis de Lisière, trouées et alcôves libres, arbres du sud sous 1,6 × (r − 74)",
+      "phase": 3,
+      "charge": "S"
+    },
+    {
+      "titre": "Contrôler le contraste du damier, des chemins et des pads violets sous ClockTime 14 et 17,5 (TintColor 255, 214, 194), et ne corriger qu'avec des teintes Charte",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Audit final : CountCells() = 0, Parts de Arene.Sol comptées, CanCollide/CanQuery/CanTouch/CastShadow conformes, 30 FPS sur Android 3 Go avec 6 joueurs et 60 Zbires",
+      "phase": 6,
+      "charge": "M"
+    }
+  ]
+}

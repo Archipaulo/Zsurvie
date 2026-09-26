@@ -1,0 +1,135 @@
+{
+  "decisions": [
+    "Recherches révélées dans l'Arbre dans l'ordre des prix de a07 : Tourelle de toit au niveau 1, Visée critique au 3, Balles perforantes au 4 et Foreuse au 5 (fin de 1re session). Une recherche non révélée n'apparaît pas et n'a pas de cadenas. a07 refuse quand même son achat via Progression.EstRevelee. Au premier retour, Doc Boulon désigne la Tourelle de toit (40 gemmes) avec un Highlight Or : c'est l'étape PremiereRecherche de a50. J'applique la consigne du chef de projet, et non la variante QA (Foreuse au 2).",
+    "Le niveau ne verrouille plus que 4 éléments, vérifiés par le serveur (Progression.EstDebloque) : Muret au niveau 1, Tapis Collant au 2, Calendrier de Doc Boulon au 3 et Mini-Tourelle au 4. Le serveur publie l'attribut Niveau du Player. Le cadenas « Niv. X » fourni à a28 est un voile Ardoise sur un bouton de 60 px minimum, avec l'icône et le texte en Crème, jamais en Alerte.",
+    "Chaque Capsule a une seule condition, sans niveau, et la même règle sert au serveur et au SurfaceGui. Normale : aucune. Difficile : Stats.RecordNormale ≥ 10, soit Record Jour 10 en Normale. Capsule du Jour et Défi du Jour : Stats.Colosses ≥ 1, soit le 1er Colosse repoussé. Un SurfaceGui par joueur, avec Adornee sur le panneau de la Capsule, affiche la condition et le record personnel.",
+    "Le jour de jeu suit Temps.cleJour() (minuit à Paris) pour le Calendrier, le bonus × 2 de première run et les plafonds quotidiens. L'anti-AFK des jours, du Colosse et du Record appelle Economie.estActif (a07) : le seuil de 20 studs et MarquerActif sont supprimés. XP, DernierBonus, Calendrier, TurboForeuseFin, Cosmetiques et Stats ne s'écrivent que par Donnees.Modifier (schéma v2 de a27).",
+    "Barème d'XP complété : secret découvert (a13) 50 XP, plafond 200 par jour ; mission hebdomadaire (a49) 500 XP, plafond 1 000 par jour ; aucun multiplicateur sur ces deux sources. Ajouter renvoie l'XP accordée : si elle vaut 0, la mission reste réclamable le lendemain. Vérification du novice tombé au J5 : 840 à 1 400 XP, donc niveau 4 dans tous les cas. Il voit la Tourelle de toit et dispose d'au moins 40 gemmes (plancher de a07, 74 selon l'estimation QA). La Foreuse est révélée au 2e retour.",
+    "Ajouts au canon, toujours à valider par Victor Lanoue : Niveau de Survivant (1 à 30), XP, Galons, Calendrier de Doc Boulon et Foreuse Turbo. Le niveau n'achète aucune puissance et ne crée aucune source de gemmes. La Foreuse Turbo donne au plus + 16 h de production par semaine (+ 28,6 % pour un joueur quotidien). Elle passe à 4 h si a07 la juge hors budget."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif",
+      "besoin": "Valider les ajouts au canon : Niveau de Survivant, XP, Galons, Calendrier de Doc Boulon et Foreuse Turbo. Valider aussi l'ouverture des défenses aux niveaux 1, 2 et 4."
+    },
+    {
+      "de": "Designer économie (a07)",
+      "besoin": "1) Confirmer la signature Economie.estActif(joueur): boolean et sa fenêtre (jour en cours), ainsi que le chemin ServerScriptService.Economie. 2) Valider la Foreuse Turbo (× 2 pendant 8 h, 2 fois par cycle de 7 jours, soit + 16 h de production par semaine) avec les 5 niveaux de la Foreuse, ou demander le passage à 4 h. 3) Garantir le plancher de 40 gemmes même si la Maison tombe au J1 ou au J2. 4) Confirmer l'ordre des prix Tourelle de toit 40 < Visée critique < Balles perforantes < Foreuse 100. 5) Vérifier qu'après 2 runs (J5 puis J8) et l'achat de la Tourelle, le solde atteint 100 gemmes. 6) Conditionner l'achat à Progression.EstRevelee et le Défi du Jour à CapsuleOuverte(j, \"DuJour\")."
+    },
+    {
+      "de": "Développeur données et sauvegarde (a27)",
+      "besoin": "Confirmer l'API Donnees.Lire(joueur, cle) et Donnees.Modifier(joueur, cle, fn), synchrone sur le profil en cache. Inclure dans le schéma v2 : Calendrier { Case = 0, DernierJour = nil }, Stats.XPJour { Cle, Secret, Mission }, Stats.RecordNormale, Stats.Colosses et Recherches.Foreuse, qui donne le niveau de la Foreuse (0 à 5). Sauvegarder ces champs dans le UpdateAsync des gemmes, à chaque jour franchi et avant le TeleportAsync de retour."
+    },
+    {
+      "de": "Designer UI (a28)",
+      "besoin": "Intégrer le cadenas « Niv. X » : voile Ardoise #4A4560 à 0,35 de transparence, cadenas et texte en Crème, rebond de 0,15 s et bulle « Débloqué au niveau X ». Il s'applique aux boutons Tapis Collant et Mini-Tourelle et à la console du Calendrier, et se pilote par l'attribut Niveau. Concevoir aussi la barre d'XP de fin de run par source et le bandeau de niveau de 2 s."
+    },
+    {
+      "de": "Responsable des Capsules et du Record (a06)",
+      "besoin": "Appeler Progression.CapsuleOuverte à l'embarquement de chaque passager et reposer sur le Quai tout Survivant refusé. Confirmer que « Record : Jour X » désigne le plus haut jour atteint (jour N franchi → N + 1). Placer un Panneau par Capsule pour les SurfaceGui."
+    },
+    {
+      "de": "Designer secrets (a13) et designer missions (a49)",
+      "besoin": "a13 : appeler côté serveur Progression.Ajouter(j, \"Secret\", 50) à la 1re découverte validée. a49 : appeler Progression.Ajouter(j, \"Mission\", 500) et laisser la mission réclamable le lendemain si l'appel renvoie 0 (plafond de 1 000 XP par jour)."
+    },
+    {
+      "de": "Designer tutoriel (a50)",
+      "besoin": "Déclencher l'étape PremiereRecherche au premier retour : Doc Boulon désigne la Tourelle de toit (Highlight Or), puis le Calendrier. Accorder les 160 XP du tutoriel par Progression.Ajouter(j, \"Tutoriel\", 160)."
+    },
+    {
+      "de": "Développeur gameplay",
+      "besoin": "Côté serveur de la Prairie, appeler Progression.DemarrerRun(j, equipe) à l'arrivée, Progression.JourFranchi(j, capsule, N), Progression.ColosseVaincu(j), Ajouter(j, \"Elimination\", 1) pour chaque contributeur des 5 dernières secondes et Ajouter(j, \"Reparation\", 1) tous les 20 PV. Vérifier EstDebloque avant chaque pose. Fournir le module ReplicatedStorage.Temps (cleJour)."
+    },
+    {
+      "de": "Artiste Laboratoire",
+      "besoin": "Créer la plaque d'Alcôve (niveau, titre, Galons) et les objets d'Alcôve : cadre « Cubes Prairie », tapis néon, fanion, distributeur de pop-corn, cadre doré et panneau Record personnel, dans la limite de 150 Parts Neon. Créer aussi les panneaux de condition des 3 Capsules."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "Composer le jingle 8-bit de montée de niveau, le son de réclamation du Calendrier et le son de rebond du cadenas."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Faire valider par Victor Lanoue les ajouts au canon : Niveau de Survivant, Galons, Calendrier de Doc Boulon et Foreuse Turbo",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Figer dans ReplicatedStorage.Progression.Paliers les 30 paliers, les 4 verrous, les 4 révélations de recherche et les 3 conditions de Capsule",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Transmettre à a28 la spécification du cadenas « Niv. X », et à a06 les textes et propriétés des SurfaceGui des 3 Capsules",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Modéliser en Pixel-bloc les cosmétiques de progression : sacs à dos, tenues, Blasters, apparences de Muret et de Mini-Tourelle",
+      "phase": 3,
+      "charge": "L"
+    },
+    {
+      "titre": "Construire la console du Calendrier, la plaque de niveau des 12 Alcôves et le Panneau de condition de chaque Capsule du Quai",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Implémenter ServerScriptService.ProgressionService : courbe, 10 sources, plafonds par run et par jour, multiplicateurs avec report de la partie décimale, anti-AFK Economie.estActif",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Faire passer toutes les écritures (XP, DernierBonus, Calendrier, TurboForeuseFin, Cosmetiques, Stats) par Donnees.Modifier et tous les jours par Temps.cleJour()",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Brancher JourFranchi, ColosseVaincu, ZbireElimine, la réparation et DemarrerRun dans la place Prairie",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Refuser côté serveur les poses verrouillées (EstDebloque), l'embarquement sans condition (CapsuleOuverte) et l'achat d'une recherche non révélée (EstRevelee)",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Brancher la RemoteFunction ReclamerCalendrier et appliquer TurboForeuseFin dans le calcul hors connexion de la Foreuse",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Intégrer l'UI : cadenas Niv. X sur les boutons de 60 px, SurfaceGui des Capsules par joueur, Highlight de Doc Boulon sur la Tourelle de toit, barre d'XP de fin de run, bandeau de 2 s",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Afficher le titre et les Galons dans un BillboardGui au-dessus de chaque Survivant, lisible sur téléphone",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Créer les 10 badges (5 par jour), avec des icônes de 512 × 512, et renseigner leurs BadgeId",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Rejouer le parcours novice : tutoriel puis run jusqu'au J5, niveau 3 ou 4, Tourelle de toit visible et achetable avec au moins 40 gemmes, Foreuse révélée au 2e retour",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Mesurer le rythme en playtest (niveau 5 en fin de 1re session, niveau 10 au 3e jour) et ajuster le coefficient 60 si l'écart dépasse 20 %",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Tester les exploits et les cas limites : aucune XP sur requête client, une case de Calendrier par jour de Paris (minuit et changement d'heure), plafonds Secret et Mission, embarquement refusé",
+      "phase": 6,
+      "charge": "S"
+    }
+  ],
+  "revise": true
+}

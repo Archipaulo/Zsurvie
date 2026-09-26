@@ -1,0 +1,92 @@
+{
+  "decisions": [
+    "Écouteur audio placé sur le HumanoidRootPart du Survivant et orienté comme la caméra (SoundService:SetListener, Enum.ListenerType.CFrame), et non sur la caméra située à 53 studs.",
+    "16 voix réparties en SoundGroups : Musique 1, Ambiance 2, Joueur 3, Zbires 4, Monde 3, Interface 2, Alertes 1. La horde ne coupe jamais une voix, et un son spatialisé hors de portée n'est pas joué.",
+    "Aucun Sound côté serveur : tout passe par le module client ReplicatedStorage.Son. Pièces, Gemmes, Achat/Refus, JourFranchi et MaisonEtat ne sonnent qu'à réception de Remotes.Retour, envoyé par le serveur après crédit.",
+    "Chaque Zbire a une signature sonore (PlaybackSpeed de 0,6 à 1,3). Le Casqué fait « clank » sur un coup normal et « ding » sur un critique, pour enseigner la règle à l'oreille.",
+    "Mixage téléphone : rien d'important sous 150 Hz, .ogg mono à -16 LUFS, chaque son doublé par un visuel. La musique (0,35) est compressée en sidechain par le groupe Alertes.",
+    "Pas de voix humaine : Doc Boulon babille en blips 8-bit, et la Roue des Pings a 4 motifs musicaux distincts."
+  ],
+  "besoins": [
+    {
+      "de": "Programmeur gameplay (Zbires)",
+      "besoin": "Inclure dans la réplication 10 Hz des Zbires les événements impact, critique, éclatement, division et bond, avec type et position, pour déclencher Son.Jouer côté client."
+    },
+    {
+      "de": "Programmeur systèmes et économie",
+      "besoin": "Créer ReplicatedStorage.Remotes.Retour et le déclencher après chaque crédit ou refus : Pieces, Gemme, Achat, Refus, JourFranchi (après UpdateAsync), MaisonEtat, MaisonTombe."
+    },
+    {
+      "de": "Designer UI",
+      "besoin": "Deux curseurs Musique et Effets (0 à 100 %) dans le menu Paramètres, sauvegardés dans le profil, et un double visuel pour chaque alerte sonore."
+    },
+    {
+      "de": "Compositeur",
+      "besoin": "4 boucles chiptune sans clic à -20 LUFS : Jour 120 BPM, Répit 90 BPM, Colosse 140 BPM, Laboratoire 100 BPM."
+    },
+    {
+      "de": "Artiste VFX",
+      "besoin": "Déclencher l'explosion de cubes et le « pop » d'éclatement au même tick, et me donner le timing des étoiles d'étourdissement (2 s)."
+    },
+    {
+      "de": "Level designer",
+      "besoin": "Positions finales des portails de la Lisière, de la Mine et des 12 Alcôves pour caler les RollOffMaxDistance."
+    },
+    {
+      "de": "Directeur créatif",
+      "besoin": "Valider le babillage 8-bit de Doc Boulon (sans voix humaine) et les 4 motifs de la Roue des Pings."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Valider avec le directeur créatif la fiche son : clés, profils de spatialisation, budget de 16 voix",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Poser dans la greybox les Attachments de référence (Mine, 4 portails, Maison) et vérifier les portées de 24, 130 et 150 studs",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Coder ReplicatedStorage.Son : 8 SoundGroups, compresseurs, profils RollOff, pool de voix, écouteur sur le Survivant",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Brancher Remotes.Retour côté client (combo de Pièces +0,05, plafond 1,5) et vérifier qu'aucun son de récompense ne part sans crédit serveur",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Brancher les sons des 8 Zbires et du Colosse sur les événements de réplication (PlaybackSpeed par type, 1 éclatement toutes les 0,025 s au plus)",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Produire environ 45 SFX chiptune en .ogg mono à -16 LUFS, les uploader au nom du groupe et les ranger dans ReplicatedStorage.Sons",
+      "phase": 5,
+      "charge": "L"
+    },
+    {
+      "titre": "Intégrer les 4 musiques avec fondus croisés de 1,5 s et ducking en sidechain sous les Alertes",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Sonoriser le Laboratoire : 4 machines d'Alcôve les plus proches, Capsules, Doc Boulon, Galerie des Zbires, Foreuse",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Tester sur Android 3 Go avec 6 joueurs, 60 Zbires et le Colosse : 16 voix au maximum, aucune saturation, 30 FPS tenus",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Tester au casque (un portail à gauche de l'écran s'entend à gauche) puis en muet (chaque son a son double visuel)",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

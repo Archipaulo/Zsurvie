@@ -1,0 +1,115 @@
+{
+  "decisions": [
+    "Écart au canon « chiptune 8-bit » soumis à Victor Lanoue : 4 canaux type NES + 1 pad triangle doux, passe-bas 8 kHz au mastering, -16 LUFS intégrés (jingles -14), pour éviter la fatigue après une heure.",
+    "Une horde = une boucle de 80 s à 120 BPM (40 mesures) relancée par le serveur à chaque jour ; une cloche aux mesures 37-40 annonce le Répit 8 s avant, doublée par le chrono de l'UI.",
+    "3 variantes de horde (A jours 1-4, B jours 6-9, C jours 11+), piste Colosse les jours multiples de 5 (68 s, LoopRegion 4-68 s, intro calée sur ClockTime 17,5), couche Tension si 40 Zbires ou plus ou Maison sous 35 % de PV (sortie à 25 Zbires et 45 %, 8 s minimum).",
+    "Budget audio : 3 voix musicales maximum sur les 16 sons simultanés (13 pour les effets) ; SoundGroup Musique 0,6 x réglage joueur, Effets 0,8, Interface 0,7.",
+    "L'état musical est posé par le serveur en attributs de Workspace (EtatMusique, Variante, DebutPhase, Tension) et RemoteEvent Jingle ; le client ne fait que jouer et se caler sur GetServerTimeNow().",
+    "Aucune musique angoissante : Maison tombée = jingle comique JIN_MaisonTombe, étourdissement = effet « tournis » local de 2 s, le danger ajoute des notes sans assombrir."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif",
+      "besoin": "Valider l'écart au canon : 5e canal pad doux et passe-bas 8 kHz dans le chiptune 8-bit."
+    },
+    {
+      "de": "Game designer",
+      "besoin": "Confirmer la durée du Jour du Colosse si le Colosse survit au-delà de 80 s, l'existence d'un décompte avant le Jour 1, et les seuils de la couche Tension (40 Zbires, 35 % de PV)."
+    },
+    {
+      "de": "Scripteur gameplay",
+      "besoin": "Appeler EtatMusical.phase, tension et jingle depuis la boucle des jours ; poser l'attribut Etourdi (2 s) et DepartCapsule (heure serveur du départ) sur le Player."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "Tenir 13 voix d'effets au maximum, placer pièces et gemmes au-dessus de 1,5 kHz, fournir le bourdonnement des néons et des machines des Alcôves pour les pauses musicales du Laboratoire."
+    },
+    {
+      "de": "Animateur",
+      "besoin": "Caler les pas du Colosse sur 120 BPM (un pas toutes les 2 temps, soit 1 s) pour la marche de tuba."
+    },
+    {
+      "de": "Éclairagiste",
+      "besoin": "Déclencher la bascule vers ClockTime 17,5 en 4 s, synchronisée sur l'intro de la piste Colosse."
+    },
+    {
+      "de": "UI designer",
+      "besoin": "Curseur Musique à 5 crans en boutons de 60 px et chrono visuel du Répit qui double la cloche des mesures 37-40."
+    },
+    {
+      "de": "Level designer du Laboratoire",
+      "besoin": "Fournir l'emprise du Quai des Capsules et de la Galerie des Zbires pour dimensionner les Parts ZonesAudio, et un point d'attache Sound par figurine."
+    },
+    {
+      "de": "Développeur back-end",
+      "besoin": "Ajouter le champ volumeMusique (0 à 1, borné côté serveur) au profil joueur sauvegardé."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Rédiger la fiche musicale (tempos, tonalités, Motif Zsurvie, durées) et faire valider l'écart pad + passe-bas par Victor Lanoue",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Livrer 2 maquettes de 30 s (Labo_Base, HordeA_Base) écoutées sur l'Android 3 Go de référence",
+      "phase": 0,
+      "charge": "M"
+    },
+    {
+      "titre": "Composer et masteriser Labo_Base, Labo_Quai et Labo_Galerie (80 s, 96 BPM, synchronisées à l'échantillon)",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Composer les 6 couches de horde HordeA/B/C_Base et _Tension (80 s à 120 BPM, cloche mesures 37-40)",
+      "phase": 3,
+      "charge": "L"
+    },
+    {
+      "titre": "Composer Colosse (68 s, LoopRegion 4-68), Repit (15 s), Capsule (15 s) et Bilan (40 s)",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Composer les 3 jingles et les 8 signatures MOT_ des Zbires (mono, 5 s)",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Uploader les pistes au nom du groupe, créer SoundService.Pistes et le SoundGroup Musique avec Tournis et Etouffe",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Intégrer le module serveur EtatMusical dans la boucle des jours et le LocalScript Musique",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Poser les Parts ZonesAudio (Quai, Galerie) et les Sounds 3D MOT_ dans les figurines de la Galerie des Zbires",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Mixer sur Android 3 Go (haut-parleur 50 % et casque) : musique 6 dB sous les tirs, basses audibles",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Brancher le curseur Musique 5 crans (boutons 60 px) avec sauvegarde bornée côté serveur",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Test d'écoute de 60 min (lobby + 2 runs) avec 3 joueurs de 9-13 ans, grille de lassitude et corrections",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Vérifier en run à 60 Zbires : 3 voix musicales maximum, 16 sons simultanés respectés, mémoire audio sous 15 Mo",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

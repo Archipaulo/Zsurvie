@@ -1,0 +1,140 @@
+{
+  "revise": true,
+  "decisions": [
+    "ReplicatedStorage.Config.Mouvement est publié. Laboratoire : WalkSpeed 16 et JumpHeight 7,2. Prairie : WalkSpeed 18 en horde, 24 au Répit, 8 en réparation et 0 en étourdissement, avec CharacterUseJumpPower false et CharacterJumpHeight 0 (profil A). Le profil B de l'A/B de H2 passe à JumpHeight 5 ; il est tiré une fois par serveur réservé. GardienMouvement (a29) est le seul script qui écrit WalkSpeed et JumpHeight : ServiceCombat.etourdir n'écrit plus qu'un état dans StatsSurvivant.",
+    "Les défenses sont dans le CollisionGroup Defenses, non collidable avec Survivants (PhysicsService:CollisionGroupSetCollidable) : les Survivants traversent tout. Le Muret n'arrête que les Zbires simulés, par une règle du Registre. Une pose dont l'emprise touche un Survivant est refusée. Muret : 150 × 1,15^(jour − 1) PV. Mini-Tourelle : 80 × 1,15^(jour − 1) PV et 50 % des dégâts du Blaster de son poseur. Les PV sont relevés au début de chaque jour.",
+    "La 4e pose est refusée avec l'icône PoseInterdite, et rien n'est détruit. Maintenir 0,5 s sur une de ses défenses envoie DemandeReprise, et Economie rend 50 % du prix payé (a07). Le maintien de 0,5 s, plutôt qu'un simple toucher, est mon choix : un tap destiné à un Zbire ne reprend jamais une défense. Le fantôme et le serveur passent par ReplicatedStorage.Defenses.Placement, qui appelle Plan.posePermise (a11). Placement gère la grille de 4 studs centrée sur la Maison, oriente le Muret tangent tout seul (le bouton Pivoter disparaît) et place le fantôme 6 studs devant, dans la dernière direction de déplacement. Je ne fixe plus aucune limite de distance.",
+    "Collecte : je retire mes chiffres de Mine (stock de 10, 30 s) et le rapatriement de 100 % des pièces. Le ramassage, le reliquat du Répit et la Mine commune suivent ReplicatedStorage.Partage (a07, a06) ; je n'en décris que le ressenti, dont le « +X » gris au Répit et les gemmes de la Mine qui volent vers chaque Survivant. Réparation : à 14 studs au plus du centre de la Maison, créditée par tranches de 0,5 s tenues, au débit d'équipe de a07. Le marteau frappe une fois par tranche.",
+    "Étourdissement : 2 s, puis 2 s d'invulnérabilité. Il y a contact si la distance horizontale est au plus le rayon du Zbire + 2 studs et l'écart vertical au plus 4 studs. L'onde du Colosse fait 12 studs de rayon et s'annonce 1,2 s avant.",
+    "Deux écarts sont soumis à Victor Lanoue et ne s'appliquent pas sans son accord : le rayon du tir auto qui suit la Portée (de 40 à 52 studs) et la caméra (0, 52, 32) pendant le Colosse. Mes tailles de boutons sont retirées au profit de la maquette unique codée par a28."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif (Victor Lanoue)",
+      "besoin": "Trancher les deux écarts soumis : rayon du tir auto qui suit la Portée (52 studs au maximum) et caméra (0, 52, 32) pendant le Colosse. Puis valider le profil gagnant de l'A/B de H2 (JumpHeight 0 ou 5)."
+    },
+    {
+      "de": "Lead programmeur gameplay (a29)",
+      "besoin": "GardienMouvement lit Config.Mouvement et les états de StatsSurvivant (etourdiJusqua, repare, repit), désactive HumanoidStateType.Jumping en profil A et tire le profil H2 une fois par serveur. Il faut aussi l'attribut Jour sur workspace, le dossier workspace.Defenses et les RemoteEvents DemandePose, DemandeReprise, PoseRefusee et DefenseReprise."
+    },
+    {
+      "de": "Level designer (a11)",
+      "besoin": "Dans ReplicatedStorage.Plan : Plan.CENTRE_MAISON (au niveau du sol) et Plan.posePermise(typeDefense, cadre), qui renvoie (ok, raison). La fonction doit être pure et donner le même résultat côté client et côté serveur. Elle gère les zones interdites, la distance maximale et le chevauchement des défenses, avec un code de raison par cas."
+    },
+    {
+      "de": "Designer économie (a07)",
+      "besoin": "Les fonctions Economie.prixDefense, Economie.debiter et Economie.reprendreDefense (50 % du prix payé). Le débit d'équipe de réparation par tranche de 0,5 s. Les noms des constantes de ramassage, de reliquat au Répit et de Mine dans ReplicatedStorage.Partage."
+    },
+    {
+      "de": "Designer UI/UX mobile (a28)",
+      "besoin": "À intégrer dans la maquette unique : bouton Défenses avec compteur 3/3, icône PoseInterdite et icônes de raison sur le fantôme, anneau de maintien de 0,5 s (réparation et reprise), « +X » gris du Répit, pool de 60 pièces et chevrons au bord de l'écran."
+    },
+    {
+      "de": "Designer bestiaire",
+      "besoin": "Le rayon de hitbox de chaque Zbire, l'altitude du Volant (au-dessus de 4 studs, il n'étourdit pas), la règle d'arrêt et de frappe au Muret dans le Registre, les dégâts subis par la Mini-Tourelle et le télégraphe de l'onde du Colosse."
+    },
+    {
+      "de": "Sound designer",
+      "besoin": "Sons chiptune : pew, tic, ding, tonk, pop, tling en gamme montante, boum, boing, tok, clonk, cristal, un bzzt doux pour les refus, un fwip pour les reprises et 4 jingles de ping. Le SoundGroup Tirs est plafonné à 6 voix."
+    },
+    {
+      "de": "Artiste VFX",
+      "besoin": "Éclatement en 8 cubes violets, étoiles d'étourdissement, étincelles de réparation et du Casqué, fantôme de pose, envol de la défense reprise, Muret qui ondule quand on le traverse et ruban du reliquat au Répit. Tout en pools, sans Part Neon."
+    },
+    {
+      "de": "Analyste données",
+      "besoin": "Mesures de l'A/B de H2 par profil (A : saut 0, B : saut 5) : durée de run, jour atteint, étourdissements par minute et retour à J1. Le verdict sera présenté à Victor Lanoue."
+    },
+    {
+      "de": "QA mobile",
+      "besoin": "Un Android d'entrée de gamme à 3 Go de RAM, pour mesurer la latence du tir et du fantôme de pose et vérifier les 30 FPS avec 6 joueurs et 60 Zbires."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Prototype papier sur grille de 4 studs : Muret tangent, 4e pose refusée, reprise par maintien de 0,5 s, testé avec 3 joueurs de 9 à 13 ans",
+      "phase": 0,
+      "charge": "M"
+    },
+    {
+      "titre": "Soumettre à Victor Lanoue le rayon du tir auto qui suit la Portée (52 studs au maximum) et la caméra (0, 52, 32) pendant le Colosse",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Greybox de ressenti : Prairie de 70 studs et Maison 16 × 16 × 14 ; chronométrer les traversées (3,9 s), vérifier que les Survivants traversent 18 Murets posés en anneau et contrôler le champ de la caméra",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Publier ReplicatedStorage.Config.Mouvement (Laboratoire, Prairie, profils A et B de H2) et le tableau des 3C pour le 02/10",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "ServiceDefenses : groupes de collision Survivants et Defenses, pose validée par le serveur, quota de 3 refusé avec PoseInterdite, DemandeReprise remboursée par Economie",
+      "phase": 4,
+      "charge": "L"
+    },
+    {
+      "titre": "Module partagé Placement et fantôme client : 6 studs devant, grille centrée sur la Maison, Muret tangent, Plan.posePermise, refus si l'emprise touche un Survivant, icônes de raison",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "ServiceCombat : tir en hitscan serveur, Casqué, critiques, balles explosives ; étourdissement au contact (rayon + 2 studs, 4 studs en vertical) et onde du Colosse de 12 studs, sans écrire WalkSpeed",
+      "phase": 4,
+      "charge": "L"
+    },
+    {
+      "titre": "Tir automatique client : Zbire visible le plus proche, hystérésis de 0,4 s, verrouillage tactile de 3 s, rayon fixé selon le verdict de Victor Lanoue",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Réparation serveur par tranches de 0,5 s tenues, à 14 studs au plus du centre de la Maison, au débit d'équipe de a07, avec le marteau synchronisé",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Retours de collecte branchés sur ReplicatedStorage.Partage : vol des pièces aimantées, « +X » gris au Répit, fusion au-delà de 60 cubes, gemmes de la Mine vers chaque Survivant",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Roue des Pings avec marqueurs BillboardGui de 6 s et anti-spam serveur (3 pings en 5 s)",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Liaisons ContextActionService pour PC et manette, reprise comprise, sans createTouchButton",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Pack de retours : tir, impact, critique, étourdissement, pose, reprise et Muret traversé, avec effet élastique de 0,15 s et pools",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Brancher les actions sur la maquette unique de a28 et les tester sur un écran de 5,5 pouces",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Mener l'A/B de H2 (profil A, JumpHeight 0, contre profil B, JumpHeight 5) et soumettre le gagnant à Victor Lanoue",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Playtest sur Android 3 Go : latence du tir et du fantôme, lisibilité de la cible, 30 FPS avec 6 joueurs et 60 Zbires",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Équilibrer les défenses à J3, J7 et J10 pour que la Mini-Tourelle et le Muret restent rentables, avec une run de 25 min au maximum",
+      "phase": 6,
+      "charge": "M"
+    }
+  ]
+}

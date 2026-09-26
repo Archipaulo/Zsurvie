@@ -1,0 +1,111 @@
+{
+  "decisions": [
+    "Sur la Prairie, AmbianceClient (ModuleScript dans StarterPlayerScripts, démarré par le LocalScript AmbianceDemarrage) est le seul script qui écrit dans Lighting, Atmosphere, CCPrairie, Bloom et workspace.Lumieres. Il expose definirMeteo(etat) pour MeteoClient (a18), definirBiome(etat) pour AmbianceBiomes (a20) et flash(position, couleur, priorite) pour le VFX (a37). Les modificateurs sont bornés et ne touchent jamais ClockTime. CycleCiel (a19) quitte la Prairie. Budget : 0,2 ms au plus au MicroProfiler (étiquette AmbianceClient).",
+    "ClockTime reste à 14 en horde comme au Répit, sans cycle jour/nuit. Au début du Répit qui précède le Jour du Colosse, EtatRun.JourColosse passe à true et lance un fondu sinusoïdal de 8 s vers 17,5, sur le même signal que l'intro de la piste Colosse de a40. Le même fondu ramène à 14 au Répit suivant. La nuit express ne revient qu'en variante A/B, en vague 2.",
+    "workspace.Lumieres est la seule liste des 12 sources de la Prairie : Maison 2 (MaisonInterieur = lampe intérieure de a22, Porche = lanterne de a20), Mine 1, Établi 1 (une PointLight Or de a21), 4 portails (kit de 4 PointLight de a23), Colosse 1 et 3 réserves VFX. Toute autre Light est un bug. Écart assumé : ce plafond de 12 vaut pour tous les types de lumière. Lumières animées rafraîchies à 10 Hz, 2 à la fois au plus (1 en mode léger), 0,35 s au moins entre deux départs d'une même source : jamais plus de 3 Hz.",
+    "Les 4 halos de portail sont réattribués chaque jour, d'après EtatRun.PortailsActifs, aux 4 premiers portails actifs parmi les 8 portails à 80 studs du centre (workspace.Portails.P1 à P8). L'hypothèse de 4 portails à 82 studs est retirée.",
+    "CastShadow est à false sur toutes les Parts des 61 Zbires, Colosse compris. Un disque plat opaque Encre de 0,1 stud (Part Sol) se place sous le Volant et le Sauteur et compte dans leurs 30 Parts ; celui du Sauteur glisse vers son point d'atterrissage. Aucune information de jeu ne passe par une ombre ou par le Bloom.",
+    "AmbianceClient calcule l'attribut Qualite du LocalPlayer (moyenne glissante des FPS sur 3 s) : \"Legere\" après 2 s sous 27 FPS, retour à \"Normale\" après 10 s au-dessus de 45 FPS. En mode léger : Bloom coupé, Haze à 0, 1 lumière animée au plus. Le Laboratoire passe en ShadowMap avec Shadows à false partout, et en Future seulement si 30 FPS sont mesurés à 12 joueurs sur l'Android 3 Go. Ses 12 sources comprennent la lampe de a22 (Doc Boulon) et le kit de 4 PointLight de a23 (Alcôves). Les Capsules pulsent à 2 Hz au plus."
+  ],
+  "besoins": [
+    {
+      "de": "Programmeur gameplay",
+      "besoin": "Faire écrire par le serveur seul, dans ReplicatedStorage.EtatRun, les attributs Phase (\"Horde\"/\"Repit\"), FinPhase (GetServerTimeNow), JourColosse (true au début du Répit qui précède le Jour du Colosse, false au Répit suivant), PVMaison (0 à 1), GemmesMine (compteur), PortailsActifs (chaîne \"2,4,6,8\", dans l'ordre d'ouverture, publiée au début de chaque jour), MeteoEtat et EtatPrairie. Poser l'attribut Atterrissage (Vector3) sur le Sauteur. Ranger les Zbires dans workspace.Zbires, avec le modèle Colosse et sa Part Torse."
+    },
+    {
+      "de": "a18 (MeteoClient)",
+      "besoin": "Retirer de MeteoClient toute écriture dans Lighting et Atmosphere, dont la rampe de ClockTime de 9 à 15,5. Traduire MeteoEtat en Modificateur (Brightness de -0,5 à 0, Density jusqu'à +0,1, Haze jusqu'à +0,5, Saturation de -0,1 à +0,05, TintColor, duree) et appeler AmbianceClient.definirMeteo. Réduire les particules quand Qualite vaut \"Legere\"."
+    },
+    {
+      "de": "a19 (CycleCiel)",
+      "besoin": "Retirer CycleCiel de la place Prairie. Rédiger la nuit express sous forme de variante A/B de vague 2, que jouera AmbianceClient, et jamais pendant le Répit du build de test."
+    },
+    {
+      "de": "a20 (AmbianceBiomes)",
+      "besoin": "Faire appeler AmbianceClient.definirBiome par AmbianceBiomes, sans aucune écriture dans Lighting. Accrocher la lanterne au-dessus de la porte de la Maison : elle devient l'ancre workspace.Lumieres.Porche, avec une lumière enfant nommée Lumiere."
+    },
+    {
+      "de": "a21, a22 et a23 (modèles lumineux)",
+      "besoin": "a21 : ne garder qu'une PointLight Or, qui devient l'ancre Etabli, et remplacer les autres par des Neon Or (4 au maximum). a22 : la lampe intérieure devient l'ancre MaisonInterieur, et fournir le même modèle pour Doc Boulon au Laboratoire. a23 : le kit de 4 PointLight fournit les ancres Portail1 à Portail4 sur la Prairie et les 4 ancres des Alcôves au Laboratoire. Aucune Light en dehors de ces ancres."
+    },
+    {
+      "de": "Artiste VFX (a37)",
+      "besoin": "Passer par AmbianceClient.flash(position, couleur, priorite) pour tout éclair de lumière (priorité 3 Colosse, 2 Balle explosive, 1 Doré ou jour franchi), jouer l'effet sans lumière quand l'appel renvoie false, ne jamais créer de Light, lire l'attribut Qualite et mettre CastShadow à false sur les cubes, les pièces et les projectiles."
+    },
+    {
+      "de": "Compositeur / sound designer (a40)",
+      "besoin": "Faire durer 8 s l'intro de la piste Colosse et la lancer sur EtatRun:GetAttributeChangedSignal(\"JourColosse\"), pour qu'elle démarre avec le fondu de lumière."
+    },
+    {
+      "de": "Modeleur des Zbires",
+      "besoin": "Mettre CastShadow à false sur toutes les Parts. Ajouter au Volant et au Sauteur une Part Sol (Cylinder de 0,1 × D × D, D = 80 % de l'emprise, couleur Encre, SmoothPlastic, opaque, CanCollide, CanQuery et CanTouch à false), comptée dans les 30 Parts. Aucun Neon, sauf 4 sur le Colosse, avec une Part Torse."
+    },
+    {
+      "de": "Level designer",
+      "besoin": "Placer les 8 portails workspace.Portails.P1 à P8 à 80 studs du centre, espacés de 45°, avec le pivot au sol. Orienter la porte de la Maison vers +Z (côté caméra), l'Établi devant elle."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Faire valider par a18, a19, a20 et a40 la table « qui écrit dans Lighting » et le contrat Modificateur (champs, bornes, durée par défaut 4 s)",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Poser les 12 ancres de workspace.Lumieres sur la Prairie à partir des modèles de a20, a21, a22 et a23, et les 12 sources du Laboratoire, avec Shadows à false partout",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Calibrer GeographicLatitude pour obtenir GetSunDirection().Z ≥ 0,3 à ClockTime 14 et ≥ 0 à 17,5",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Vérifier avec le modeleur CastShadow à false sur les Parts des 61 Zbires, et les disques Sol du Volant et du Sauteur, dans la limite de 30 Parts",
+      "phase": 3,
+      "charge": "S"
+    },
+    {
+      "titre": "Intégrer le ModuleScript AmbianceClient et AmbianceDemarrage, puis les brancher sur EtatRun (fondu du Colosse, Maison, Mine, Établi, portails, Colosse)",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Tester definirMeteo, definirBiome et flash avec a18, a20 et a37 : bornes respectées, ClockTime jamais modifié, 2 lumières animées au plus",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Valider l'attribut Qualite : passage à \"Legere\" après 2 s sous 27 FPS, retour à \"Normale\" après 10 s au-dessus de 45 FPS",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Régler les ambiances Jour et Jour du Colosse, et caler le fondu de 8 s sur l'intro de a40 (moins de 0,1 s d'écart)",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Éclairer le Laboratoire en ShadowMap avec LumieresLabo : Capsules à 1 Hz puis 2 Hz, 2 animées au plus, flash de la Foreuse",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Mesurer au MicroProfiler, sur l'Android 3 Go, AmbianceClient à 0,2 ms au plus, et au moins 30 FPS avec 6 joueurs et 60 Zbires aux niveaux graphiques 1, 4 et 10",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Lancer l'audit client au pic d'une partie : 0 Light hors de workspace.Lumieres, 0 Shadows à true, 0 Part de Zbire qui projette une ombre, 150 Neon au plus",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Tester le Laboratoire à 12 joueurs sur l'Android 3 Go, et ne passer en Future que si 30 FPS sont tenus",
+      "phase": 6,
+      "charge": "S"
+    }
+  ],
+  "revise": true
+}

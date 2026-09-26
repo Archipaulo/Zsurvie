@@ -1,0 +1,97 @@
+{
+  "decisions": [
+    "Aucun Robux ne touche à la progression, conformément au canon §9 : pas de pack de Pièces ou de Gemmes, pas d'accélération de Foreuse, pas de boost, pas de relance de run. Tout ce qui s'achète est cosmétique ou serveur privé.",
+    "Catalogue de lancement : 4 game passes (Garde-robe Pixel-bloc 149 R$, Blasters de collection 199 R$, Alcôve de Luxe 199 R$, Emotes du Labo 99 R$), 10 developer products (Feux d'artifice x5 à 25 R$, 9 Bonnets de Zbire à 49 R$) et un serveur privé à 50 R$ par mois. Aucun article au-dessus de 199 R$, 1 087 R$ pour tout posséder hors Feux.",
+    "Aucune boutique et aucun appel Prompt...Purchase dans la place Prairie. Vente uniquement au Laboratoire (bouton HUD de 64 px masqué avant la fin de la 1re run, pupitre d'Alcôve, Cabine d'Essayage). Aucun prompt automatique et aucun lien vers la Boutique sur l'écran de fin de run.",
+    "Écart au canon : j'ajoute la Cabine d'Essayage, un comptoir de 12 x 12 studs au Laboratoire, absent du §5. Elle est soumise à la validation de Victor Lanoue.",
+    "Grille de lisibilité obligatoire : un cosmétique ne change ni stats, ni hitbox, ni son. Les tirs restent Toit orange et Crème. Violet horde, Alerte, Or et Gemme cyan sont interdits sur un Survivant. Aucun skin sur la Maison, les Zbires, les défenses ni la Roue des Pings.",
+    "Pas de loot box, pas de monnaie intermédiaire, pas de minuteur ni de promo limitée. Les variantes de la Galerie des Zbires et les récompenses du Défi du Jour ne sont jamais vendues. Côté technique : Script ServerScriptService.Boutique dans les deux places, DataStore séparé Boutique_v1, ProcessReceipt idempotent par PurchaseId."
+  ],
+  "besoins": [
+    {
+      "de": "Directeur créatif",
+      "besoin": "Valider l'écart de la Cabine d'Essayage, les noms des tenues, des Blasters et des thèmes d'Alcôve, ainsi que la liste des couleurs interdites sur les cosmétiques."
+    },
+    {
+      "de": "Scripteur gameplay",
+      "besoin": "Poser workspace:SetAttribute(\"Phase\", \"Horde\" ou \"Repit\") dans la place Prairie. Le Blaster lit l'attribut Cosmetique_Blaster pour le visuel seulement, sans jamais changer dégâts, cadence ni portée."
+    },
+    {
+      "de": "Ingénieur sauvegarde / données",
+      "besoin": "Valider le DataStore séparé Boutique_v1 et exposer une fonction pour que le Défi du Jour (7 réussis) et le record Jour 10 inscrivent les cosmétiques gratuits dans possedes."
+    },
+    {
+      "de": "Artiste personnages",
+      "besoin": "Prévoir sur le rig du Survivant des Attachments Tete, Dos et Main pour souder les accessoires, et produire des cosmétiques conformes à la grille (40 cubes de 0,5 stud au maximum, palette autorisée)."
+    },
+    {
+      "de": "Designer UI",
+      "besoin": "Écran Boutique mobile avec aperçu ViewportFrame, prix en Robux, boutons de 64 px et aucune pastille rouge, plus un bouton « Feu d'artifice » affiché seulement pendant le Répit."
+    },
+    {
+      "de": "Level designer Laboratoire",
+      "besoin": "Réserver 12 x 12 studs pour la Cabine d'Essayage entre l'anneau des Alcôves et la Galerie, hors du trajet entre l'apparition et le Quai des Capsules, et un pupitre « Thème » dans chaque Alcôve."
+    },
+    {
+      "de": "Artiste VFX et designer sonore",
+      "besoin": "Feu d'artifice avec ParticleEmitter.Rate 20, Lifetime 1,5 s, aucune PointLight, son chiptune à Volume 0,4, inclus dans le budget des 16 sons simultanés."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Figer le ModuleScript ReplicatedStorage.Catalogue : 4 PassId, 10 ProductId, tous les cosmétiques avec emplacement et prix",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Faire valider par Victor Lanoue l'écart de la Cabine d'Essayage et la grille de lisibilité des cosmétiques",
+      "phase": 0,
+      "charge": "S"
+    },
+    {
+      "titre": "Construire la Cabine d'Essayage de 12 x 12 studs au Laboratoire avec son mannequin et un ProximityPrompt (HoldDuration 0, MaxActivationDistance 10)",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Produire 4 tenues, 4 teintes de Sac à dos, 3 Blasters, 9 Bonnets de Zbire et 3 thèmes d'Alcôve (120 Parts au maximum) conformes à la grille",
+      "phase": 3,
+      "charge": "L"
+    },
+    {
+      "titre": "Scripter ServerScriptService.Boutique : ProcessReceipt idempotent, passes, Equiper, LancerFeu, DataStore Boutique_v1, dans les deux places",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Vérifier qu'aucun appel Prompt...Purchase ni aucun écran Boutique n'existe dans la place Prairie",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Intégrer l'écran Boutique mobile (aperçu ViewportFrame, boutons de 64 px, prix en Robux, bouton masqué avant la fin de la 1re run)",
+      "phase": 5,
+      "charge": "M"
+    },
+    {
+      "titre": "Régler l'effet Feux d'artifice : ParticleEmitter.Rate 20, Lifetime 1,5 s, aucune PointLight, son chiptune à Volume 0,4",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Créer sur le Creator Hub les 4 game passes, les 10 developer products et le serveur privé à 50 R$ par mois, avec des icônes de 512 x 512",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Tester en Studio les achats simulés, le rejeu d'un reçu après une coupure serveur (sans doublon) et une panne du DataStore",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Mener l'audit anti-pay-to-win à J+14 : à nombre de runs égal, écart du jour moyen atteint entre payeurs et non-payeurs sous 3 %",
+      "phase": 6,
+      "charge": "S"
+    }
+  ]
+}

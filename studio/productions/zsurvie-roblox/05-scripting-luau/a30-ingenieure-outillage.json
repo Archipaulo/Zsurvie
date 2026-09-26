@@ -1,0 +1,92 @@
+{
+  "decisions": [
+    "ReplicatedStorage.Charte (livrée le 29/09, Package AutoUpdate dans les 2 places) est la seule API couleur et elle est figée : Charte.Couleurs.<Nom> (11 Color3 : Encre, Prairie, TerreBattue, Creme, ToitOrange, Or, GemmeCyan, VioletHorde, Alerte, NuitLabo, Ardoise), Charte.teinte(nom, 'Base' | 'Ombre' | 'Lumiere') avec ombre = base × 0,8 et lumière = base:Lerp(Creme, 0.2), Charte.Interface (a31) et Charte.Ambiances (Laboratoire, Cameras.Prairie (0, 45, 28) et Cameras.Colosse levée à (0, 56, 35), FieldOfView 50). Chargement uniquement par require(ReplicatedStorage:WaitForChild('Charte')), jamais relatif ; Palette, couleur() et Gemme.Lumiere n'existent plus et toute clé absente lève une erreur.",
+    "Chemin unique des Zbires : ReplicatedStorage.Modeles.Zbires, pour la Forge, l'Auditeur, le Package AutoUpdate partagé par les 2 places, la Galerie et ZbiresRendu (a26). Les 10 modèles s'appellent Marcheur, Rapide, Costaud, Dore, Sauteur, Gluant, MiniGluant, Volant, Casque, Colosse ; l'absence d'un seul est bloquante, la présence de l'ancien ReplicatedStorage.Zbires aussi.",
+    "Format Zbire imposé par la Forge et vérifié par l'Auditeur : Racine (Part ancrée, Transparency 1, PrimaryPart) + 3 à 5 MeshParts, 6 Parts au plus et 0 Neon (Colosse : 30 Parts, 4 Neon) ; CastShadow, CanCollide, CanQuery et CanTouch à false ; ni Humanoid, ni Animator, ni Light, ni ParticleEmitter, ni script ; aucune stat dans le modèle.",
+    "Budget Parts de la Prairie : statique ≤ 6 500 (Gabarit de a11, jamais relevé par un attribut) ; pic = statique + 60 × pire Zbire + 30 + 450 + 240 + 300 ≤ 10 000, désormais bloquant. Avec des Zbires à 6 Parts, le pic vaut 7 880 Parts.",
+    "Nouveaux contrôles bloquants de l'Auditeur dans les 2 places : 24 ParticleEmitter Enabled au plus, workspace.Terrain:CountCells() = 0, Neon par zone selon les attributs Neon_<Zone> du Gabarit (150 au total), 12 lumières toutes classes. Les Parts taguées HorsArene, sur elles ou un ancêtre (Canopée de a16), sont exemptées du ± 110 mais tenues à ± 150.",
+    "Écart au canon déclaré à Victor Lanoue : les noms d'instances sont en ASCII sans accents ni espaces (Lisiere, Etabli, Dore, Casque, MiniGluant, GalerieZbires, TerreBattue, Creme, Lumiere) ; tout texte affiché au joueur garde l'orthographe exacte du canon."
+  ],
+  "besoins": [
+    {
+      "de": "Victor Lanoue, directeur créatif",
+      "besoin": "Valider l'écart des noms d'instances sans accents (Lisiere, Etabli, Dore, Casque, MiniGluant, Creme, Lumiere), le texte affiché gardant l'orthographe du canon."
+    },
+    {
+      "de": "a26, rendu des Zbires (ZbiresRendu)",
+      "besoin": "Lire uniquement ReplicatedStorage.Modeles.Zbires et appeler warn('[ZbiresRendu] Modèle manquant : ' .. type) pour chaque type sans modèle avant d'afficher un cube provisoire."
+    },
+    {
+      "de": "a11, level design",
+      "besoin": "Poser la Configuration ServerStorage.Outillage.Gabarit dans les 2 places, avec PartsStatiques = 6500 en Prairie et un attribut Neon_<Zone> par zone (somme ≤ 150), avant le 01/10."
+    },
+    {
+      "de": "a16, Canopée de la Lisière",
+      "besoin": "Taguer HorsArene le Model de la Canopée (ou ses Parts) et rester dans le cadre de ± 150 studs."
+    },
+    {
+      "de": "a31, interface",
+      "besoin": "Valider ou ajuster les valeurs de Charte.Interface (BoutonMin 60, Fond, Panneau, Texte, Action, ActionAppui, Pieces, Gemmes, Danger) ; toute nouvelle clé passe par moi."
+    },
+    {
+      "de": "Éclairage et caméra",
+      "besoin": "Valider Charte.Ambiances.Laboratoire (ClockTime 0, Brightness 1, Ambient et OutdoorAmbient en NuitLabo) et la caméra levée Cameras.Colosse (0, 56, 35), FieldOfView 50."
+    },
+    {
+      "de": "Modélisation des Zbires",
+      "besoin": "Livrer les 10 Zbires en 3 à 5 MeshParts (cubes de 0,5 stud fusionnés), Colosse en 29 Parts au plus avec 4 Neon au plus, pour passage à la Forge."
+    },
+    {
+      "de": "a25, budget de performance",
+      "besoin": "Confirmer les réserves du pic : 450 Parts de défenses, 300 de pièces et effets, 240 d'avatars."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Publier ReplicatedStorage.Charte en Package AutoUpdate dans le Laboratoire et la Prairie le 29/09, Auditeur au vert sur la ligne Charte",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Installer l'Auditeur Pixel-bloc v2 en plugin local sur tous les postes et obtenir 0 bloquant sur la greybox de la Prairie",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Migrer la Forge vers ReplicatedStorage.Modeles.Zbires, supprimer ReplicatedStorage.Zbires et publier le Package AutoUpdate dans les 2 places",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Forger les 10 types au format Racine + 3 à 5 MeshParts et obtenir « types manquants : » vide dans l'Auditeur",
+      "phase": 3,
+      "charge": "M"
+    },
+    {
+      "titre": "Remplacer dans les scripts de l'équipe tout appel à Palette, couleur(), Gemme.Lumiere et tout require relatif de la Charte",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Brancher le Semeur sur les attributs du Gabarit et le tag HorsArene (pose jusqu'à ± 150 pour la Canopée)",
+      "phase": 1,
+      "charge": "M"
+    },
+    {
+      "titre": "Générer la Galerie des Zbires du Laboratoire depuis Modeles.Zbires (socles 6 × 6, figurines × 1,5, Seuil 10, 100, 1 000)",
+      "phase": 5,
+      "charge": "S"
+    },
+    {
+      "titre": "Mesurer le pic réel (60 Zbires, Colosse, 6 joueurs, 18 défenses) sur Android 3 Go et le comparer au pic calculé de 7 880 Parts",
+      "phase": 6,
+      "charge": "L"
+    },
+    {
+      "titre": "Obtenir la validation écrite de Victor Lanoue sur l'écart des noms d'instances sans accents",
+      "phase": 0,
+      "charge": "S"
+    }
+  ],
+  "revise": true
+}

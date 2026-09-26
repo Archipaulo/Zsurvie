@@ -1,0 +1,110 @@
+{
+  "decisions": [
+    "Store unique Zsurvie_Joueurs_v1, clé J_<UserId> (Studio : Zsurvie_Joueurs_Studio), SchemaJoueur v2 migré depuis v1. Gemmes_v1, Zsurvie_Profils_v1, Boutique_v1, Cosmetiques_v1, PeluchesSecretes_v1 et le store de Transactions sont supprimés : chaque système écrit par Donnees (Modifier, AjouterGemmes, CrediterRun, EnregistrerAchat, DefinirDeblocage).",
+    "Gemmes : plafonds par appel Jour 210, Mine 200, Dore 50, FinDeRun 1 500 (runId obligatoire, cumulés dans RunsCreditees), Foreuse 216 (5 à 27 gemmes/h, 8 h) et DefiDuJour 150 ; la source ZbireSemaine est supprimée. Run.Terminer appelle Donnees.CrediterRun(joueur, Run.Id, totalRun, true), qui ne verse que le reliquat et clôt la run dans RunsTerminees.",
+    "Réseau : ReplicatedStorage.Reseau génère l'unique dossier Remotes depuis son enfant ReglesRemotes (assert au démarrage et 10 s plus tard). 11 demandes Demande* en RemoteEvent, réponses par Annonce ; Reseau.Brancher refuse une seconde connexion. niveauVise sur DemandeAchat et DemandeRecherche : refus sans débit si niveau + 1 ~= niveauVise.",
+    "Flux Zbires : EtatZbires à 9 octets par Zbire et Evenements à 8 octets par fait (100 au plus), 10 Hz, positions relatives à Workspace.CentrePlace, codes dans Reseau.Faits. Impact, Eclatement, VfxRapide, ZbireApparu, ZbireVaincu et Notification sont supprimés ; le client décode une fois via Reseau.SurFait.",
+    "État de run dans ReplicatedStorage.EtatRun (Configuration créée par Run.Demarrer sur la Prairie seulement : Mode, Jour, Phase, FinPhase, Niv_Solidite, Niv_Reparation, Niv_Regeneration, Cagnotte_*). Workspace ne porte que TypePlace, CentrePlace et RayonPlace, posés dans Studio. Temps.cleJour(), Temps.SecondesAvantDemain() et Temps.cleSemaine() en heure de Paris, sur l'horloge du serveur, pour tous les rendez-vous quotidiens.",
+    "Téléport seulement après un Donnees.Liberer réussi (3 essais), sinon session gardée et « Sauvegarde… ». Fiche Capsules et RunEnCours_<UserId> en MemoryStore, TTL 1 800 s ; Player.RunEnCours affiche « Rejoindre la run » (DemandeCapsule Rejoindre). Écarts assumés : Cosmetiques.Possedes et Achats sont protégés comme Gemmes à la réconciliation, et l'équipement cosmétique passe par DemandeDeblocage Equiper."
+  ],
+  "besoins": [
+    {
+      "de": "a29 (ReglesRemotes, Validation et économie de run)",
+      "besoin": "Reprendre ReglesRemotes au format livré (Classe, Sens, Types, ParSeconde, Rafale, niveauVise compris) comme enfant de ReplicatedStorage.Reseau ; faire déléguer Validation.brancher à Reseau.Brancher ; supprimer Transactions et son store ; appeler AjouterGemmes(joueur, n, source, Run.Id), Run.JourFranchi(jour), Run.Terminer(totaux, jour) et renseigner Run.CalculerTotaux avant le 29/09."
+    },
+    {
+      "de": "a26 (Blaster et Zbires côté serveur)",
+      "besoin": "Brancher DemandeTir et le message pret de EvenementsZbires uniquement via Reseau.Brancher ou Validation.brancher, supprimer l'OnServerEvent brut de BlasterService, diffuser l'état par Reseau.DiffuserEtatZbires à 10 Hz avec des Id recyclés sur 16 bits."
+    },
+    {
+      "de": "a28, a37, a38 et a39 (VFX, sons et animation des Zbires)",
+      "besoin": "Remplacer Impact, Eclatement, VfxRapide et les remotes de coups par Reseau.AjouterFait avec les codes de Reseau.Faits ; côté client, VfxClient, Son et ZbireAnimateur s'abonnent à Reseau.SurFait, sans second décodage."
+    },
+    {
+      "de": "a06 et a07 (économie et méta-progression)",
+      "besoin": "Retirer Gemmes_v1 et Zsurvie_Profils_v1 ; créditer Mine, Dore et Jour par Donnees.AjouterGemmes avec Run.Id ; écrire XP, DernierBonus et Calendrier par Donnees.Modifier avec Temps.cleJour()."
+    },
+    {
+      "de": "a13, a15 et a22 (secrets, chapeaux, tampons, peluches)",
+      "besoin": "Enregistrer les genres Secret, Chapeau, Tampon et Peluche via Donnees.DefinirDeblocage, avec vérification de distance côté serveur ; écrire Secrets, Chapeaux, JourChapeau, Tampons, JourTampon et Peluches dans le profil unique ; supprimer PeluchesSecretes_v1 et la clé Survivant_."
+    },
+    {
+      "de": "a46 (boutique Robux)",
+      "besoin": "Passer ProcessReceipt par Donnees.EnregistrerAchat (Achats[PurchaseId] = os.time()) et écrire Cosmetiques.Possedes au format Emplacement:Id ; supprimer Boutique_v1 et Cosmetiques_v1."
+    },
+    {
+      "de": "a50 et a08 (accueil de Doc Boulon, Foreuse)",
+      "besoin": "a50 envoie DemandeDeblocage(\"Accueil\", etape) croissante de 1 à 12 et lit AccueilEtape dans ProfilMaj ; a08 active le turbo par Donnees.ActiverTurboForeuse(joueur, secondes), jamais en écrivant TurboForeuseFin directement."
+    },
+    {
+      "de": "Level designers du Laboratoire et de la Prairie",
+      "besoin": "Poser les attributs Workspace TypePlace, CentrePlace et RayonPlace (70 sur la Prairie) dans chaque place, et créer Workspace.Laboratoire.QuaiDesCapsules.Normale, .Difficile et .DuJour, ArbreDesRecherches et Alcoves.Alcove1 à Alcove12."
+    },
+    {
+      "de": "Intégrateur UI",
+      "besoin": "Traduire les codes d'Annonce (Refus, Recherche, Foreuse, Sauvegarde, PassageAnnule, FinDeRun) en phrases courtes, afficher « Sauvegarde… » et le bouton « Rejoindre la run » (Player.RunEnCours, 60 px minimum), et appliquer ProfilMaj champ par champ."
+    },
+    {
+      "de": "Chef de projet",
+      "besoin": "Renseigner les PlaceId de Catalogue.Places, activer l'accès API en Studio et ouvrir un serveur de bêta avec 3 comptes de test pour les 20 allers-retours."
+    }
+  ],
+  "taches": [
+    {
+      "titre": "Poser les attributs Workspace TypePlace, CentrePlace et RayonPlace dans les deux places de greybox",
+      "phase": 1,
+      "charge": "S"
+    },
+    {
+      "titre": "Publier ReplicatedStorage.Reseau et ReglesRemotes dans les deux places et vérifier l'assert d'un seul dossier Remotes",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Migrer 5 profils v1 réels (Tutoriel, Achats en liste, anciens Reglages) vers v2 dans Zsurvie_Joueurs_Studio et comparer champ à champ",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Brancher Donnees.CrediterRun et Run.Terminer avec a29, puis vérifier qu'un FinDeRun rejoué verse 0 gemme",
+      "phase": 4,
+      "charge": "M"
+    },
+    {
+      "titre": "Tester Passage : Liberer en échec simulé (session gardée, « Sauvegarde… »), TeleportAsync refusé (rechargement), fiche et RunEnCours à TTL 1 800 s",
+      "phase": 4,
+      "charge": "L"
+    },
+    {
+      "titre": "Valider Temps : SecondesAvantDemain(1792843200) = 36000 et SecondesAvantDemain(1792929600) = 39600, puis brancher Défi du Jour, Calendrier, secrets, énigmes et Record du Jour sur Temps.cleJour()",
+      "phase": 4,
+      "charge": "S"
+    },
+    {
+      "titre": "Test de corruption : Gemmes = abc dans le store Studio, chargement refusé sans écriture puis restauration par ListVersionsAsync",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Test d'acceptation : 20 allers-retours Laboratoire → Prairie → Laboratoire avec 3 comptes, 0 écart dans les lignes [Solde]",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Test double tap : DemandeRecherche et DemandeAchat envoyés deux fois dans la même image, un seul niveau débité et Refus NiveauVise",
+      "phase": 6,
+      "charge": "S"
+    },
+    {
+      "titre": "Mesurer au pic (60 Zbires + Colosse, 70 coups/s) sur Android 3 Go : EtatZbires ≤ 549 octets, Evenements ≤ 800 octets, un seul décodage par client",
+      "phase": 6,
+      "charge": "M"
+    },
+    {
+      "titre": "Test de déconnexion en pleine run : « Rejoindre la run » depuis le Laboratoire, puis fin de run sans double versement",
+      "phase": 6,
+      "charge": "M"
+    }
+  ],
+  "revise": true
+}
