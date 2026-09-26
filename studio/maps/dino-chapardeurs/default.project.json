@@ -1,0 +1,17 @@
+{
+  "name": "DinoChapardeurs",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Dino": { "$path": "src/ReplicatedStorage/Dino" }
+    },
+    "ServerScriptService": {
+      "Dino": { "$path": "src/ServerScriptService/Dino" }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Dino": { "$path": "src/StarterPlayerScripts/Dino" }
+      }
+    }
+  }
+}

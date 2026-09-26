@@ -1,0 +1,7 @@
+{
+  "name": "zsurvie-banc",
+  "private": true,
+  "description": "Banc d'essai de la map Roblox Zsurvie (Roblox simulé dans fengari)",
+  "scripts": { "test": "node banc.js" },
+  "dependencies": { "fengari": "^0.1.5", "luaparse": "^0.3.1", "three": "^0.170.0" }
+}
