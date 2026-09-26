@@ -2406,7 +2406,7 @@ function sectionsBible(prod) {
   }
   if (prod.plan) {
     const lignes = (prod.plan.taches || []).map(t =>
-      `| ${esc(PHASES[t.phase] || String(t.phase))} | ${t.titre} | ${(t.agents || []).map(x => agentById[x] ? agentById[x].nom.split(" ")[0] : x).join(", ")} |`);
+      `| ${PHASES[t.phase] || String(t.phase)} | ${t.titre} | ${(t.agents || []).map(x => agentById[x] ? agentById[x].nom.split(" ")[0] : x).join(", ")} |`);
     s.push({ id: "plan", titre: "📋 Plan de production", md: (prod.plan.plan || "") +
       (lignes.length ? `\n\n## Tâches\n\n| Phase | Tâche | Agents |\n|---|---|---|\n${lignes.join("\n")}` : "") });
   }
