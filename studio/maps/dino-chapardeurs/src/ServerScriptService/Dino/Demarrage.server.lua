@@ -10,6 +10,7 @@ local Plan = require(Partage.Plan)
 local Equilibrage = require(Partage.Equilibrage)
 local Bus = require(Partage.Bus)
 local Reseau = require(Partage.Reseau)
+local Style = require(Partage.Style)
 
 -- ===== les dossiers communs =====
 local ancienne = workspace:FindFirstChild("Dino")
@@ -34,6 +35,7 @@ end
 
 local ctxBase = {
 	Charte = Charte,
+	Style = Style,
 	Outils = Outils,
 	Plan = Plan,
 	Equilibrage = Equilibrage,

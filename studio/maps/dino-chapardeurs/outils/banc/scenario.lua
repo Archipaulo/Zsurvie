@@ -442,6 +442,7 @@ end
 avancer(1)
 commeClient(function() Reseau().Collecter:FireServer() end)
 avancer(1)
+if EXPORTER_UI then EXPORTER_UI("hud") end
 controle("collecte encaissée", (A:GetAttribute("Argent") or 0) > argentAvant, argentAvant .. " -> " .. tostring(A:GetAttribute("Argent")))
 
 -- ===== 6. vol réussi =====
@@ -452,6 +453,7 @@ if proie then
 	activer(inviteSur(proie, "Voler"), B)
 end
 avancer(0.5)
+if EXPORTER_UI then EXPORTER_UI("alerte-vol") end
 controle("vol : le dino est porté", proie and proie:GetAttribute("Etat") == "Porte" and B:GetAttribute("Porte") == proie:GetAttribute("Id"),
 	proie and tostring(proie:GetAttribute("Etat")))
 local zoneB = bB and bB:FindFirstChild("Zone")
@@ -517,12 +519,17 @@ controle("événement lancé", ReplicatedStorage.DinoEtat:GetAttribute("Evenemen
 activer(inviteSur(racine, "Boutique"), A)
 avancer(0.5)
 local panneau = instantane("panneau Boutique ouvert")
+if EXPORTER_UI then EXPORTER_UI("boutique") end
 local vuBottes = false
 for _, t in ipairs(panneau.textes) do if string.find(t, "Bottes") then vuBottes = true end end
 controle("panneau Boutique affiché", vuBottes, #panneau.textes .. " textes")
 activer(inviteSur(racine, "Index"), A)
 avancer(0.5)
 instantane("panneau Dinodex ouvert")
+if EXPORTER_UI then EXPORTER_UI("dinodex") end
+activer(inviteSur(racine, "Renaissance"), A)
+avancer(0.5)
+if EXPORTER_UI then EXPORTER_UI("renaissance") end
 
 -- ===== 10. renaissance =====
 demander("AjouterArgent", A, E.coutRenaissance(0) + 10, "test")

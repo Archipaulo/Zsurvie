@@ -50,8 +50,8 @@ function Charte.lumiere(c)
 	return c:Lerp(Charte.creme, 0.2)
 end
 
--- 1234567 -> "1,23 M" ; 950 -> "950"
-local SUFFIXES = { "", " k", " M", " Md", " T", " Qa", " Qi" }
+-- 1234567 -> "$1,23M" ; 950 -> "$950" (style simulateur)
+local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi" }
 function Charte.argent(n)
 	n = tonumber(n) or 0
 	local i = 1
@@ -68,7 +68,8 @@ function Charte.argent(n)
 		texte = string.gsub(string.format("%.2f", n), "%.?0+$", "")
 	end
 	texte = string.gsub(texte, "%.", ",")
-	return texte .. SUFFIXES[i] .. " $"
+	if n < 0 then return "-$" .. string.sub(texte, 2) .. SUFFIXES[i] end
+	return "$" .. texte .. SUFFIXES[i]
 end
 
 Charte.police = Enum.Font.FredokaOne

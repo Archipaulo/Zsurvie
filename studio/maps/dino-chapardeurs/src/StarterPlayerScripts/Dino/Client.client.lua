@@ -10,6 +10,7 @@ local Plan = require(Partage.Plan)
 local Equilibrage = require(Partage.Equilibrage)
 local Bus = require(Partage.Bus)
 local Reseau = require(Partage.Reseau)
+local Style = require(Partage.Style)
 
 local joueur = Players.LocalPlayer
 local gui = Instance.new("ScreenGui")
@@ -23,6 +24,7 @@ local racine = workspace:WaitForChild("Dino")
 
 local ctxBase = {
 	Charte = Charte,
+	Style = Style,
 	Outils = Outils,
 	Plan = Plan,
 	Equilibrage = Equilibrage,
@@ -34,6 +36,9 @@ local ctxBase = {
 	racine = racine,
 	dinos = racine:WaitForChild("Dinos"),
 }
+
+-- dégradés animés des raretés Divin et Secret (étiquettes du monde et interface)
+Style.animerDegrades({ workspace, joueur:WaitForChild("PlayerGui") })
 
 -- les invites du décor ouvrent les panneaux d'interface
 local PANNEAUX = { Boutique = "Boutique", Renaissance = "Renaissance", Index = "Index" }

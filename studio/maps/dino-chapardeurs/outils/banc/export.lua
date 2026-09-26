@@ -41,5 +41,42 @@ function EXPORTER(nom)
 	local eclairage = { ClockTime = L.ClockTime, Ambient = hex(L.Ambient), OutdoorAmbient = hex(L.OutdoorAmbient), FogColor = hex(L.FogColor), FogEnd = L.FogEnd, Brightness = L.Brightness }
 	local atmo = L:FindFirstChildOfClass("Atmosphere")
 	if atmo then eclairage.Atmosphere = { Density = atmo.Density, Color = hex(atmo.Color) } end
-	__ecrire(nom, banc.json({ parts = parts, terrain = terrain, eclairage = eclairage }))
+	-- étiquettes flottantes (BillboardGui) : position, taille en studs et lignes de texte
+	local etiquettes = {}
+	if racine then
+		for _, g in ipairs(racine:GetDescendants()) do
+			if g.ClassName == "BillboardGui" and g.Enabled ~= false and #etiquettes < 600 then
+				local support = g.Adornee or g.Parent
+				if support and support:IsA("BasePart") then
+					local p = support.Position + g.StudsOffset + g.StudsOffsetWorldSpace
+					local lignes = {}
+					for _, t in ipairs(g:GetDescendants()) do
+						if (t:IsA("TextLabel") or t:IsA("TextButton")) and t.Text ~= "" then
+							local visible = true
+							local a = t
+							while a and a ~= g do
+								if a:IsA("GuiObject") and not a.Visible then visible = false end
+								a = a.Parent
+							end
+							if visible then
+								local couleur = hex(t.TextColor3)
+								local grad = t:FindFirstChildOfClass("UIGradient")
+								local degrade = nil
+								if grad then
+									degrade = {}
+									for _, k in ipairs(grad.Color.Keypoints) do table.insert(degrade, hex(k.Value)) end
+								end
+								local contour = t:FindFirstChildOfClass("UIStroke")
+								table.insert(lignes, { t.Text, couleur, t.Size.Y.Scale, degrade, contour and hex(contour.Color) or nil, t.Font and t.Font.Name or "" })
+							end
+						end
+					end
+					if #lignes > 0 then
+						table.insert(etiquettes, { r3(p.X), r3(p.Y), r3(p.Z), r3(g.Size.X.Scale), r3(g.Size.Y.Scale), lignes })
+					end
+				end
+			end
+		end
+	end
+	__ecrire("parts-" .. nom, banc.json({ parts = parts, terrain = terrain, eclairage = eclairage, etiquettes = etiquettes }))
 end

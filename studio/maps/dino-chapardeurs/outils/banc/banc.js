@@ -99,7 +99,7 @@ function executer(fichiers) {
   lua.lua_pushjsfunction(L, L2 => {
     const nom = to_jsstring(lauxlib.luaL_checkstring(L2, 1));
     const texte = to_jsstring(lauxlib.luaL_checkstring(L2, 2));
-    fs.writeFileSync(path.join(SORTIE, `parts-${nom}.json`), texte);
+    fs.writeFileSync(path.join(SORTIE, `${nom}.json`), texte);
     return 0;
   });
   lua.lua_setglobal(L, to_luastring("__ecrire"));
@@ -116,7 +116,7 @@ function executer(fichiers) {
   });
   const gestionnaire = lua.lua_gettop(L);
   let resultat = null;
-  for (const f of ["moteur.lua", "types.lua", "instances.lua", "services.lua", "export.lua", "scenario.lua"]) {
+  for (const f of ["moteur.lua", "types.lua", "instances.lua", "services.lua", "export.lua", "interface.lua", "scenario.lua"]) {
     if (process.env.BANC_DEBUG) process.stderr.write(`[banc] charge ${f}\n`);
     const code = fs.readFileSync(path.join(ICI, f), "utf8");
     if (lauxlib.luaL_loadbuffer(L, to_luastring(code), null, to_luastring("@banc/" + f)) !== lua.LUA_OK) {
