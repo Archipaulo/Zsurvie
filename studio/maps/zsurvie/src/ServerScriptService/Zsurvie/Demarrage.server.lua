@@ -67,6 +67,7 @@ end
 -- modules d'un dossier dans l'ordre donné, puis ceux qui n'y figurent pas (par ordre alphabétique)
 local function modulesDans(dossier, ordre)
 	local liste, vus = {}, {}
+	if not dossier then return liste end
 	for _, nom in ipairs(ordre) do
 		local m = dossier:FindFirstChild(nom)
 		if m and m:IsA("ModuleScript") then
@@ -91,7 +92,7 @@ local ORDRE_CONSTRUCTION = {
 }
 
 local debut = os.clock()
-for _, module in ipairs(modulesDans(script.Parent.Builders, ORDRE_CONSTRUCTION)) do
+for _, module in ipairs(modulesDans(script.Parent:FindFirstChild("Builders"), ORDRE_CONSTRUCTION)) do
 	local constructeur = charger(module)
 	if constructeur and type(constructeur.construire) == "function" then
 		local dossier = Outils.dossier(racine, module.Name)
@@ -108,7 +109,7 @@ local ORDRE_SYSTEMES = {
 	"Securite", "GardeFou", "Boutique", "Analytique", "Performance", "Autotest", "ModeTest",
 }
 
-for _, module in ipairs(modulesDans(script.Parent.Systemes, ORDRE_SYSTEMES)) do
+for _, module in ipairs(modulesDans(script.Parent:FindFirstChild("Systemes"), ORDRE_SYSTEMES)) do
 	local systeme = charger(module)
 	if systeme and type(systeme.demarrer) == "function" then
 		local ctx = contexte(nil)
