@@ -750,9 +750,11 @@ if (!reserve && JETON) {
 }
 if (!reserve) {
   if (!marqueur) throw new Error("La réservation exclusive n'a pas pu être faite (agent en échec) : relancez le workflow.")
+  // sans jeton, impossible de distinguer un autre lancement d'une reprise de celui-ci ; rien n'est encore produit
+  const cause = JETON ? "par un autre lancement" : "par un autre lancement, ou par une exécution interrompue de celui-ci"
   throw new Error(typeof entree.dossier === "string"
-    ? `${RACINE} est déjà réservé par un autre lancement : choisissez un autre dossier vide, ou relancez sans args.dossier.`
-    : `${RACINE} vient d'être pris par un autre lancement : relancez, un nouveau dossier sera réservé.`)
+    ? `${RACINE} est déjà réservé ${cause} : choisissez un autre dossier vide, ou relancez sans args.dossier. Aucun livrable n'a encore été produit.`
+    : `${RACINE} est déjà réservé ${cause} : relancez, un nouveau dossier sera réservé. Aucun livrable n'a encore été produit.`)
 }
 const echecs = []
 log(`Brief reçu pour « ${NOM} ». Livrables dans ${RACINE}/`)

@@ -57,8 +57,10 @@ précédente), fait travailler les 50 agents qui y écrivent tous leurs livrable
 commande d'assemblage que Claude exécute pour produire `production.json` et
 `BIBLE-COMPLETE.md`. Importez `production.json` dans l'application avec
 **📥 Importer une production**. Pour pouvoir reprendre une exécution
-interrompue, lancez-la avec un identifiant unique :
-`{ nom, brief, jeton: "zsurvie-01" }`.
+interrompue dès sa réservation de dossier, lancez-la avec un identifiant
+propre à ce lancement (jamais réutilisé) : `{ nom, brief, jeton: "zsurvie-2026-09-26-a" }`.
+Sans jeton, une exécution interrompue à ce tout premier moment se relance
+simplement : rien n'a encore été produit.
 
 En cas d'échec d'un agent, l'application ne passe pas à l'étape suivante avec
 des données incomplètes : elle propose **🔁 Réessayer les échecs** ou
