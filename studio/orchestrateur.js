@@ -3,8 +3,10 @@
    Un brief → les 50 agents travaillent ensemble via l'API Anthropic,
    directement depuis le navigateur (clé saisie dans les Réglages).
    Chaque résultat est sauvegardé dès qu'il arrive : une production
-   interrompue reprend là où elle s'était arrêtée.
-   Utilise les globales d'app.js (state, save, toast, esc…) et de
+   interrompue reprend là où elle s'était arrêtée. Une étape ne démarre
+   que lorsque la précédente est complète (ou que ses échecs ont été
+   explicitement ignorés), pour que la bible reste cohérente.
+   Utilise les globales d'app.js (state, save, toast, esc, verrou…) et de
    production.js (TACHES, SCHEMAS, digest*…).
    ========================================================================= */
 "use strict";
@@ -19,12 +21,15 @@ class ErreurFatale extends Error {}
 
 function pause(ms, signal) {
   return new Promise((ok, ko) => {
+    if (signal && signal.aborted) { ko(new DOMException("Interrompu", "AbortError")); return; }
     const t = setTimeout(ok, ms);
     if (signal) signal.addEventListener("abort", () => { clearTimeout(t); ko(new DOMException("Interrompu", "AbortError")); }, { once: true });
   });
 }
 
-/* lit un flux SSE de l'API Messages et reconstitue le texte final */
+/* lit un flux SSE de l'API Messages et reconstitue le texte final.
+   En cas de coupure, l'erreur emporte le résultat partiel (e.partiel)
+   pour que les jetons déjà consommés soient comptés. */
 async function lireFlux(res, onProgres) {
   const lecteur = res.body.getReader();
   const dec = new TextDecoder();
@@ -57,30 +62,37 @@ async function lireFlux(res, onProgres) {
         break;
     }
   };
-  for (;;) {
-    const { done, value } = await lecteur.read();
-    if (done) break;
-    tampon += dec.decode(value, { stream: true }).replace(/\r\n/g, "\n");
-    let i;
-    while ((i = tampon.indexOf("\n\n")) >= 0) {
-      const bloc = tampon.slice(0, i);
-      tampon = tampon.slice(i + 2);
-      const data = bloc.split("\n").filter(l => l.startsWith("data:")).map(l => l.slice(5).trim()).join("");
-      if (!data) continue;
-      try { traiter(JSON.parse(data)); } catch (e) { /* ligne incomplète ou ping : ignorée */ }
+  try {
+    for (;;) {
+      const { done, value } = await lecteur.read();
+      if (done) break;
+      tampon += dec.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+      let i;
+      while ((i = tampon.indexOf("\n\n")) >= 0) {
+        const bloc = tampon.slice(0, i);
+        tampon = tampon.slice(i + 2);
+        const data = bloc.split("\n").filter(l => l.startsWith("data:")).map(l => l.slice(5).trim()).join("");
+        if (!data) continue;
+        try { traiter(JSON.parse(data)); } catch (e) { /* ligne incomplète ou ping : ignorée */ }
+      }
     }
+  } catch (e) {
+    e.partiel = r;
+    throw e;
   }
   return r;
 }
 
+/* estimation des jetons de sortie d'un flux coupé avant son bilan */
+const jetonsEstimes = texte => Math.ceil(texte.length / 3.5);
+
 /* un appel complet, avec nouvelles tentatives sur les erreurs passagères */
-async function appelClaude({ system, user, schema, signal, onProgres, usage }) {
-  const model = state.settings.model;
+async function appelClaude({ model, apiKey, system, user, schema, signal, onProgres, compter }) {
   const body = { model, max_tokens: 32000, stream: true, system, messages: [{ role: "user", content: user }] };
   if (schema) body.output_config = { format: { type: "json_schema", schema } };
   const headers = {
     "content-type": "application/json",
-    "x-api-key": state.settings.apiKey,
+    "x-api-key": apiKey,
     "anthropic-version": "2023-06-01",
     "anthropic-dangerous-direct-browser-access": "true",
   };
@@ -115,11 +127,12 @@ async function appelClaude({ system, user, schema, signal, onProgres, usage }) {
     try {
       r = await lireFlux(res, onProgres);
     } catch (e) {
+      if (e.partiel) compter(e.partiel.entree, e.partiel.sortie || jetonsEstimes(e.partiel.texte));
       if (signal && signal.aborted) throw e;
       derniere = new Error("flux interrompu");
       continue;
     }
-    if (usage) { usage.entree += r.entree; usage.sortie += r.sortie; }
+    compter(r.entree, r.sortie || jetonsEstimes(r.texte));
     if (r.erreur) { derniere = new Error(r.erreur.message || r.erreur.type); continue; }
     if (r.stop === "refusal") throw new Error("demande déclinée par le modèle");
     if (r.stop === "max_tokens") throw new Error("réponse trop longue (limite de jetons atteinte)");
@@ -138,11 +151,11 @@ let run = null;   // production en cours dans cet onglet
 function nouvelleProduction(brief) {
   return {
     id: uid(), source: "app", brief,
-    modele: state.settings.model, cree: Date.now(), statut: "prete",
+    modele: null, cree: Date.now(), statut: "prete",
     vision: { benchmark: null, da: null, canon: null, titre: null, pitch: null },
     contributions: {}, qa: {}, coordination: null, revisionsFaites: {},
-    plan: null, bible: null, scripts: {}, echecs: {},
-    usage: { entree: 0, sortie: 0 },
+    plan: null, bible: null, scripts: {}, echecs: {}, ignores: {},
+    usages: {}, tachesImportees: false,
   };
 }
 function trouverProduction(prodId) {
@@ -152,9 +165,16 @@ function trouverProduction(prodId) {
   return null;
 }
 function coutProduction(prod) {
-  if (!prod.usage) return null;
-  const [pe, ps] = PRIX_MODELES[prod.modele] || PRIX_MODELES["claude-opus-5"];
-  return (prod.usage.entree * pe + prod.usage.sortie * ps) / 1e6;
+  const u = Object.entries(prod.usages || {});
+  if (!u.length) return null;
+  return u.reduce((total, [m, x]) => {
+    const [pe, ps] = PRIX_MODELES[m] || PRIX_MODELES["claude-opus-5"];
+    return total + (x.entree * pe + x.sortie * ps) / 1e6;
+  }, 0);
+}
+function modelesUtilises(prod) {
+  const m = Object.keys(prod.usages || {});
+  return m.length ? m.map(nomModele).join(" + ") : nomModele(prod.modele);
 }
 function estimationCout(model) {
   const [pe, ps] = PRIX_MODELES[model] || PRIX_MODELES["claude-opus-5"];
@@ -187,29 +207,56 @@ function arbitragesTexte(prod) {
   return (prod.coordination.conflits || [])
     .map(c => `- ${c.sujet} (${(c.agents || []).join(", ")}) → ${c.arbitrage}`).join("\n");
 }
+/* échecs d'une étape qui n'ont pas été explicitement ignorés */
+function echecsBloquants(prod, prefixes) {
+  return Object.keys(prod.echecs || {}).filter(k => prefixes.some(p => k.startsWith(p)) && !prod.ignores[k]);
+}
+function aFaire(prod, cle, fait) {
+  return !fait && !prod.ignores[cle];
+}
+
+class ArretEtape extends Error {}
 
 async function lancerProduction(prodId) {
   const trouve = trouverProduction(prodId);
   if (!trouve) return;
   if (run && run.actif) { toast("Une production est déjà en cours dans cet onglet."); return; }
+  if (verrouAutreOnglet()) { toast("Une production tourne déjà dans un autre onglet : attendez qu'elle se termine."); return; }
   if (!state.settings.apiKey) { toast("Ajoutez d'abord votre clé API dans les Réglages."); return; }
   const { projet, prod } = trouve;
-  run = { prodId, actif: true, ctrl: new AbortController(), statuts: {}, progres: {}, journal: [] };
+  // le modèle et la clé sont figés pour toute la durée de cette exécution
+  run = {
+    prodId, actif: true, ctrl: new AbortController(), statuts: {}, progres: {}, journal: [],
+    model: state.settings.model, apiKey: state.settings.apiKey, nonSauve: false, battement: null,
+  };
   const signal = run.ctrl.signal;
-  prod.modele = state.settings.model;
+  if (!prod.modele) prod.modele = run.model;
   prod.statut = "en_cours";
   prod.echecs = {};
   delete prod.erreur;
-  if (!prod.usage) prod.usage = { entree: 0, sortie: 0 };
-  save();
-  noter(`🚀 Production lancée avec ${nomModele(prod.modele)}`);
+  if (!save()) {
+    prod.statut = "interrompu";
+    run.actif = false;
+    toast("Stockage du navigateur plein : exportez puis supprimez d'anciennes productions avant de lancer.");
+    rendreProduction();
+    return;
+  }
+  poserVerrou(prodId);
+  run.battement = setInterval(() => poserVerrou(prodId), 4000);
+  noter(`🚀 Production lancée avec ${nomModele(run.model)}`);
   const parallele = Math.max(1, Math.min(8, Number(state.settings.parallele) || 3));
   const A = id => agentById[id];
+  const compter = (entree, sortie) => {
+    const u = prod.usages[run.model] || (prod.usages[run.model] = { entree: 0, sortie: 0 });
+    u.entree += entree;
+    u.sortie += sortie;
+  };
 
   const appel = (cle, a, tache, schema) => appelClaude({
+    model: run.model, apiKey: run.apiKey,
     system: `${personaPrompt(a)}\n\n${REGLES_STUDIO}`,
-    user: tache, schema, signal, usage: prod.usage,
-    onProgres: n => { run.progres[cle] = n; planifierRendu(); },
+    user: tache, schema, signal, compter,
+    onProgres: n => { run.progres[cle] = n; planifierProgres(); },
   });
 
   async function unite(cle, travail) {
@@ -221,71 +268,82 @@ async function lancerProduction(prodId) {
       run.statuts[cle] = "fini";
       delete prod.echecs[cle];
     } catch (e) {
-      if (signal.aborted) { run.statuts[cle] = "attente"; return; }
+      if (signal.aborted && !(e instanceof ErreurFatale)) { run.statuts[cle] = "attente"; return; }
       run.statuts[cle] = "echec";
       prod.echecs[cle] = e.message;
-      const [, id] = cle.split(":");
+      const id = cle.split(":")[1];
       noter(`⚠️ ${A(id).nom} : ${e.message}`);
       if (e instanceof ErreurFatale) {
         prod.erreur = e.message;
         run.ctrl.abort();
       }
     } finally {
-      save();
+      if (!save() && !run.nonSauve) {
+        // plus rien ne peut être enregistré : on arrête de consommer l'API
+        run.nonSauve = true;
+        prod.erreur = "Stockage du navigateur plein : exportez cette production (bouton ⬇️ Exporter) avant de fermer l'onglet";
+        run.ctrl.abort();
+      }
       planifierRendu();
     }
   }
-  async function enParallele(ids, fn) {
+  async function enParallele(items, fn) {
     let i = 0;
-    await Promise.all(Array.from({ length: Math.min(parallele, ids.length) }, async () => {
-      while (i < ids.length && !signal.aborted) await fn(ids[i++]);
+    await Promise.all(Array.from({ length: Math.min(parallele, items.length) }, async () => {
+      while (i < items.length && !signal.aborted) await fn(items[i++]);
     }));
   }
-  const verifier = () => { if (signal.aborted) throw new DOMException("Interrompu", "AbortError"); };
+  /* fin d'étape : interruption, ou échecs non ignorés → on s'arrête ici */
+  const cloturer = (nomEtape, prefixes) => {
+    if (signal.aborted) throw new DOMException("Interrompu", "AbortError");
+    const bloquants = echecsBloquants(prod, prefixes);
+    if (bloquants.length) throw new ArretEtape(`${bloquants.length} échec(s) à l'étape « ${nomEtape} »`);
+  };
 
   try {
     /* 1. Vision */
     const v = prod.vision;
     await Promise.all([
-      !v.benchmark && unite("vision:a05", async () => { v.benchmark = await appel("vision:a05", A("a05"), TACHES.benchmark(prod.brief)); }),
-      !v.da && unite("vision:a04", async () => { v.da = await appel("vision:a04", A("a04"), TACHES.da(prod.brief)); }),
+      aFaire(prod, "vision:a05", v.benchmark) && unite("vision:a05", async () => { v.benchmark = await appel("vision:a05", A("a05"), TACHES.benchmark(prod.brief)); }),
+      aFaire(prod, "vision:a04", v.da) && unite("vision:a04", async () => { v.da = await appel("vision:a04", A("a04"), TACHES.da(prod.brief)); }),
     ].filter(Boolean));
-    verifier();
+    cloturer("Vision", ["vision:a05", "vision:a04"]);
     if (!v.canon) {
       await unite("vision:a01", async () => {
         const r = await appel("vision:a01", A("a01"), TACHES.canon(prod.brief, v.benchmark, v.da), SCHEMAS.canon(true));
         Object.assign(v, { canon: r.canon, titre: r.titre, pitch: r.pitch });
       });
     }
-    verifier();
-    if (!v.canon) throw new Error("le canon n'a pas pu être écrit, la production s'arrête");
+    if (signal.aborted) throw new DOMException("Interrompu", "AbortError");
+    if (!v.canon) throw new ArretEtape("le canon n'a pas pu être écrit (il est indispensable)");
     noter(`🧭 Canon établi : « ${v.titre} »`);
 
     /* 2. Contributions */
-    await enParallele(CREATEURS.filter(id => !prod.contributions[id]), id => unite(`contrib:${id}`, async () => {
+    await enParallele(CREATEURS.filter(id => aFaire(prod, `contrib:${id}`, prod.contributions[id])), id => unite(`contrib:${id}`, async () => {
       prod.contributions[id] = await appel(`contrib:${id}`, A(id), TACHES.contribution(A(id), prod.brief, v.canon), SCHEMAS.contribution(true));
     }));
-    verifier();
+    cloturer("Contributions", ["contrib:"]);
     noter(`🛠️ ${Object.keys(prod.contributions).length}/${CREATEURS.length} contributions livrées`);
 
     /* 3. Revue QA */
-    await enParallele(RELECTEURS_QA.filter(id => !prod.qa[id]), id => unite(`qa:${id}`, async () => {
+    await enParallele(RELECTEURS_QA.filter(id => aFaire(prod, `qa:${id}`, prod.qa[id])), id => unite(`qa:${id}`, async () => {
       prod.qa[id] = await appel(`qa:${id}`, A(id), TACHES.qa(A(id), prod.brief, v.canon, dossierQA(prod, id)), SCHEMAS.qa(true));
     }));
-    verifier();
+    cloturer("Revue QA", ["qa:"]);
 
     /* 4. Coordination */
-    if (!prod.coordination) {
+    if (aFaire(prod, "coord:a03", prod.coordination)) {
       await unite("coord:a03", async () => {
         prod.coordination = await appel("coord:a03", A("a03"),
           TACHES.coordination(prod.brief, v.canon, digestDecisions(prod.contributions), digestProblemes(prod.qa)),
           SCHEMAS.coordination(true));
       });
     }
-    verifier();
+    cloturer("Coordination", ["coord:"]);
 
     /* 5. Révisions */
-    const aReviser = Object.entries(revisionsDemandees(prod)).filter(([id]) => !prod.revisionsFaites[id]);
+    const aReviser = Object.entries(revisionsDemandees(prod))
+      .filter(([id]) => aFaire(prod, `rev:${id}`, prod.revisionsFaites[id]));
     if (aReviser.length) noter(`✏️ ${aReviser.length} agents révisent leur livrable`);
     await enParallele(aReviser, ([id, consignes]) => unite(`rev:${id}`, async () => {
       const r = await appel(`rev:${id}`, A(id),
@@ -294,36 +352,58 @@ async function lancerProduction(prodId) {
       prod.contributions[id] = Object.assign(r, { revise: true });
       prod.revisionsFaites[id] = true;
     }));
-    verifier();
+    cloturer("Révisions", ["rev:"]);
 
     /* 6. Plan & Bible */
     await Promise.all([
-      !prod.plan && unite("plan:a02", async () => {
+      aFaire(prod, "plan:a02", prod.plan) && unite("plan:a02", async () => {
         prod.plan = await appel("plan:a02", A("a02"),
           TACHES.plan(prod.brief, v.canon, digestTaches(prod.contributions), arbitragesTexte(prod)), SCHEMAS.plan(true));
       }),
-      !prod.bible && unite("bible:a01", async () => {
+      aFaire(prod, "bible:a01", prod.bible) && unite("bible:a01", async () => {
         prod.bible = await appel("bible:a01", A("a01"),
           TACHES.bible(prod.brief, v.canon, digestDecisions(prod.contributions), arbitragesTexte(prod),
             digestProblemes(prod.qa, ["bloquant", "majeur"])), SCHEMAS.bible(true));
       }),
     ].filter(Boolean));
-    verifier();
+    cloturer("Plan & Bible", ["plan:", "bible:"]);
 
-    prod.statut = Object.keys(prod.echecs).length ? "incomplet" : "termine";
-    noter(prod.statut === "termine" ? "🎉 Production terminée !" : "⚠️ Production terminée avec des échecs : relancez pour les reprendre");
+    prod.statut = "termine";
+    noter("🎉 Production terminée !");
   } catch (e) {
-    prod.statut = "interrompu";
-    if (prod.erreur) noter(`⛔ Arrêt : ${prod.erreur}`);
-    else if (e.name === "AbortError") noter("⏸️ Production interrompue — elle reprendra là où elle s'est arrêtée");
-    else noter(`⛔ ${e.message}`);
+    if (prod.erreur) {
+      prod.statut = "interrompu";
+      noter(`⛔ Arrêt : ${prod.erreur}`);
+    } else if (e instanceof ArretEtape) {
+      prod.statut = "incomplet";
+      noter(`⚠️ ${e.message} : réessayez, ou continuez sans ces agents`);
+    } else if (e.name === "AbortError") {
+      prod.statut = "interrompu";
+      noter("⏸️ Production interrompue — elle reprendra là où elle s'est arrêtée");
+    } else {
+      prod.statut = "incomplet";
+      noter(`⛔ ${e.message}`);
+    }
   } finally {
     run.actif = false;
-    save();
+    clearInterval(run.battement);
+    leverVerrou();
+    if (!save() && !run.nonSauve) run.nonSauve = true;
     const titre = prod.vision.titre || projet.nom;
-    logEvent(`🎬 Production « ${esc(titre)} » : ${libelleStatut(prod.statut).toLowerCase()} (<b>${esc(projet.nom)}</b>)`);
+    logEvent(`🎬 Production « ${titre} » : ${libelleStatut(prod.statut).toLowerCase()} (<b>${projet.nom}</b>)`);
     rendreProduction();
   }
+}
+
+/* les échecs actuels ne bloquent plus : l'étape suivante se fera sans eux */
+function ignorerEchecs(prodId) {
+  const t = trouverProduction(prodId);
+  if (!t) return;
+  const cles = Object.keys(t.prod.echecs || {}).filter(k => !t.prod.ignores[k]);
+  if (cles.includes("vision:a01")) { toast("Le canon est indispensable : réessayez-le."); return; }
+  for (const k of cles) t.prod.ignores[k] = true;
+  save();
+  lancerProduction(prodId);
 }
 
 function noter(msg) {
@@ -332,10 +412,16 @@ function noter(msg) {
   planifierRendu();
 }
 function nomModele(m) {
-  return { "claude-opus-5": "Claude Opus 5", "claude-sonnet-5": "Claude Sonnet 5", "claude-haiku-4-5": "Claude Haiku 4.5" }[m] || m;
+  return { "claude-opus-5": "Claude Opus 5", "claude-sonnet-5": "Claude Sonnet 5", "claude-haiku-4-5": "Claude Haiku 4.5" }[m] || "modèle inconnu";
 }
 function libelleStatut(s) {
-  return { prete: "Prête", en_cours: "En cours", termine: "Terminée", incomplet: "Incomplète", interrompu: "Interrompue" }[s] || s;
+  return { prete: "Prête", en_cours: "En cours", termine: "Terminée", incomplet: "Incomplète", interrompu: "Interrompue" }[s] || "Inconnu";
+}
+/* une production « en cours » que plus aucun onglet ne fait tourner est en fait interrompue */
+function statutAffiche(prod) {
+  if (prod.statut !== "en_cours") return prod.statut;
+  const ici = run && run.actif && run.prodId === prod.id;
+  return ici || verrouFrais(prod.id) ? "en_cours" : "interrompu";
 }
 
 /* ========================= état des unités ========================= */
@@ -344,7 +430,7 @@ function libelleStatut(s) {
 function unitesProduction(prod) {
   const vivant = run && run.prodId === prod.id ? run.statuts : {};
   const etat = (cle, fait) => vivant[cle] === "travail" ? "travail"
-    : fait ? "fini" : prod.echecs && prod.echecs[cle] ? "echec" : "attente";
+    : fait ? "fini" : prod.ignores[cle] ? "ignore" : prod.echecs[cle] ? "echec" : "attente";
   const u = [
     { cle: "vision:a05", etape: "vision", fait: !!prod.vision.benchmark },
     { cle: "vision:a04", etape: "vision", fait: !!prod.vision.da },
@@ -365,19 +451,55 @@ function unitesProduction(prod) {
 let prodAffichee = null;     // id de la production affichée
 let ongletProd = "salle";
 let renduPlanifie = null;
+let progresPlanifie = null;
+let livresAuDernierRendu = -1;
 
+/* rendu complet (changement d'état d'un agent) : au plus toutes les 1,2 s */
 function planifierRendu() {
   if (renduPlanifie) return;
   renduPlanifie = setTimeout(() => {
     renduPlanifie = null;
-    if (currentView === "production") rendreProduction();
-  }, 500);
+    if (currentView !== "production") return;
+    const t = prodAffichee && trouverProduction(prodAffichee);
+    // la bible n'est reconstruite que lorsqu'un nouveau livrable est arrivé
+    if (t && ongletProd === "bible" && run && run.actif) {
+      const livres = unitesProduction(t.prod).filter(u => u.etat === "fini").length;
+      if (livres === livresAuDernierRendu) { majEntete(t.prod); return; }
+    }
+    rendreProduction();
+  }, 1200);
+}
+/* progression du texte en streaming : on ne touche qu'aux étiquettes des tuiles */
+function planifierProgres() {
+  if (progresPlanifie) return;
+  progresPlanifie = setTimeout(() => {
+    progresPlanifie = null;
+    if (!run || currentView !== "production" || prodAffichee !== run.prodId) return;
+    for (const [cle, n] of Object.entries(run.progres)) {
+      if (run.statuts[cle] !== "travail") continue;
+      const el = document.querySelector(`.tuile[data-aid="${cle.split(":")[1]}"] .tuile-etat`);
+      if (el) el.textContent = `🔨 ${Math.round(n / 100) / 10}k`;
+    }
+  }, 700);
 }
 
 function ouvrirProduction(prodId, onglet) {
   prodAffichee = prodId;
   ongletProd = onglet || "salle";
+  livresAuDernierRendu = -1;
   showView("production");
+}
+
+function majEntete(prod) {
+  const unites = unitesProduction(prod);
+  const finies = unites.filter(u => u.etat === "fini").length;
+  const c = document.querySelector("#prod-compteur");
+  if (c) c.textContent = `✅ ${finies}/${unites.length} étapes d'agents`;
+  const barre = document.querySelector("#prod-barre");
+  if (barre) barre.style.width = `${Math.round(100 * finies / unites.length)}%`;
+  const cout = coutProduction(prod);
+  const ce = document.querySelector("#prod-cout");
+  if (ce && cout !== null) ce.textContent = `💶 ≈ ${cout.toFixed(2)} $ consommés`;
 }
 
 function rendreProduction() {
@@ -390,41 +512,49 @@ function rendreProduction() {
       <p class="muted">Aucune production ouverte. Ouvrez un projet et cliquez sur « 🚀 Brief au studio » :
       les 50 agents travailleront ensemble à partir d'un seul brief.</p>
       ${toutes.length ? `<h2>Productions existantes</h2><div class="card-list">${toutes.map(({ p, pr }) => `
-        <div class="project-card" data-prod="${pr.id}">
+        <div class="project-card" data-prod="${esc(pr.id)}">
           <div class="pc-top"><div><div class="pc-nom">${esc(pr.vision.titre || p.nom)}</div>
           <div class="pc-type">${esc(p.nom)} · ${new Date(pr.cree).toLocaleDateString("fr-FR")}</div></div>
-          <span class="badge ${classeStatut(pr.statut)}">${libelleStatut(pr.statut)}</span></div>
+          <span class="badge ${classeStatut(statutAffiche(pr))}">${esc(libelleStatut(statutAffiche(pr)))}</span></div>
         </div>`).join("")}</div>` : ""}`;
     wrap.querySelectorAll("[data-prod]").forEach(el => el.addEventListener("click", () => ouvrirProduction(el.dataset.prod)));
     return;
   }
   const { projet, prod } = trouve;
-  const enCours = run && run.actif && run.prodId === prod.id;
+  const enCours = !!(run && run.actif && run.prodId === prod.id);
+  const ailleurs = !enCours && verrouFrais(prod.id);
+  const statut = statutAffiche(prod);
   const unites = unitesProduction(prod);
   const finies = unites.filter(u => u.etat === "fini").length;
+  livresAuDernierRendu = finies;
+  const ignores = unites.filter(u => u.etat === "ignore").length;
+  const echecs = unites.filter(u => u.etat === "echec").length;
   const cout = coutProduction(prod);
-  const peutReprendre = !enCours && prod.statut !== "termine" && prod.source !== "claude-code";
+  const peutReprendre = !enCours && !ailleurs && statut !== "termine" && prod.source !== "claude-code";
 
   wrap.innerHTML = `
     <button class="ghost-btn" id="btn-prod-retour">← ${esc(projet.nom)}</button>
     <div class="detail-head" style="margin-top:14px">
       <h1>🎬 ${esc(prod.vision.titre || "Production en préparation")}</h1>
-      <span class="badge ${classeStatut(prod.statut)}">${libelleStatut(prod.statut)}</span>
+      <span class="badge ${classeStatut(statut)}">${esc(libelleStatut(statut))}</span>
     </div>
     ${prod.vision.pitch ? `<p class="detail-desc">${esc(prod.vision.pitch)}</p>` : ""}
     <div class="prod-meta">
-      <span>🤖 ${esc(prod.source === "claude-code" ? "Workflow Claude Code" : nomModele(prod.modele))}</span>
-      <span>✅ ${finies}/${unites.length} étapes d'agents</span>
-      ${cout !== null && prod.source !== "claude-code" ? `<span>💶 ≈ ${cout.toFixed(2)} $ consommés</span>` : ""}
+      <span>🤖 ${esc(prod.source === "claude-code" ? "Workflow Claude Code" : modelesUtilises(prod))}</span>
+      <span id="prod-compteur">✅ ${finies}/${unites.length} étapes d'agents</span>
+      ${ignores ? `<span>⏭️ ${ignores} ignorée${ignores > 1 ? "s" : ""}</span>` : ""}
+      ${cout !== null ? `<span id="prod-cout">💶 ≈ ${cout.toFixed(2)} $ consommés</span>` : ""}
       ${prod.erreur ? `<span class="txt-danger">⛔ ${esc(prod.erreur)}</span>` : ""}
+      ${ailleurs ? `<span>🔒 En cours dans un autre onglet</span>` : ""}
     </div>
-    <div class="progress big"><div style="width:${Math.round(100 * finies / unites.length)}%"></div></div>
+    <div class="progress big"><div id="prod-barre" style="width:${Math.round(100 * finies / unites.length)}%"></div></div>
     <div class="btn-row" style="margin:14px 0">
       ${enCours ? `<button class="danger-btn" id="btn-prod-stop">⏸️ Interrompre</button>` : ""}
-      ${peutReprendre ? `<button class="primary-btn" id="btn-prod-go2">${prod.statut === "prete" ? "🚀 Lancer" : "▶️ Reprendre / relancer les échecs"}</button>` : ""}
+      ${peutReprendre ? `<button class="primary-btn" id="btn-prod-go2">${statut === "prete" ? "🚀 Lancer" : echecs ? "🔁 Réessayer les échecs" : "▶️ Reprendre"}</button>` : ""}
+      ${peutReprendre && echecs ? `<button class="ghost-btn" id="btn-prod-ignorer">⏭️ Continuer sans eux</button>` : ""}
       <button class="ghost-btn" id="btn-prod-md">⬇️ Télécharger la bible (.md)</button>
       <button class="ghost-btn" id="btn-prod-json">⬇️ Exporter (.json)</button>
-      ${!enCours ? `<button class="danger-btn" id="btn-prod-del">🗑️ Supprimer</button>` : ""}
+      ${!enCours && !ailleurs ? `<button class="danger-btn" id="btn-prod-del">🗑️ Supprimer</button>` : ""}
     </div>
     <div class="tabs">
       <button class="tab ${ongletProd === "salle" ? "active" : ""}" data-tab="salle">🏭 Salle de production</button>
@@ -432,16 +562,17 @@ function rendreProduction() {
     </div>
     <div id="prod-contenu"></div>`;
 
-  const contenu = wrap.querySelector("#prod-contenu");
-  if (ongletProd === "salle") rendreSalle(contenu, prod, unites);
-  else rendreBible(contenu, projet, prod);
-
+  // les boutons sont branchés avant le contenu : un contenu illisible ne doit pas les rendre inertes
   wrap.querySelector("#btn-prod-retour").addEventListener("click", () => openProject(projet.id));
   wrap.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => { ongletProd = b.dataset.tab; rendreProduction(); }));
   const stop = wrap.querySelector("#btn-prod-stop");
   if (stop) stop.addEventListener("click", () => { run.ctrl.abort(); toast("Interruption demandée…"); });
   const go = wrap.querySelector("#btn-prod-go2");
   if (go) go.addEventListener("click", () => lancerProduction(prod.id));
+  const ign = wrap.querySelector("#btn-prod-ignorer");
+  if (ign) ign.addEventListener("click", () => {
+    if (confirm("Continuer sans les agents en échec ? Les étapes suivantes se feront sans leur travail.")) ignorerEchecs(prod.id);
+  });
   wrap.querySelector("#btn-prod-md").addEventListener("click", () =>
     telecharger(`${slugProd(prod.vision.titre || projet.nom)}-bible.md`, markdownComplet(prod), "text/markdown"));
   wrap.querySelector("#btn-prod-json").addEventListener("click", () =>
@@ -453,10 +584,18 @@ function rendreProduction() {
     save();
     openProject(projet.id);
   });
+
+  const contenu = wrap.querySelector("#prod-contenu");
+  try {
+    if (ongletProd === "salle") rendreSalle(contenu, prod, unites);
+    else rendreBible(contenu, projet, prod);
+  } catch (e) {
+    contenu.innerHTML = `<p class="txt-danger">Affichage impossible : ${esc(e.message)}</p>`;
+  }
 }
 
 function classeStatut(s) {
-  return { termine: "termine", en_cours: "actif", prete: "pause", incomplet: "pause", interrompu: "pause" }[s] || "pause";
+  return { termine: "termine", en_cours: "actif" }[s] || "pause";
 }
 
 function rendreSalle(el, prod, unites) {
@@ -465,14 +604,14 @@ function rendreSalle(el, prod, unites) {
     const us = parEtape(id);
     if (!us.length) return id === "revisions" && prod.coordination ? "fini" : "attente";
     if (us.some(u => u.etat === "travail")) return "travail";
-    if (us.every(u => u.etat === "fini")) return "fini";
     if (us.some(u => u.etat === "echec")) return "echec";
-    return us.some(u => u.etat === "fini") ? "travail" : "attente";
+    if (us.every(u => u.etat === "fini" || u.etat === "ignore")) return "fini";
+    return us.some(u => u.etat === "fini") ? "partiel" : "attente";
   };
-  const icone = { attente: "⏳", travail: "🔨", fini: "✅", echec: "⚠️" };
-  // état agrégé par agent : au travail > échec > fini > en attente
+  const icone = { attente: "⏳", travail: "🔨", fini: "✅", echec: "⚠️", ignore: "⏭️", partiel: "◐" };
+  // état agrégé par agent : au travail > échec > fini > ignoré > en attente
   const etatAgent = {};
-  const rang = { travail: 3, echec: 2, fini: 1, attente: 0 };
+  const rang = { travail: 4, echec: 3, fini: 2, ignore: 1, attente: 0 };
   for (const u of unites) {
     const id = u.cle.split(":")[1];
     if (etatAgent[id] === undefined || rang[u.etat] > rang[etatAgent[id]]) etatAgent[id] = u.etat;
@@ -494,7 +633,8 @@ function rendreSalle(el, prod, unites) {
         <div class="salle-dept-nom" style="color:${d.color}">${d.emoji} ${d.nom}</div>
         <div class="salle-agents">${AGENTS.filter(a => a.dept === d.id).map(a => {
           const st = etatAgent[a.id] || "attente";
-          const car = vivant ? Object.entries(vivant.progres).filter(([k]) => k.endsWith(":" + a.id) && vivant.statuts[k] === "travail").map(([, n]) => n)[0] : 0;
+          const cleVive = vivant ? Object.keys(vivant.statuts).find(k => k.endsWith(":" + a.id) && vivant.statuts[k] === "travail") : null;
+          const car = cleVive ? vivant.progres[cleVive] || 0 : 0;
           return `<div class="tuile ${st}" data-aid="${a.id}" title="${esc(a.nom)} — ${esc(a.role)}">
             <span class="tuile-emoji">${a.emoji}</span>
             <span class="tuile-nom">${esc(a.nom.split(" ")[0])}</span>
@@ -503,7 +643,8 @@ function rendreSalle(el, prod, unites) {
         }).join("")}</div>
       </div>`).join("")}
     </div>
-    ${Object.keys(prod.echecs || {}).length ? `<div class="echecs"><b>Échecs à reprendre :</b> ${Object.entries(prod.echecs).map(([k, m]) => `${esc(k)} (${esc(m)})`).join(" · ")}</div>` : ""}
+    ${Object.keys(prod.echecs || {}).length ? `<div class="echecs"><b>Échecs :</b> ${Object.entries(prod.echecs).map(([k, m]) =>
+      `${esc(k)}${prod.ignores[k] ? " (ignoré)" : ""} : ${esc(m)}`).join(" · ")}</div>` : ""}
     <h2>Journal</h2>
     <div class="log-list">${vivant && vivant.journal.length
       ? vivant.journal.slice(0, 30).map(j => `<div class="log-item">${esc(j.msg)} <span class="log-time">· ${timeAgo(j.t)}</span></div>`).join("")
@@ -535,15 +676,22 @@ function livrablesAgent(prod, id) {
 }
 function ouvrirLivrables(prod, id) {
   const a = agentById[id];
+  if (!a) return;
   const d = deptById[a.dept];
   const parts = livrablesAgent(prod, id);
   const err = Object.entries(prod.echecs || {}).filter(([k]) => k.endsWith(":" + id));
   document.getElementById("livrable-head").innerHTML = `
     <div class="agent-profile"><span class="ap-emoji">${a.emoji}</span>
     <div><h2>${esc(a.nom)}</h2><div class="ap-role">${esc(a.role)} · ${d.emoji} ${d.nom}</div></div></div>`;
-  document.getElementById("livrable-body").innerHTML = parts.length
-    ? parts.map(([t, md]) => `<h2 class="md-section">${esc(t)}</h2>${mdVersHtml(md)}`).join("")
-    : `<p class="muted">${err.length ? `⚠️ ${esc(err.map(([, m]) => m).join(" · "))}` : "Cet agent n'a encore rien livré pour cette production."}</p>`;
+  let corps;
+  try {
+    corps = parts.length
+      ? parts.map(([t, md]) => `<h2 class="md-section">${esc(t)}</h2>${mdVersHtml(md)}`).join("")
+      : `<p class="muted">${err.length ? `⚠️ ${esc(err.map(([, m]) => m).join(" · "))}` : "Cet agent n'a encore rien livré pour cette production."}</p>`;
+  } catch (e) {
+    corps = `<p class="txt-danger">Affichage impossible : ${esc(e.message)}</p>`;
+  }
+  document.getElementById("livrable-body").innerHTML = corps;
   document.getElementById("modal-livrable").classList.remove("hidden");
 }
 
@@ -562,18 +710,20 @@ function sectionsBible(prod) {
       return `## ${a.emoji} ${a.role} — ${a.nom}${c.revise ? " ✏️ révisé" : ""}\n\n${c.livrable || ""}`;
     }).join("\n\n") });
   }
-  if (Object.keys(prod.qa).length) {
-    s.push({ id: "qa", titre: "🧪 Revue QA", md: Object.entries(prod.qa).map(([id, r]) =>
-      `## ${agentById[id].emoji} ${agentById[id].role} — ${agentById[id].nom}\n\n${r.rapport || ""}`).join("\n\n") });
+  const relecteurs = AGENTS.filter(a => prod.qa[a.id]);
+  if (relecteurs.length) {
+    s.push({ id: "qa", titre: "🧪 Revue QA", md: relecteurs.map(a =>
+      `## ${a.emoji} ${a.role} — ${a.nom}\n\n${prod.qa[a.id].rapport || ""}`).join("\n\n") });
   }
   if (prod.coordination) {
-    const conflits = (prod.coordination.conflits || []).map(c => `| ${c.sujet} | ${(c.agents || []).join(", ")} | ${c.arbitrage} |`);
+    const conflits = (prod.coordination.conflits || []).map(c =>
+      `| ${cellule(c.sujet)} | ${cellule((c.agents || []).join(", "))} | ${cellule(c.arbitrage)} |`);
     s.push({ id: "coord", titre: "🤝 Coordination", md: (prod.coordination.synthese || "") +
       (conflits.length ? `\n\n## Arbitrages\n\n| Sujet | Agents | Arbitrage |\n|---|---|---|\n${conflits.join("\n")}` : "") });
   }
   if (prod.plan) {
     const lignes = (prod.plan.taches || []).map(t =>
-      `| ${PHASES[t.phase] || String(t.phase)} | ${t.titre} | ${(t.agents || []).map(x => agentById[x] ? agentById[x].nom.split(" ")[0] : x).join(", ")} |`);
+      `| ${cellule(PHASES[t.phase] || t.phase)} | ${cellule(t.titre)} | ${cellule((t.agents || []).map(x => agentById[x] ? agentById[x].nom.split(" ")[0] : x).join(", "))} |`);
     s.push({ id: "plan", titre: "📋 Plan de production", md: (prod.plan.plan || "") +
       (lignes.length ? `\n\n## Tâches\n\n| Phase | Tâche | Agents |\n|---|---|---|\n${lignes.join("\n")}` : "") });
   }
@@ -594,8 +744,11 @@ function rendreBible(el, projet, prod) {
         : `<button class="primary-btn" id="btn-import-taches">➕ Ajouter au tableau de « ${esc(projet.nom)} »</button>`}</div>` : ""}
     <div class="bible">
       <nav class="bible-toc">${sections.map(s => `<a href="#" data-sec="${s.id}">${esc(s.titre)}</a>`).join("")}</nav>
-      <article class="bible-corps md">${sections.map(s =>
-        `<section id="sec-${s.id}"><h1 class="bible-titre">${esc(s.titre)}</h1>${mdVersHtml(s.md)}</section>`).join("")}</article>
+      <article class="bible-corps md">${sections.map(s => {
+        let html;
+        try { html = mdVersHtml(s.md); } catch (e) { html = `<pre>${esc(s.md)}</pre>`; }
+        return `<section id="sec-${s.id}"><h1 class="bible-titre">${esc(s.titre)}</h1>${html}</section>`;
+      }).join("")}</article>
     </div>`;
   el.querySelectorAll(".bible-toc a").forEach(a => a.addEventListener("click", e => {
     e.preventDefault();
@@ -606,6 +759,7 @@ function rendreBible(el, projet, prod) {
   if (imp) imp.addEventListener("click", () => importerTaches(projet, prod));
 }
 function importerTaches(projet, prod) {
+  if (prod.tachesImportees) return;
   for (const t of prod.plan.taches || []) {
     projet.tasks.push({
       id: uid(), titre: t.titre, statut: "todo",
@@ -615,7 +769,7 @@ function importerTaches(projet, prod) {
     });
   }
   prod.tachesImportees = true;
-  logEvent(`<b>${esc(projet.nom)}</b> : ${prod.plan.taches.length} tâches du plan de production ajoutées au tableau`);
+  logEvent(`<b>${projet.nom}</b> : ${prod.plan.taches.length} tâches du plan de production ajoutées au tableau`);
   save();
   toast(`${prod.plan.taches.length} tâches ajoutées au tableau du projet ✅`);
   rendreProduction();
@@ -663,8 +817,13 @@ function mdVersHtml(md) {
       const rangs = [];
       while (i < lignes.length && /^\s*\|.*\|\s*$/.test(lignes[i])) rangs.push(lignes[i++]);
       i--;
-      const cellules = r => r.trim().replace(/^\||\|$/g, "").split("|").map(c => mdEnLigne(c.trim()));
       const corps = rangs.filter(r => !/^\s*\|[\s:|-]+\|\s*$/.test(r));
+      if (!corps.length) {
+        // uniquement des séparateurs (tableau mal formé, dessin ASCII) : texte brut
+        out.push(`<pre><code>${rangs.join("\n")}</code></pre>`);
+        continue;
+      }
+      const cellules = r => r.trim().replace(/^\||\|$/g, "").split("|").map(c => mdEnLigne(c.trim()));
       const [tete, ...reste] = corps;
       out.push(`<div class="table-wrap"><table><thead><tr>${cellules(tete).map(c => `<th>${c}</th>`).join("")}</tr></thead><tbody>${
         reste.map(r => `<tr>${cellules(r).map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
@@ -714,30 +873,32 @@ function htmlProductionsProjet(p) {
         </div>
       </div>
       ${prods.length ? `<div class="prod-list">${prods.map(pr => `
-        <div class="prod-item" data-prod="${pr.id}">
+        <div class="prod-item" data-prod="${esc(pr.id)}">
           <span>🎬 <b>${esc(pr.vision.titre || "Production")}</b>
-          <span class="muted">· ${new Date(pr.cree).toLocaleDateString("fr-FR")} · ${pr.source === "claude-code" ? "Claude Code" : esc(nomModele(pr.modele))}</span></span>
-          <span class="badge ${classeStatut(pr.statut)}">${libelleStatut(pr.statut)}</span>
+          <span class="muted">· ${new Date(pr.cree).toLocaleDateString("fr-FR")} · ${esc(pr.source === "claude-code" ? "Claude Code" : modelesUtilises(pr))}</span></span>
+          <span class="badge ${classeStatut(statutAffiche(pr))}">${esc(libelleStatut(statutAffiche(pr)))}</span>
         </div>`).join("")}</div>` : ""}
     </div>`;
 }
 function brancherProductionsProjet(racine, p) {
-  racine.querySelector("#btn-brief-studio").addEventListener("click", () => ouvrirModaleBrief(p));
+  racine.querySelector("#btn-brief-studio").addEventListener("click", () => ouvrirModaleBrief(p.id));
   racine.querySelector("#btn-import-prod").addEventListener("click", () => {
     const input = document.getElementById("import-prod-file");
-    input.onchange = () => importerProductionFichier(p, input);
+    input.onchange = () => importerProductionFichier(p.id, input);
     input.click();
   });
   racine.querySelectorAll(".prod-item").forEach(el => el.addEventListener("click", () => ouvrirProduction(el.dataset.prod)));
 }
 
-function ouvrirModaleBrief(p) {
+function ouvrirModaleBrief(projetId) {
+  const p = state.projects.find(x => x.id === projetId);
+  if (!p) return;
   const brief = document.getElementById("prod-brief");
   brief.value = [p.nom, p.type !== "Autre" ? `Type de map : ${p.type}.` : "", p.desc].filter(Boolean).join("\n");
   const [bas, haut] = estimationCout(state.settings.model);
   const cle = !!state.settings.apiKey;
   document.getElementById("prod-estimation").innerHTML = cle
-    ? `🤖 Modèle : <b>${nomModele(state.settings.model)}</b> · ${Math.max(1, Math.min(8, Number(state.settings.parallele) || 3))} agents en parallèle<br>
+    ? `🤖 Modèle : <b>${esc(nomModele(state.settings.model))}</b> · ${Math.max(1, Math.min(8, Number(state.settings.parallele) || 3))} agents en parallèle<br>
        💶 Coût estimé : <b>≈ ${bas.toFixed(0)} à ${haut.toFixed(0)} $</b> pour ${NB_APPELS_PREVUS} à ${NB_APPELS_PREVUS + 12} appels selon le nombre de révisions (facturés sur votre compte Anthropic)<br>
        ⏱️ Durée : 20 à 60 minutes selon le modèle et vos limites de débit. Gardez cet onglet ouvert ; si vous le fermez, la production reprendra là où elle s'était arrêtée.`
     : `🔌 Aucune clé API : ajoutez-la dans ⚙️ Réglages pour lancer les 50 agents depuis l'application.
@@ -746,10 +907,16 @@ function ouvrirModaleBrief(p) {
   document.getElementById("btn-prod-go").onclick = () => {
     const texte = brief.value.trim();
     if (texte.length < 20) { toast("Décrivez un peu plus votre idée (20 caractères minimum)."); return; }
+    if (verrouAutreOnglet()) { toast("Une production tourne déjà dans un autre onglet."); return; }
+    const projet = state.projects.find(x => x.id === projetId);
+    if (!projet) { toast("Ce projet n'existe plus."); closeModals(); return; }
     const prod = nouvelleProduction(texte);
-    if (!p.productions) p.productions = [];
-    p.productions.unshift(prod);
-    save();
+    projet.productions.unshift(prod);
+    if (!save()) {
+      projet.productions.shift();
+      toast("Stockage du navigateur plein : exportez puis supprimez d'anciennes productions.");
+      return;
+    }
     closeModals();
     ouvrirProduction(prod.id);
     lancerProduction(prod.id);
@@ -758,35 +925,37 @@ function ouvrirModaleBrief(p) {
   brief.focus();
 }
 
-function importerProductionFichier(p, input) {
+function importerProductionFichier(projetId, input) {
   const f = input.files[0];
   input.value = "";
   if (!f) return;
   const lecteur = new FileReader();
   lecteur.onload = () => {
+    let prod;
     try {
-      const prod = JSON.parse(lecteur.result);
-      if (!prod || typeof prod !== "object" || !prod.vision || typeof prod.contributions !== "object")
-        throw new Error("ce fichier n'est pas une production Atelier Roblox");
-      prod.id = uid();
-      prod.qa = prod.qa || {};
-      prod.revisionsFaites = prod.revisionsFaites || {};
-      prod.echecs = prod.echecs || {};
-      prod.scripts = prod.scripts || {};
-      prod.cree = prod.cree || Date.now();
-      if (!p.productions) p.productions = [];
-      p.productions.unshift(prod);
-      if (!save()) {
-        p.productions.shift();
-        throw new Error("stockage du navigateur plein");
-      }
-      logEvent(`<b>${esc(p.nom)}</b> : production « ${esc(prod.vision.titre || "sans titre")} » importée 📥`);
-      ouvrirProduction(prod.id, "bible");
-    } catch (e) { toast("Import impossible : " + e.message); }
+      prod = normaliserProduction(JSON.parse(lecteur.result));
+    } catch (e) {
+      prod = null;
+    }
+    if (!prod) { toast("Import impossible : ce fichier n'est pas une production Atelier Roblox."); return; }
+    const p = state.projects.find(x => x.id === projetId);
+    if (!p) { toast("Ce projet n'existe plus."); return; }
+    // une copie importée repart d'un état propre pour ce projet
+    prod.id = uid();
+    if (prod.statut === "en_cours") prod.statut = "interrompu";
+    prod.tachesImportees = false;
+    p.productions.unshift(prod);
+    if (!save()) {
+      p.productions.shift();
+      toast("Import impossible : stockage du navigateur plein.");
+      return;
+    }
+    logEvent(`<b>${p.nom}</b> : production « ${prod.vision.titre || "sans titre"} » importée 📥`);
+    ouvrirProduction(prod.id, "bible");
   };
   lecteur.readAsText(f);
 }
 
 window.addEventListener("beforeunload", e => {
-  if (run && run.actif) { e.preventDefault(); e.returnValue = ""; }
+  if (run && (run.actif || run.nonSauve)) { e.preventDefault(); e.returnValue = ""; }
 });

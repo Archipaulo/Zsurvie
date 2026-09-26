@@ -410,3 +410,5 @@ h2 { font-size: 17px; margin: 14px 0 10px; color: var(--txt); }
 .md a { color: var(--accent2); }
 .md-section { color: var(--accent); margin-top: 18px !important; }
 #livrable-body { margin-top: 12px; max-height: 62vh; overflow-y: auto; padding-right: 6px; }
+.tl-step.partiel { border-color: #6a5a2a; }
+.tuile.ignore { opacity: 0.8; border-style: dashed; }

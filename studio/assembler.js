@@ -3,15 +3,42 @@
    (studio/productions/<projet>/) en deux fichiers :
    - production.json : importable dans l'application (bouton « Importer une production »)
    - BIBLE-COMPLETE.md : toute la bible de production en un seul document
-   Usage : node studio/assembler.js studio/productions/<projet>              */
+   Usage :
+     node studio/assembler.js studio/productions/<projet> [--infos-stdin]
+       --infos-stdin : lit sur l'entrée standard { brief, echecs } transmis par le workflow
+     node studio/assembler.js --reserver studio/productions/<projet>
+       crée et affiche un dossier neuf (<projet>, <projet>-2, …) pour une nouvelle production */
 "use strict";
 const fs = require("fs");
 const path = require("path");
 
+if (process.argv[2] === "--reserver") {
+  const base = (process.argv[3] || "").replace(/\/+$/, "");
+  if (!base.startsWith("studio/productions/")) {
+    console.error("Usage : node studio/assembler.js --reserver studio/productions/<projet>");
+    process.exit(1);
+  }
+  const libre = d => !fs.existsSync(d) || fs.readdirSync(d).length === 0;
+  let dossier = base;
+  for (let n = 2; !libre(dossier); n++) dossier = `${base}-${n}`;
+  fs.mkdirSync(dossier, { recursive: true });
+  console.log(dossier);
+  process.exit(0);
+}
+
 const racine = process.argv[2];
 if (!racine || !fs.existsSync(racine)) {
-  console.error("Usage : node studio/assembler.js studio/productions/<projet>");
+  console.error("Usage : node studio/assembler.js studio/productions/<projet> [--infos-stdin]");
   process.exit(1);
+}
+let infos = {};
+if (process.argv.includes("--infos-stdin")) {
+  try {
+    const brut = JSON.parse(fs.readFileSync(0, "utf8"));
+    if (brut && typeof brut === "object") infos = brut;
+  } catch (e) {
+    console.log(`- infos du workflow illisibles (${e.message}) : brief repris du canon`);
+  }
 }
 
 const lib = n => fs.readFileSync(path.join(__dirname, n), "utf8");
@@ -105,9 +132,30 @@ if (fs.existsSync(dossierScripts)) {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const complet = path.join(dir, e.name);
       if (e.isDirectory()) parcourir(complet, prefixe + e.name + "/");
-      else if (/\.(lua|luau)$/.test(e.name)) scripts[prefixe + e.name] = fs.readFileSync(complet, "utf8");
+      else if (/\.(lua|luau)$/.test(e.name)) {
+        const code = fs.readFileSync(complet, "utf8");
+        if (!/^\s*--\s*SUPPRIM/i.test(code)) scripts[prefixe + e.name] = code;
+      }
     }
   })(dossierScripts, "");
+}
+
+/* ---------- échecs, avec les mêmes clés d'étape que l'application ---------- */
+const echecs = {};
+const manque = (cle, raison) => { if (!echecs[cle]) echecs[cle] = raison; };
+if (!vision.benchmark) manque("vision:a05", "analyse de marché absente");
+if (!vision.da) manque("vision:a04", "direction artistique absente");
+if (!vision.canon) manque("vision:a01", "canon absent");
+for (const id of S.CREATEURS) if (!contributions[id]) manque(`contrib:${id}`, "livrable absent");
+for (const id of S.RELECTEURS_QA) if (!qa[id]) manque(`qa:${id}`, "relecture absente");
+if (!coordination) manque("coord:a03", "coordination absente");
+for (const r of (coordination ? coordination.revisions : [])) {
+  if (contributions[r.agent] && !contributions[r.agent].revise) manque(`rev:${r.agent}`, "révision demandée mais non livrée");
+}
+if (!plan) manque("plan:a02", "plan absent");
+if (!bible) manque("bible:a01", "synthèse absente");
+for (const cle of Array.isArray(infos.echecs) ? infos.echecs : []) {
+  if (typeof cle === "string" && /^[a-z]+:a\d\d$/.test(cle)) manque(cle, "échec de l'agent pendant le workflow");
 }
 
 /* ---------- assemblage ---------- */
@@ -115,10 +163,10 @@ const production = {
   id: "cc-" + path.basename(racine),
   source: "claude-code",
   nom: vision.titre || path.basename(racine),
-  brief: ficheCanon.brief || "",
-  modele: "Workflow Claude Code",
+  brief: typeof infos.brief === "string" && infos.brief ? infos.brief : (ficheCanon.brief || ""),
+  modele: null,
   cree: fs.statSync(racine).mtimeMs,
-  statut: "termine",
+  statut: Object.keys(echecs).length ? "incomplet" : "termine",
   vision,
   contributions,
   qa,
@@ -127,8 +175,9 @@ const production = {
   plan,
   bible,
   scripts,
-  echecs: Object.fromEntries(manquants.concat(invalides).map(m => [m, "fichier manquant ou invalide"])),
-  usage: null,
+  echecs,
+  ignores: {},
+  usages: {},
 };
 
 fs.writeFileSync(path.join(racine, "production.json"), JSON.stringify(production, null, 2));
@@ -147,5 +196,6 @@ console.log(`- revues QA : ${Object.keys(qa).length}/${S.RELECTEURS_QA.length} (
 console.log(`- coordination : ${coordination ? coordination.conflits.length + " conflits arbitrés" : "absente"}`);
 console.log(`- plan : ${plan ? plan.taches.length + " tâches" : "absent"} · bible : ${bible ? "oui" : "absente"} · scripts Luau : ${Object.keys(scripts).length}`);
 if (manquants.length) console.log(`- fichiers manquants : ${manquants.join(", ")}`);
-if (invalides.length) console.log(`- fichiers JSON invalides : ${invalides.join(", ")}`);
+if (invalides.length) console.log(`- fichiers JSON invalides (livrable gardé, décisions perdues) : ${invalides.join(", ")}`);
+console.log(`- statut : ${production.statut}${Object.keys(echecs).length ? ` (${Object.keys(echecs).join(", ")})` : ""}`);
 console.log(`→ production.json (à importer dans l'application) et BIBLE-COMPLETE.md écrits.`);

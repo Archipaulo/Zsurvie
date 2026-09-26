@@ -9,8 +9,15 @@
 /* ========================= ÉTAT & PERSISTANCE ========================= */
 
 const STORE_KEY = "atelier_roblox_v1";
+const VERROU_KEY = "atelier_roblox_verrou";
+const MODELES = ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"];
+const STATUTS_PROJET = ["actif", "pause", "termine"];
+const STATUTS_TACHE = ["todo", "encours", "revision", "fini"];
+const STATUTS_PROD = ["prete", "en_cours", "termine", "incomplet", "interrompu"];
+const ID_SUR = /^[A-Za-z0-9_-]{1,40}$/;
 
-let state = load();
+const agentById = Object.fromEntries(AGENTS.map(a => [a.id, a]));
+const deptById = Object.fromEntries(DEPTS.map(d => [d.id, d]));
 
 function defaultState() {
   return {
@@ -19,6 +26,135 @@ function defaultState() {
     settings: { apiKey: "", model: "claude-opus-5", parallele: 3 },
   };
 }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+/* ------- validation : tout ce qui vient du stockage ou d'un fichier importé ------- */
+const texte = (v, defaut = "") => typeof v === "string" ? v : defaut;
+const texteOuNull = v => typeof v === "string" && v ? v : null;
+const liste = v => Array.isArray(v) ? v : [];
+const objetSimple = v => !!v && typeof v === "object" && !Array.isArray(v);
+const entier = (v, min, max, defaut) => Number.isInteger(v) && v >= min && v <= max ? v : defaut;
+
+function normaliser(brut) {
+  const src = objetSimple(brut) ? brut : {};
+  const s = defaultState();
+  const r = objetSimple(src.settings) ? src.settings : {};
+  s.settings.apiKey = texte(r.apiKey).trim();
+  s.settings.model = MODELES.includes(r.model) ? r.model : s.settings.model;
+  s.settings.parallele = [1, 2, 3, 4, 6, 8].includes(Number(r.parallele)) ? Number(r.parallele) : 3;
+  s.log = liste(src.log).filter(e => objetSimple(e) && typeof e.msg === "string")
+    .map(e => ({ t: Number(e.t) || 0, msg: e.msg })).slice(0, 60);
+  s.projects = liste(src.projects).filter(objetSimple).map(normaliserProjet);
+  return s;
+}
+function normaliserProjet(p) {
+  return {
+    id: ID_SUR.test(p.id) ? p.id : uid(),
+    nom: texte(p.nom, "Projet sans nom"),
+    type: texte(p.type, "Autre"),
+    desc: texte(p.desc),
+    statut: STATUTS_PROJET.includes(p.statut) ? p.statut : "actif",
+    phases: PHASES.map((_, i) => !!liste(p.phases)[i]),
+    tasks: liste(p.tasks).filter(objetSimple).map(t => ({
+      id: ID_SUR.test(t.id) ? t.id : uid(),
+      titre: texte(t.titre, "Tâche"),
+      statut: STATUTS_TACHE.includes(t.statut) ? t.statut : "todo",
+      agents: liste(t.agents).filter(a => agentById[a]),
+      note: texte(t.note),
+      created: Number(t.created) || 0,
+    })),
+    productions: liste(p.productions).map(normaliserProduction).filter(Boolean),
+    created: Number(p.created) || 0,
+  };
+}
+/* renvoie null si l'objet n'est pas une production exploitable */
+function normaliserProduction(pr) {
+  if (!objetSimple(pr) || !objetSimple(pr.vision) || !objetSimple(pr.contributions)) return null;
+  const parAgent = (obj, fn) => Object.fromEntries(Object.entries(objetSimple(obj) ? obj : {})
+    .filter(([id, x]) => agentById[id] && objetSimple(x)).map(([id, x]) => [id, fn(x)]));
+  const cles = obj => Object.keys(objetSimple(obj) ? obj : {});
+  const v = pr.vision;
+  const usages = {};
+  for (const [m, u] of Object.entries(objetSimple(pr.usages) ? pr.usages : {})) {
+    if (MODELES.includes(m) && objetSimple(u)) usages[m] = { entree: Number(u.entree) || 0, sortie: Number(u.sortie) || 0 };
+  }
+  // anciennes productions : un seul compteur, rattaché au modèle de lancement
+  if (objetSimple(pr.usage) && MODELES.includes(pr.modele) && !usages[pr.modele]) {
+    usages[pr.modele] = { entree: Number(pr.usage.entree) || 0, sortie: Number(pr.usage.sortie) || 0 };
+  }
+  let statut = STATUTS_PROD.includes(pr.statut) ? pr.statut : "incomplet";
+  // « en cours » sans onglet vivant pour la faire tourner = coupée en route
+  if (statut === "en_cours" && !verrouFrais(pr.id)) statut = "interrompu";
+  return {
+    id: ID_SUR.test(pr.id) ? pr.id : uid(),
+    source: pr.source === "claude-code" ? "claude-code" : "app",
+    brief: texte(pr.brief),
+    modele: MODELES.includes(pr.modele) ? pr.modele : null,
+    cree: Number(pr.cree) || Date.now(),
+    statut,
+    vision: { benchmark: texteOuNull(v.benchmark), da: texteOuNull(v.da), canon: texteOuNull(v.canon),
+      titre: texteOuNull(v.titre), pitch: texteOuNull(v.pitch) },
+    contributions: parAgent(pr.contributions, c => ({
+      livrable: texte(c.livrable),
+      decisions: liste(c.decisions).filter(d => typeof d === "string"),
+      besoins: liste(c.besoins).filter(objetSimple).map(b => ({ de: texte(b.de), besoin: texte(b.besoin) })),
+      taches: liste(c.taches).filter(objetSimple).map(t => ({
+        titre: texte(t.titre), phase: entier(t.phase, 0, PHASES.length - 1, 0), charge: texte(t.charge, "M") })),
+      revise: !!c.revise,
+    })),
+    qa: parAgent(pr.qa, r => ({
+      rapport: texte(r.rapport),
+      problemes: liste(r.problemes).filter(objetSimple).map(x => ({
+        gravite: ["bloquant", "majeur", "mineur"].includes(x.gravite) ? x.gravite : "mineur",
+        agent: texte(x.agent), probleme: texte(x.probleme), correction: texte(x.correction) })),
+    })),
+    coordination: objetSimple(pr.coordination) ? {
+      synthese: texte(pr.coordination.synthese),
+      conflits: liste(pr.coordination.conflits).filter(objetSimple).map(c => ({
+        sujet: texte(c.sujet), agents: liste(c.agents).filter(a => typeof a === "string"), arbitrage: texte(c.arbitrage) })),
+      revisions: liste(pr.coordination.revisions).filter(objetSimple).map(r => ({
+        agent: texte(r.agent), consignes: texte(r.consignes) })),
+    } : null,
+    revisionsFaites: Object.fromEntries(cles(pr.revisionsFaites).filter(id => agentById[id]).map(id => [id, true])),
+    plan: objetSimple(pr.plan) ? {
+      plan: texte(pr.plan.plan),
+      taches: liste(pr.plan.taches).filter(objetSimple).map(t => ({
+        titre: texte(t.titre), phase: entier(t.phase, 0, PHASES.length - 1, 0),
+        agents: liste(t.agents).filter(a => agentById[a]), note: texte(t.note) })).filter(t => t.titre),
+    } : null,
+    bible: objetSimple(pr.bible) ? { titre: texte(pr.bible.titre), pitch: texte(pr.bible.pitch), bible: texte(pr.bible.bible) } : null,
+    scripts: Object.fromEntries(Object.entries(objetSimple(pr.scripts) ? pr.scripts : {}).filter(([, c]) => typeof c === "string")),
+    echecs: Object.fromEntries(Object.entries(objetSimple(pr.echecs) ? pr.echecs : {}).map(([k, m]) => [k, texte(m, "échec")])),
+    ignores: Object.fromEntries(cles(pr.ignores).map(k => [k, true])),
+    usages,
+    tachesImportees: !!pr.tachesImportees,
+  };
+}
+
+/* ------- verrou entre onglets : un seul onglet fait tourner une production ------- */
+const ONGLET_ID = uid();
+function lireVerrou() {
+  try {
+    const v = JSON.parse(localStorage.getItem(VERROU_KEY) || "null");
+    return objetSimple(v) ? v : null;
+  } catch (e) { return null; }
+}
+function verrouFrais(prodId) {
+  const v = lireVerrou();
+  return !!v && Date.now() - (Number(v.t) || 0) < 15000 && (!prodId || v.prodId === prodId);
+}
+function verrouAutreOnglet() {
+  const v = lireVerrou();
+  return verrouFrais() && v.onglet !== ONGLET_ID ? v : null;
+}
+function poserVerrou(prodId) {
+  try { localStorage.setItem(VERROU_KEY, JSON.stringify({ onglet: ONGLET_ID, prodId, t: Date.now() })); } catch (e) {}
+}
+function leverVerrou() {
+  const v = lireVerrou();
+  if (v && v.onglet === ONGLET_ID) try { localStorage.removeItem(VERROU_KEY); } catch (e) {}
+}
+
 function load() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
@@ -26,16 +162,8 @@ function load() {
     return normaliser(JSON.parse(raw));
   } catch (e) { return defaultState(); }
 }
-function normaliser(brut) {
-  const s = Object.assign(defaultState(), brut);
-  s.settings = Object.assign(defaultState().settings, s.settings || {});
-  for (const p of s.projects) {
-    p.productions = p.productions || [];
-    // une production « en cours » au chargement a été coupée par la fermeture de l'onglet
-    for (const pr of p.productions) if (pr.statut === "en_cours") pr.statut = "interrompu";
-  }
-  return s;
-}
+let state = load();
+
 function productionActive() {
   return typeof run !== "undefined" && run && run.actif;
 }
@@ -53,12 +181,15 @@ function save() {
     return false;
   }
 }
-function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
+/* le journal contient du texte brut ; seul le gras <b>…</b> est interprété */
 function logEvent(msg) {
   state.log.unshift({ t: Date.now(), msg });
   state.log = state.log.slice(0, 60);
   save();
+}
+function logHtml(msg) {
+  return esc(msg).replace(/&lt;(\/?)b&gt;/g, "<$1b>");
 }
 function timeAgo(t) {
   const s = (Date.now() - t) / 1000;
@@ -67,9 +198,6 @@ function timeAgo(t) {
   if (s < 86400) return `il y a ${Math.floor(s / 3600)} h`;
   return `il y a ${Math.floor(s / 86400)} j`;
 }
-
-const agentById = Object.fromEntries(AGENTS.map(a => [a.id, a]));
-const deptById = Object.fromEntries(DEPTS.map(d => [d.id, d]));
 
 function projectProgress(p) {
   const phases = p.phases.filter(Boolean).length / PHASES.length;
@@ -82,6 +210,34 @@ function agentTasks(agentId) {
     for (const t of p.tasks)
       if (t.agents.includes(agentId) && t.statut !== "fini") out.push({ p, t });
   return out;
+}
+
+/* ------- un autre onglet a modifié les données : on suit ------- */
+window.addEventListener("storage", e => {
+  if (e.key !== STORE_KEY || !e.newValue) return;
+  let autre;
+  try { autre = normaliser(JSON.parse(e.newValue)); } catch (err) { return; }
+  if (productionActive()) {
+    // la production qui tourne ici fait foi : on garde notre objet vivant
+    const vivant = trouverProduction(run.prodId);
+    if (vivant) {
+      let place = false;
+      for (const p of autre.projects) {
+        const i = p.productions.findIndex(x => x.id === run.prodId);
+        if (i >= 0) { p.productions[i] = vivant.prod; place = true; }
+      }
+      if (!place) autre.projects.unshift(vivant.projet);
+    }
+  }
+  state = autre;
+  rafraichirVue();
+});
+function rafraichirVue() {
+  refreshApiStatus();
+  if (currentView === "reglages") return;   // ne pas écraser une saisie en cours
+  const detail = document.getElementById("projet-detail");
+  if (currentView === "projets" && currentProjectId && !detail.classList.contains("hidden")) openProject(currentProjectId);
+  else showView(currentView);
 }
 
 /* ========================= NAVIGATION ========================= */
@@ -129,7 +285,7 @@ function renderDash() {
   document.getElementById("dash-log").innerHTML =
     state.log.length
       ? state.log.slice(0, 12).map(e =>
-          `<div class="log-item">${e.msg} <span class="log-time">· ${timeAgo(e.t)}</span></div>`).join("")
+          `<div class="log-item">${logHtml(e.msg)} <span class="log-time">· ${timeAgo(e.t)}</span></div>`).join("")
       : `<p class="muted">L'activité du studio apparaîtra ici.</p>`;
 }
 
@@ -142,7 +298,7 @@ function projectCard(p) {
   el.innerHTML = `
     <div class="pc-top">
       <div><div class="pc-nom">${esc(p.nom)}</div><div class="pc-type">${esc(p.type)}</div></div>
-      <span class="badge ${p.statut}">${{ actif: "Actif", pause: "En pause", termine: "Terminé" }[p.statut]}</span>
+      <span class="badge ${esc(p.statut)}">${{ actif: "Actif", pause: "En pause", termine: "Terminé" }[p.statut] || ""}</span>
     </div>
     <div class="progress"><div style="width:${prog}%"></div></div>
     <div class="pc-meta"><span>${p.tasks.length} tâche${p.tasks.length > 1 ? "s" : ""}</span><span>${prog} %</span></div>`;
@@ -176,7 +332,7 @@ function openProject(id) {
     <button class="ghost-btn" id="btn-back">← Tous les projets</button>
     <div class="detail-head" style="margin-top:14px">
       <h1>${esc(p.nom)}</h1>
-      <span class="badge ${p.statut}">${{ actif: "Actif", pause: "En pause", termine: "Terminé" }[p.statut]}</span>
+      <span class="badge ${esc(p.statut)}">${{ actif: "Actif", pause: "En pause", termine: "Terminé" }[p.statut] || ""}</span>
       <span class="muted">${esc(p.type)}</span>
     </div>
     <p class="detail-desc">${esc(p.desc || "")}</p>
@@ -205,7 +361,7 @@ function openProject(id) {
   brancherProductionsProjet(d, p);
   d.querySelector("#btn-cycle-status").addEventListener("click", () => {
     p.statut = { actif: "pause", pause: "termine", termine: "actif" }[p.statut];
-    logEvent(`Projet <b>${esc(p.nom)}</b> passé en « ${p.statut} »`);
+    logEvent(`Projet <b>${p.nom}</b> passé en « ${p.statut} »`);
     save(); openProject(id);
   });
   d.querySelector("#btn-del-project").addEventListener("click", () => {
@@ -215,13 +371,13 @@ function openProject(id) {
     }
     if (!confirm(`Supprimer définitivement le projet « ${p.nom} » ?`)) return;
     state.projects = state.projects.filter(x => x.id !== id);
-    logEvent(`Projet <b>${esc(p.nom)}</b> supprimé`);
+    logEvent(`Projet <b>${p.nom}</b> supprimé`);
     save(); renderProjects();
   });
   d.querySelectorAll(".phase-item").forEach(el => el.addEventListener("click", () => {
     const i = +el.dataset.i;
     p.phases[i] = !p.phases[i];
-    if (p.phases[i]) logEvent(`<b>${esc(p.nom)}</b> : phase « ${PHASES[i]} » validée ✅`);
+    if (p.phases[i]) logEvent(`<b>${p.nom}</b> : phase « ${PHASES[i]} » validée ✅`);
     save(); openProject(id);
   }));
 
@@ -246,7 +402,7 @@ function openProject(id) {
       </div>`;
     card.querySelectorAll("[data-mv]").forEach(b => b.addEventListener("click", () => {
       t.statut = ORDER[idx + (+b.dataset.mv)];
-      if (t.statut === "fini") logEvent(`<b>${esc(p.nom)}</b> : tâche « ${esc(t.titre)} » terminée ✅`);
+      if (t.statut === "fini") logEvent(`<b>${p.nom}</b> : tâche « ${t.titre} » terminée ✅`);
       save(); openProject(id);
     }));
     card.querySelector("[data-del]").addEventListener("click", () => {
@@ -284,7 +440,7 @@ document.getElementById("btn-project-save").addEventListener("click", () => {
     created: Date.now(),
   };
   state.projects.unshift(p);
-  logEvent(`Nouveau projet créé : <b>${esc(nom)}</b> 🎉`);
+  logEvent(`Nouveau projet créé : <b>${nom}</b> 🎉`);
   save();
   closeModals();
   openProject(p.id);
@@ -318,18 +474,20 @@ function renderTaskAgentPicker() {
 }
 document.getElementById("btn-task-save").addEventListener("click", () => {
   const titre = document.getElementById("t-titre").value.trim();
-  if (!titre || !taskProject) { toast("Donnez un titre à la tâche !"); return; }
+  const projet = taskProject && state.projects.find(x => x.id === taskProject.id);
+  if (!projet) { toast("Ce projet n'existe plus."); closeModals(); return; }
+  if (!titre) { toast("Donnez un titre à la tâche !"); return; }
   const agents = [...document.querySelectorAll("#t-agents .pick-agent.on")].map(e => e.dataset.aid);
-  taskProject.tasks.push({
+  projet.tasks.push({
     id: uid(), titre, statut: "todo", agents,
     note: document.getElementById("t-note").value.trim(),
     created: Date.now(),
   });
-  logEvent(`<b>${esc(taskProject.nom)}</b> : tâche « ${esc(titre)} » ajoutée` +
+  logEvent(`<b>${projet.nom}</b> : tâche « ${titre} » ajoutée` +
     (agents.length ? ` (${agents.map(a => agentById[a].nom.split(" ")[0]).join(", ")})` : ""));
   save();
   closeModals();
-  openProject(taskProject.id);
+  openProject(projet.id);
 });
 
 /* ========================= ÉQUIPE ========================= */
@@ -366,7 +524,12 @@ function renderTeam() {
 
 /* ------- fiche agent + consultation ------- */
 let chatAgent = null;
-let chatHistory = [];   // messages {role, content} de la conversation en cours
+let chatHistory = [];   // messages {role, content} de la conversation ouverte
+let chatCtrl = null;    // requête en cours : une seule question à la fois
+
+function annulerChat() {
+  if (chatCtrl) { chatCtrl.abort(); chatCtrl = null; }
+}
 
 function agentSystemPrompt(a) {
   let ctx = "";
@@ -384,6 +547,7 @@ function agentSystemPrompt(a) {
 function openAgent(aid) {
   const a = agentById[aid];
   if (!a) return;
+  annulerChat();
   chatAgent = a;
   chatHistory = [];
   const d = deptById[a.dept];
@@ -416,69 +580,90 @@ function openAgent(aid) {
     ? `<div class="msg agent">${a.emoji} Bonjour ! Je suis ${esc(a.nom.split(" ")[0])}, votre ${esc(a.role.toLowerCase())}. Comment puis-je aider sur vos maps ?</div>`
     : `<div class="msg agent">💡 Ajoutez votre clé API Anthropic dans les Réglages pour discuter directement avec moi ici — ou copiez mon prompt expert ci-dessus.</div>`;
   document.getElementById("chat-input").value = "";
+  document.getElementById("btn-chat-send").disabled = false;
   document.getElementById("modal-agent").classList.remove("hidden");
 }
 
+/* un appel de discussion, avec nouvelles tentatives sur les erreurs passagères */
+async function appelChat(agent, messages, signal) {
+  const headers = {
+    "content-type": "application/json",
+    "x-api-key": state.settings.apiKey,
+    "anthropic-version": "2023-06-01",
+    "anthropic-dangerous-direct-browser-access": "true",
+  };
+  const body = { model: state.settings.model, max_tokens: 16000, system: agentSystemPrompt(agent), messages };
+  if (body.model === "claude-opus-5") {
+    headers["anthropic-beta"] = "server-side-fallback-2026-07-01";
+    body.fallbacks = "default";
+  }
+  let derniere = null;
+  for (let essai = 0; essai < 4; essai++) {
+    if (essai) await pause(2000 * 2 ** (essai - 1), signal);
+    let res;
+    try {
+      res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers, body: JSON.stringify(body), signal });
+    } catch (e) {
+      if (signal.aborted) throw e;
+      derniere = new Error("connexion impossible à l'API");
+      continue;
+    }
+    let data = null;
+    try { data = await res.json(); } catch (e) { /* réponse non JSON (passerelle) */ }
+    if (res.ok && data) return data;
+    const msg = (data && data.error && data.error.message) || `erreur HTTP ${res.status}`;
+    if (res.status === 429 || res.status === 529 || res.status >= 500) { derniere = new Error(msg); continue; }
+    if (res.status === 401 || res.status === 403) throw new Error(`${msg} — vérifiez la clé API dans les Réglages`);
+    throw new Error(msg);
+  }
+  throw derniere || new Error("échec après plusieurs tentatives");
+}
+
 async function sendChat() {
+  if (chatCtrl) return;
   const input = document.getElementById("chat-input");
   const question = input.value.trim();
   if (!question || !chatAgent) return;
   if (!state.settings.apiKey) { toast("Ajoutez d'abord une clé API dans les Réglages."); return; }
+  const agent = chatAgent, hist = chatHistory;
+  const ctrl = new AbortController();
+  chatCtrl = ctrl;
   input.value = "";
   const box = document.getElementById("chat-messages");
   box.insertAdjacentHTML("beforeend", `<div class="msg user">${esc(question)}</div>`);
   const wait = document.createElement("div");
   wait.className = "msg agent wait";
-  wait.textContent = `${chatAgent.emoji} ${chatAgent.nom.split(" ")[0]} réfléchit…`;
+  wait.textContent = `${agent.emoji} ${agent.nom.split(" ")[0]} réfléchit…`;
   box.appendChild(wait);
   box.scrollTop = box.scrollHeight;
   const sendBtn = document.getElementById("btn-chat-send");
   sendBtn.disabled = true;
 
-  chatHistory.push({ role: "user", content: question });
+  const msgUser = { role: "user", content: question };
+  hist.push(msgUser);
+  const encoreOuverte = () => !ctrl.signal.aborted && hist === chatHistory;
   try {
-    const headers = {
-      "content-type": "application/json",
-      "x-api-key": state.settings.apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    };
-    const body = {
-      model: state.settings.model,
-      max_tokens: 16000,
-      system: agentSystemPrompt(chatAgent),
-      messages: chatHistory,
-    };
-    if (body.model === "claude-opus-5") {
-      headers["anthropic-beta"] = "server-side-fallback-2026-07-01";
-      body.fallbacks = "default";
-    }
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST", headers, body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      const msg = data && data.error && data.error.message ? data.error.message : `Erreur HTTP ${res.status}`;
-      throw new Error(msg);
-    }
-    let text;
-    if (data.stop_reason === "refusal") {
-      text = "Je préfère ne pas répondre à cette demande. Reformulez-la ou posez une autre question sur votre map !";
-    } else {
-      text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n").trim()
-        || "(réponse vide)";
-    }
-    chatHistory.push({ role: "assistant", content: text });
+    const data = await appelChat(agent, hist.slice(), ctrl.signal);
+    if (!encoreOuverte()) return;
+    const text = data.stop_reason === "refusal"
+      ? "Je préfère ne pas répondre à cette demande. Reformulez-la ou posez une autre question sur votre map !"
+      : (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n").trim() || "(réponse vide)";
+    hist.push({ role: "assistant", content: text });
     wait.classList.remove("wait");
-    wait.textContent = "";
-    wait.insertAdjacentText("beforeend", `${chatAgent.emoji} ${text}`);
+    wait.textContent = `${agent.emoji} ${text}`;
   } catch (e) {
-    chatHistory.pop();  // la question n'a pas abouti, on la retire de l'historique
+    const i = hist.indexOf(msgUser);   // la question n'a pas abouti : on la retire, elle seule
+    if (i >= 0) hist.splice(i, 1);
+    if (!encoreOuverte()) return;
     wait.classList.remove("wait");
-    wait.textContent = `⚠️ Erreur : ${e.message}. Vérifiez la clé API dans les Réglages.`;
+    wait.textContent = `⚠️ ${e.message}`;
+  } finally {
+    if (chatCtrl === ctrl) chatCtrl = null;
+    if (hist === chatHistory) {
+      sendBtn.disabled = false;
+      box.scrollTop = box.scrollHeight;
+    }
   }
-  sendBtn.disabled = false;
-  box.scrollTop = box.scrollHeight;
 }
 document.getElementById("btn-chat-send").addEventListener("click", sendChat);
 document.getElementById("chat-input").addEventListener("keydown", e => {
@@ -508,7 +693,9 @@ function refreshApiStatus() {
 }
 
 document.getElementById("btn-export").addEventListener("click", () => {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  // la clé API ne quitte jamais ce navigateur
+  const copie = Object.assign({}, state, { settings: Object.assign({}, state.settings, { apiKey: "" }) });
+  const blob = new Blob([JSON.stringify(copie, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = "atelier-roblox-sauvegarde.json";
@@ -524,9 +711,11 @@ document.getElementById("import-file").addEventListener("change", e => {
   r.onload = () => {
     try {
       const s = JSON.parse(r.result);
-      if (!Array.isArray(s.projects)) throw new Error("format invalide");
-      if (productionActive()) throw new Error("une production est en cours, interrompez-la d'abord");
+      if (!s || !Array.isArray(s.projects)) throw new Error("format invalide");
+      if (productionActive() || verrouAutreOnglet()) throw new Error("une production est en cours, interrompez-la d'abord");
+      const cle = state.settings.apiKey;
       state = normaliser(s);
+      state.settings.apiKey = cle;   // on garde la clé de ce navigateur, jamais celle du fichier
       save();
       toast("Sauvegarde importée ✅");
       showView("dash");
@@ -537,7 +726,7 @@ document.getElementById("import-file").addEventListener("change", e => {
   e.target.value = "";
 });
 document.getElementById("btn-wipe").addEventListener("click", () => {
-  if (productionActive()) { toast("Une production est en cours : interrompez-la d'abord."); return; }
+  if (productionActive() || verrouAutreOnglet()) { toast("Une production est en cours : interrompez-la d'abord."); return; }
   if (!confirm("Effacer TOUTES les données du studio (projets, tâches, réglages) ?")) return;
   localStorage.removeItem(STORE_KEY);
   state = defaultState();
@@ -561,6 +750,7 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.add("hidden"), 2600);
 }
 function closeModals() {
+  annulerChat();
   document.querySelectorAll(".overlay").forEach(o => o.classList.add("hidden"));
 }
 document.querySelectorAll(".modal-close").forEach(b => b.addEventListener("click", closeModals));

@@ -382,6 +382,10 @@ Markdown de 1000 à 1800 mots, inspirant et précis.`,
 };
 
 /* ---------- export de la bible complète en markdown ---------- */
+/* une valeur prête à entrer dans une cellule de tableau markdown */
+function cellule(v) {
+  return String(v == null ? "" : v).replace(/\r?\n+/g, " ").replace(/\|/g, "∣").trim();
+}
 function productionEnMarkdown(prod) {
   const out = [];
   const titre = (prod.bible && prod.bible.titre) || (prod.vision && prod.vision.titre) || "Production";
@@ -406,17 +410,21 @@ function productionEnMarkdown(prod) {
   }
   if (prod.qa && Object.keys(prod.qa).length) {
     out.push(`## 🧪 Revue QA`);
-    for (const [id, r] of Object.entries(prod.qa)) {
-      const a = AGENTS.find(x => x.id === id);
-      out.push(`### ${a.emoji} ${a.role} — ${a.nom}\n${r.rapport || ""}`);
+    for (const a of AGENTS.filter(x => prod.qa[x.id])) {
+      out.push(`### ${a.emoji} ${a.role} — ${a.nom}\n${prod.qa[a.id].rapport || ""}`);
     }
   }
-  if (prod.coordination) out.push(`## 🤝 Coordination\n${prod.coordination.synthese || ""}`);
+  if (prod.coordination) {
+    out.push(`## 🤝 Coordination\n${prod.coordination.synthese || ""}`);
+    const conflits = (prod.coordination.conflits || []).map(c =>
+      `| ${cellule(c.sujet)} | ${cellule((c.agents || []).join(", "))} | ${cellule(c.arbitrage)} |`);
+    if (conflits.length) out.push(`### Arbitrages\n| Sujet | Agents | Arbitrage |\n|---|---|---|\n${conflits.join("\n")}`);
+  }
   if (prod.plan) {
     out.push(`## 📋 Plan de production\n${prod.plan.plan || ""}`);
     const lignes = (prod.plan.taches || []).map(t =>
-      `| ${PHASES[t.phase] || t.phase} | ${t.titre} | ${(t.agents || []).join(", ")} |`);
-    if (lignes.length) out.push(`| Phase | Tâche | Agents |\n|---|---|---|\n${lignes.join("\n")}`);
+      `| ${cellule(PHASES[t.phase] || t.phase)} | ${cellule(t.titre)} | ${cellule((t.agents || []).join(", "))} |`);
+    if (lignes.length) out.push(`### Tâches\n| Phase | Tâche | Agents |\n|---|---|---|\n${lignes.join("\n")}`);
   }
   return out.join("\n\n");
 }
