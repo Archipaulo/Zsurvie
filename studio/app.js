@@ -16,20 +16,42 @@ function defaultState() {
   return {
     projects: [],
     log: [],
-    settings: { apiKey: "", model: "claude-opus-5" },
+    settings: { apiKey: "", model: "claude-opus-5", parallele: 3 },
   };
 }
 function load() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return defaultState();
-    const s = Object.assign(defaultState(), JSON.parse(raw));
-    s.settings = Object.assign(defaultState().settings, s.settings || {});
-    return s;
+    return normaliser(JSON.parse(raw));
   } catch (e) { return defaultState(); }
 }
+function normaliser(brut) {
+  const s = Object.assign(defaultState(), brut);
+  s.settings = Object.assign(defaultState().settings, s.settings || {});
+  for (const p of s.projects) {
+    p.productions = p.productions || [];
+    // une production « en cours » au chargement a été coupée par la fermeture de l'onglet
+    for (const pr of p.productions) if (pr.statut === "en_cours") pr.statut = "interrompu";
+  }
+  return s;
+}
+function productionActive() {
+  return typeof run !== "undefined" && run && run.actif;
+}
+let alerteStockage = false;
 function save() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    alerteStockage = false;
+    return true;
+  } catch (e) {
+    if (!alerteStockage) {
+      alerteStockage = true;
+      toast("⚠️ Stockage du navigateur plein : exportez vos données puis supprimez d'anciennes productions.");
+    }
+    return false;
+  }
 }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
@@ -79,6 +101,7 @@ function showView(view) {
   if (view === "dash") renderDash();
   if (view === "projets") renderProjects();
   if (view === "equipe") renderTeam();
+  if (view === "production") rendreProduction();
   if (view === "reglages") renderSettings();
 }
 
@@ -162,6 +185,7 @@ function openProject(id) {
       <button class="primary-btn" id="btn-add-task">＋ Nouvelle tâche</button>
       <button class="danger-btn" id="btn-del-project">🗑️ Supprimer le projet</button>
     </div>
+    ${htmlProductionsProjet(p)}
     <h2>Pipeline de production</h2>
     <div class="phase-list">${PHASES.map((ph, i) => `
       <div class="phase-item ${p.phases[i] ? "done" : ""}" data-i="${i}">
@@ -178,12 +202,17 @@ function openProject(id) {
 
   d.querySelector("#btn-back").addEventListener("click", renderProjects);
   d.querySelector("#btn-add-task").addEventListener("click", () => openTaskModal(p));
+  brancherProductionsProjet(d, p);
   d.querySelector("#btn-cycle-status").addEventListener("click", () => {
     p.statut = { actif: "pause", pause: "termine", termine: "actif" }[p.statut];
     logEvent(`Projet <b>${esc(p.nom)}</b> passé en « ${p.statut} »`);
     save(); openProject(id);
   });
   d.querySelector("#btn-del-project").addEventListener("click", () => {
+    if (productionActive() && (p.productions || []).some(pr => pr.id === run.prodId)) {
+      toast("Une production de ce projet est en cours : interrompez-la d'abord.");
+      return;
+    }
     if (!confirm(`Supprimer définitivement le projet « ${p.nom} » ?`)) return;
     state.projects = state.projects.filter(x => x.id !== id);
     logEvent(`Projet <b>${esc(p.nom)}</b> supprimé`);
@@ -251,6 +280,7 @@ document.getElementById("btn-project-save").addEventListener("click", () => {
     statut: "actif",
     phases: PHASES.map(() => false),
     tasks: [],
+    productions: [],
     created: Date.now(),
   };
   state.projects.unshift(p);
@@ -339,15 +369,13 @@ let chatAgent = null;
 let chatHistory = [];   // messages {role, content} de la conversation en cours
 
 function agentSystemPrompt(a) {
-  const d = deptById[a.dept];
   let ctx = "";
   const p = state.projects.find(x => x.id === currentProjectId);
   if (p) {
     ctx = `\n\nProjet en cours au studio : « ${p.nom} » (type : ${p.type}). ${p.desc || ""}` +
       `\nPhases validées : ${p.phases.map((v, i) => v ? PHASES[i] : null).filter(Boolean).join(", ") || "aucune"}.`;
   }
-  return `Tu es ${a.nom}, ${a.role} au sein du département ${d.nom} d'un studio expert en création de maps et d'expériences Roblox. ` +
-    `Tes spécialités : ${a.skills.join(", ")}. ${a.focus}` +
+  return personaPrompt(a) +
     `\nRéponds en français, de façon concrète et directement actionnable dans Roblox Studio ` +
     `(noms d'instances, services, propriétés et valeurs précises quand c'est pertinent). ` +
     `Reste dans ton domaine d'expertise ; si la question relève d'un autre département, dis-le et donne quand même une piste.` + ctx;
@@ -409,20 +437,24 @@ async function sendChat() {
 
   chatHistory.push({ role: "user", content: question });
   try {
+    const headers = {
+      "content-type": "application/json",
+      "x-api-key": state.settings.apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    };
+    const body = {
+      model: state.settings.model,
+      max_tokens: 16000,
+      system: agentSystemPrompt(chatAgent),
+      messages: chatHistory,
+    };
+    if (body.model === "claude-opus-5") {
+      headers["anthropic-beta"] = "server-side-fallback-2026-07-01";
+      body.fallbacks = "default";
+    }
     const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": state.settings.apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: state.settings.model,
-        max_tokens: 4096,
-        system: agentSystemPrompt(chatAgent),
-        messages: chatHistory,
-      }),
+      method: "POST", headers, body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -458,10 +490,12 @@ document.getElementById("chat-input").addEventListener("keydown", e => {
 function renderSettings() {
   document.getElementById("set-apikey").value = state.settings.apiKey;
   document.getElementById("set-model").value = state.settings.model;
+  document.getElementById("set-parallele").value = String(state.settings.parallele || 3);
 }
 document.getElementById("btn-save-settings").addEventListener("click", () => {
   state.settings.apiKey = document.getElementById("set-apikey").value.trim();
   state.settings.model = document.getElementById("set-model").value;
+  state.settings.parallele = Number(document.getElementById("set-parallele").value) || 3;
   save();
   refreshApiStatus();
   toast("Réglages enregistrés ✅");
@@ -491,7 +525,8 @@ document.getElementById("import-file").addEventListener("change", e => {
     try {
       const s = JSON.parse(r.result);
       if (!Array.isArray(s.projects)) throw new Error("format invalide");
-      state = Object.assign(defaultState(), s);
+      if (productionActive()) throw new Error("une production est en cours, interrompez-la d'abord");
+      state = normaliser(s);
       save();
       toast("Sauvegarde importée ✅");
       showView("dash");
@@ -502,6 +537,7 @@ document.getElementById("import-file").addEventListener("change", e => {
   e.target.value = "";
 });
 document.getElementById("btn-wipe").addEventListener("click", () => {
+  if (productionActive()) { toast("Une production est en cours : interrompez-la d'abord."); return; }
   if (!confirm("Effacer TOUTES les données du studio (projets, tâches, réglages) ?")) return;
   localStorage.removeItem(STORE_KEY);
   state = defaultState();

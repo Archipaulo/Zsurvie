@@ -288,3 +288,125 @@ h2 { font-size: 17px; margin: 14px 0 10px; color: var(--txt); }
   padding: 11px 20px; border-radius: 12px;
   z-index: 99; box-shadow: 0 8px 30px rgba(0,0,0,0.5);
 }
+
+/* ===================== Production complète (50 agents) ===================== */
+.view-large { max-width: 1400px; }
+.modal-large { max-width: 860px; }
+.txt-danger { color: #ff9d8f; }
+
+.prod-card {
+  background: linear-gradient(135deg, #22203a, #1b2432);
+  border: 1px solid #4a3f7a; border-radius: 14px;
+  padding: 16px 18px; margin: 18px 0 6px;
+}
+.prod-card-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
+.prod-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.prod-item {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 9px;
+  padding: 9px 12px; cursor: pointer; font-size: 14px;
+}
+.prod-item:hover { border-color: var(--accent); }
+
+.prod-meta { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13.5px; color: var(--muted); margin: 6px 0 8px; }
+.progress.big { height: 12px; }
+.estimation {
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 14px; margin-top: 14px; font-size: 13.5px; line-height: 1.6; color: var(--muted);
+}
+.estimation b { color: var(--txt); }
+
+.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: 6px 0 16px; }
+.tab {
+  background: none; border: none; border-bottom: 3px solid transparent;
+  color: var(--muted); font-size: 15px; padding: 10px 14px; cursor: pointer;
+}
+.tab.active { color: var(--txt); border-bottom-color: var(--accent); font-weight: bold; }
+
+/* frise des étapes */
+.timeline { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 18px; }
+@media (max-width: 900px) { .timeline { grid-template-columns: repeat(3, 1fr); } }
+.tl-step {
+  background: var(--card); border: 1px solid var(--line); border-radius: 11px;
+  padding: 10px; text-align: center;
+}
+.tl-step .tl-emoji { font-size: 22px; }
+.tl-step .tl-nom { font-weight: bold; font-size: 13.5px; margin-top: 2px; }
+.tl-step .tl-etat { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.tl-step.travail { border-color: var(--accent); box-shadow: 0 0 16px rgba(232, 161, 39, 0.25); }
+.tl-step.fini { border-color: #1a8a66; }
+.tl-step.echec { border-color: #7a3328; }
+
+/* la salle : les 50 agents */
+.salle { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.salle-dept { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+.salle-dept-nom { font-weight: bold; font-size: 13px; margin-bottom: 8px; }
+.salle-agents { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.tuile {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 9px;
+  padding: 6px 2px; cursor: pointer; opacity: 0.55; transition: opacity 0.2s, border-color 0.2s;
+}
+.tuile:hover { opacity: 1; border-color: var(--muted); }
+.tuile-emoji { font-size: 20px; }
+.tuile-nom { font-size: 10.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tuile-etat { font-size: 10px; color: var(--muted); }
+.tuile.fini { opacity: 1; border-color: #1a8a66; }
+.tuile.echec { opacity: 1; border-color: #7a3328; }
+.tuile.travail { opacity: 1; border-color: var(--accent); animation: au-travail 1.1s ease-in-out infinite; }
+@keyframes au-travail {
+  0%, 100% { box-shadow: 0 0 0 rgba(232, 161, 39, 0); transform: translateY(0); }
+  50% { box-shadow: 0 0 14px rgba(232, 161, 39, 0.55); transform: translateY(-2px); }
+}
+.echecs {
+  margin-top: 14px; font-size: 13px; color: #ff9d8f;
+  background: #2a1512; border: 1px solid #7a3328; border-radius: 10px; padding: 10px 12px;
+}
+
+/* la bible */
+.import-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  background: #14372a; border: 1px solid #1a8a66; border-radius: 11px;
+  padding: 10px 14px; margin-bottom: 16px; font-size: 14px;
+}
+.bible { display: grid; grid-template-columns: 240px 1fr; gap: 22px; align-items: start; }
+@media (max-width: 900px) { .bible { grid-template-columns: 1fr; } .bible-toc { position: static; } }
+.bible-toc {
+  position: sticky; top: 0;
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 10px;
+  max-height: calc(100vh - 60px); overflow-y: auto;
+}
+.bible-toc a { color: var(--muted); text-decoration: none; font-size: 13.5px; padding: 6px 8px; border-radius: 7px; }
+.bible-toc a:hover { background: var(--card); color: var(--txt); }
+.bible-corps section { margin-bottom: 34px; }
+.bible-titre {
+  font-size: 22px; padding-bottom: 8px; margin-bottom: 12px;
+  border-bottom: 2px solid var(--accent);
+}
+
+/* markdown rendu */
+.md { line-height: 1.6; font-size: 14.5px; }
+.md h2 { font-size: 18px; margin: 20px 0 8px; color: #ffd98a; }
+.md h3 { font-size: 16px; margin: 16px 0 6px; }
+.md h4, .md h5, .md h6 { font-size: 14.5px; margin: 12px 0 4px; color: var(--accent2); }
+.md p { margin: 8px 0; }
+.md .md-li { margin: 3px 0; padding-left: 14px; position: relative; }
+.md .md-li::before { content: "•"; position: absolute; left: 2px; color: var(--accent); }
+.md .md-li:has(.md-num)::before { content: ""; }
+.md .md-num { color: var(--accent); font-weight: bold; }
+.md code { background: #0d1219; border-radius: 5px; padding: 1px 5px; font-size: 13px; color: #9fe8c9; }
+.md pre {
+  background: #0d1219; border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 14px; overflow-x: auto; margin: 10px 0;
+}
+.md pre code { background: none; padding: 0; color: #d6e2f0; font-size: 12.5px; line-height: 1.5; }
+.md blockquote { border-left: 3px solid var(--accent); padding: 4px 12px; color: var(--muted); margin: 8px 0; }
+.md hr { border: none; border-top: 1px solid var(--line); margin: 16px 0; }
+.md .table-wrap { overflow-x: auto; margin: 10px 0; }
+.md table { border-collapse: collapse; font-size: 13px; min-width: 60%; }
+.md th, .md td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+.md th { background: var(--card2); }
+.md a { color: var(--accent2); }
+.md-section { color: var(--accent); margin-top: 18px !important; }
+#livrable-body { margin-top: 12px; max-height: 62vh; overflow-y: auto; padding-right: 6px; }

@@ -19,6 +19,7 @@
   <nav id="nav">
     <button class="nav-btn active" data-view="dash">📊 Tableau de bord</button>
     <button class="nav-btn" data-view="projets">🗂️ Projets</button>
+    <button class="nav-btn" data-view="production">🎬 Production</button>
     <button class="nav-btn" data-view="equipe">👥 Équipe (50)</button>
     <button class="nav-btn" data-view="reglages">⚙️ Réglages</button>
   </nav>
@@ -54,6 +55,11 @@
     <div id="projet-detail" class="hidden"></div>
   </section>
 
+  <!-- ===== Production complète (50 agents) ===== -->
+  <section id="view-production" class="view view-large hidden">
+    <div id="prod-wrap"></div>
+  </section>
+
   <!-- ===== Équipe ===== -->
   <section id="view-equipe" class="view hidden">
     <h1>👥 L'équipe du studio</h1>
@@ -80,6 +86,18 @@
           <option value="claude-haiku-4-5">Claude Haiku 4.5 (économique)</option>
         </select>
       </label>
+      <label>Agents qui travaillent en parallèle pendant une production
+        <select id="set-parallele">
+          <option value="1">1 (le plus prudent)</option>
+          <option value="2">2</option>
+          <option value="3">3 (recommandé)</option>
+          <option value="4">4</option>
+          <option value="6">6</option>
+          <option value="8">8 (comptes à limites élevées)</option>
+        </select>
+      </label>
+      <p class="muted" style="font-size:13px">Avec Claude Opus 5, le modèle de secours automatique est activé :
+      si une demande est déclinée, l'API la relance sur un autre modèle.</p>
       <button id="btn-save-settings" class="primary-btn">💾 Enregistrer</button>
     </div>
     <div class="settings-card">
@@ -156,9 +174,40 @@
   </div>
 </div>
 
+<!-- ===== Modale : brief au studio ===== -->
+<div id="modal-prod" class="overlay hidden">
+  <div class="modal modal-large">
+    <h2>🚀 Brief au studio — les 50 agents</h2>
+    <p class="muted">Décrivez votre idée de map : le directeur créatif en tire le canon, 40 spécialistes livrent
+    leur partie, la QA relit, le chef de projet arbitre, puis la productrice planifie et le directeur écrit la bible.</p>
+    <label>Votre brief
+      <textarea id="prod-brief" rows="8" placeholder="L'idée, l'ambiance, les mécaniques, le public, ce qui doit rendre la map incroyable…"></textarea>
+    </label>
+    <div id="prod-estimation" class="estimation"></div>
+    <div class="btn-row right">
+      <button class="ghost-btn modal-close">Annuler</button>
+      <button id="btn-prod-go" class="primary-btn">🚀 Lancer les 50 agents</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modale : livrables d'un agent ===== -->
+<div id="modal-livrable" class="overlay hidden">
+  <div class="modal modal-large">
+    <div id="livrable-head"></div>
+    <div id="livrable-body" class="md"></div>
+    <div class="btn-row right">
+      <button class="ghost-btn modal-close">Fermer</button>
+    </div>
+  </div>
+</div>
+<input type="file" id="import-prod-file" accept=".json" class="hidden">
+
 <div id="toast" class="hidden"></div>
 
 <script src="agents.js"></script>
+<script src="production.js"></script>
 <script src="app.js"></script>
+<script src="orchestrateur.js"></script>
 </body>
 </html>

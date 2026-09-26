@@ -51,12 +51,41 @@ ${colleagues}
 console.log(`✔ ${AGENTS.length} agents Claude Code générés dans ${path.relative(process.cwd(), outDir)}/`);
 
 /* ---------- 2. application en un seul fichier ---------- */
+const SCRIPTS_APP = ["agents.js", "production.js", "app.js", "orchestrateur.js"];
 const html = fs.readFileSync(path.join(DIR, "index.html"), "utf8");
 const inline = f => fs.readFileSync(path.join(DIR, f), "utf8").replace(/<\/script/gi, "<\\/script");
-const single = html
-  .replace('<link rel="stylesheet" href="style.css">', () => `<style>\n${inline("style.css")}\n</style>`)
-  .replace('<script src="agents.js"></script>', () => `<script>\n${inline("agents.js")}\n</script>`)
-  .replace('<script src="app.js"></script>', () => `<script>\n${inline("app.js")}\n</script>`);
-if (/src="(agents|app)\.js"|href="style\.css"/.test(single)) throw new Error("inlining incomplet");
+let single = html.replace('<link rel="stylesheet" href="style.css">', () => `<style>\n${inline("style.css")}\n</style>`);
+for (const f of SCRIPTS_APP) {
+  single = single.replace(`<script src="${f}"></script>`, () => `<script>\n${inline(f)}\n</script>`);
+}
+if (/<script src=|href="style\.css"/.test(single)) throw new Error("inlining incomplet");
 fs.writeFileSync(path.join(DIR, "Atelier-Roblox.html"), single);
 console.log("✔ Application en un seul fichier : studio/Atelier-Roblox.html");
+
+/* ---------- 3. workflow Claude Code « atelier-roblox » ---------- */
+const META = `export const meta = {
+  name: 'atelier-roblox',
+  description: 'Les 50 agents du studio Atelier Roblox transforment un seul brief en bible de production complète pour une map Roblox',
+  whenToUse: 'Quand on veut que tout le studio (vision, 40 spécialistes, QA, coordination, plan) travaille ensemble sur une idée de map. args : { nom, brief } ou simplement le brief en texte.',
+  phases: [
+    { title: 'Vision', detail: 'Analyse de marché et direction artistique, puis canon du directeur créatif' },
+    { title: 'Contributions', detail: '40 spécialistes livrent leur partie en respectant le canon' },
+    { title: 'Revue QA', detail: '5 experts QA relisent les livrables et signalent les problèmes' },
+    { title: 'Coordination', detail: 'Le chef de projet arbitre les conflits entre départements' },
+    { title: 'Révisions', detail: 'Les agents concernés corrigent leur livrable' },
+    { title: 'Plan & Bible', detail: 'Plan de production et synthèse du directeur créatif' },
+    { title: 'Archivage', detail: 'Assemblage de production.json et de la bible complète' },
+  ],
+}
+`;
+const workflow = [
+  META,
+  "/* ===== Fichier généré par studio/generer.js — modifiez studio/agents.js, studio/production.js ou studio/workflow-template.js puis relancez « node studio/generer.js » ===== */",
+  fs.readFileSync(path.join(DIR, "agents.js"), "utf8").replace(/^"use strict";$/m, ""),
+  fs.readFileSync(path.join(DIR, "production.js"), "utf8"),
+  fs.readFileSync(path.join(DIR, "workflow-template.js"), "utf8"),
+].join("\n\n");
+const dossierWf = path.join(DIR, "..", ".claude", "workflows");
+fs.mkdirSync(dossierWf, { recursive: true });
+fs.writeFileSync(path.join(dossierWf, "atelier-roblox.js"), workflow);
+console.log("✔ Workflow Claude Code : .claude/workflows/atelier-roblox.js");

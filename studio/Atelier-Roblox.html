@@ -296,6 +296,128 @@ h2 { font-size: 17px; margin: 14px 0 10px; color: var(--txt); }
   z-index: 99; box-shadow: 0 8px 30px rgba(0,0,0,0.5);
 }
 
+/* ===================== Production complète (50 agents) ===================== */
+.view-large { max-width: 1400px; }
+.modal-large { max-width: 860px; }
+.txt-danger { color: #ff9d8f; }
+
+.prod-card {
+  background: linear-gradient(135deg, #22203a, #1b2432);
+  border: 1px solid #4a3f7a; border-radius: 14px;
+  padding: 16px 18px; margin: 18px 0 6px;
+}
+.prod-card-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
+.prod-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.prod-item {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 9px;
+  padding: 9px 12px; cursor: pointer; font-size: 14px;
+}
+.prod-item:hover { border-color: var(--accent); }
+
+.prod-meta { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13.5px; color: var(--muted); margin: 6px 0 8px; }
+.progress.big { height: 12px; }
+.estimation {
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 14px; margin-top: 14px; font-size: 13.5px; line-height: 1.6; color: var(--muted);
+}
+.estimation b { color: var(--txt); }
+
+.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: 6px 0 16px; }
+.tab {
+  background: none; border: none; border-bottom: 3px solid transparent;
+  color: var(--muted); font-size: 15px; padding: 10px 14px; cursor: pointer;
+}
+.tab.active { color: var(--txt); border-bottom-color: var(--accent); font-weight: bold; }
+
+/* frise des étapes */
+.timeline { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 18px; }
+@media (max-width: 900px) { .timeline { grid-template-columns: repeat(3, 1fr); } }
+.tl-step {
+  background: var(--card); border: 1px solid var(--line); border-radius: 11px;
+  padding: 10px; text-align: center;
+}
+.tl-step .tl-emoji { font-size: 22px; }
+.tl-step .tl-nom { font-weight: bold; font-size: 13.5px; margin-top: 2px; }
+.tl-step .tl-etat { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.tl-step.travail { border-color: var(--accent); box-shadow: 0 0 16px rgba(232, 161, 39, 0.25); }
+.tl-step.fini { border-color: #1a8a66; }
+.tl-step.echec { border-color: #7a3328; }
+
+/* la salle : les 50 agents */
+.salle { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.salle-dept { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+.salle-dept-nom { font-weight: bold; font-size: 13px; margin-bottom: 8px; }
+.salle-agents { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.tuile {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 9px;
+  padding: 6px 2px; cursor: pointer; opacity: 0.55; transition: opacity 0.2s, border-color 0.2s;
+}
+.tuile:hover { opacity: 1; border-color: var(--muted); }
+.tuile-emoji { font-size: 20px; }
+.tuile-nom { font-size: 10.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tuile-etat { font-size: 10px; color: var(--muted); }
+.tuile.fini { opacity: 1; border-color: #1a8a66; }
+.tuile.echec { opacity: 1; border-color: #7a3328; }
+.tuile.travail { opacity: 1; border-color: var(--accent); animation: au-travail 1.1s ease-in-out infinite; }
+@keyframes au-travail {
+  0%, 100% { box-shadow: 0 0 0 rgba(232, 161, 39, 0); transform: translateY(0); }
+  50% { box-shadow: 0 0 14px rgba(232, 161, 39, 0.55); transform: translateY(-2px); }
+}
+.echecs {
+  margin-top: 14px; font-size: 13px; color: #ff9d8f;
+  background: #2a1512; border: 1px solid #7a3328; border-radius: 10px; padding: 10px 12px;
+}
+
+/* la bible */
+.import-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  background: #14372a; border: 1px solid #1a8a66; border-radius: 11px;
+  padding: 10px 14px; margin-bottom: 16px; font-size: 14px;
+}
+.bible { display: grid; grid-template-columns: 240px 1fr; gap: 22px; align-items: start; }
+@media (max-width: 900px) { .bible { grid-template-columns: 1fr; } .bible-toc { position: static; } }
+.bible-toc {
+  position: sticky; top: 0;
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 10px;
+  max-height: calc(100vh - 60px); overflow-y: auto;
+}
+.bible-toc a { color: var(--muted); text-decoration: none; font-size: 13.5px; padding: 6px 8px; border-radius: 7px; }
+.bible-toc a:hover { background: var(--card); color: var(--txt); }
+.bible-corps section { margin-bottom: 34px; }
+.bible-titre {
+  font-size: 22px; padding-bottom: 8px; margin-bottom: 12px;
+  border-bottom: 2px solid var(--accent);
+}
+
+/* markdown rendu */
+.md { line-height: 1.6; font-size: 14.5px; }
+.md h2 { font-size: 18px; margin: 20px 0 8px; color: #ffd98a; }
+.md h3 { font-size: 16px; margin: 16px 0 6px; }
+.md h4, .md h5, .md h6 { font-size: 14.5px; margin: 12px 0 4px; color: var(--accent2); }
+.md p { margin: 8px 0; }
+.md .md-li { margin: 3px 0; padding-left: 14px; position: relative; }
+.md .md-li::before { content: "•"; position: absolute; left: 2px; color: var(--accent); }
+.md .md-li:has(.md-num)::before { content: ""; }
+.md .md-num { color: var(--accent); font-weight: bold; }
+.md code { background: #0d1219; border-radius: 5px; padding: 1px 5px; font-size: 13px; color: #9fe8c9; }
+.md pre {
+  background: #0d1219; border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 14px; overflow-x: auto; margin: 10px 0;
+}
+.md pre code { background: none; padding: 0; color: #d6e2f0; font-size: 12.5px; line-height: 1.5; }
+.md blockquote { border-left: 3px solid var(--accent); padding: 4px 12px; color: var(--muted); margin: 8px 0; }
+.md hr { border: none; border-top: 1px solid var(--line); margin: 16px 0; }
+.md .table-wrap { overflow-x: auto; margin: 10px 0; }
+.md table { border-collapse: collapse; font-size: 13px; min-width: 60%; }
+.md th, .md td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+.md th { background: var(--card2); }
+.md a { color: var(--accent2); }
+.md-section { color: var(--accent); margin-top: 18px !important; }
+#livrable-body { margin-top: 12px; max-height: 62vh; overflow-y: auto; padding-right: 6px; }
+
 </style>
 </head>
 <body>
@@ -311,6 +433,7 @@ h2 { font-size: 17px; margin: 14px 0 10px; color: var(--txt); }
   <nav id="nav">
     <button class="nav-btn active" data-view="dash">📊 Tableau de bord</button>
     <button class="nav-btn" data-view="projets">🗂️ Projets</button>
+    <button class="nav-btn" data-view="production">🎬 Production</button>
     <button class="nav-btn" data-view="equipe">👥 Équipe (50)</button>
     <button class="nav-btn" data-view="reglages">⚙️ Réglages</button>
   </nav>
@@ -346,6 +469,11 @@ h2 { font-size: 17px; margin: 14px 0 10px; color: var(--txt); }
     <div id="projet-detail" class="hidden"></div>
   </section>
 
+  <!-- ===== Production complète (50 agents) ===== -->
+  <section id="view-production" class="view view-large hidden">
+    <div id="prod-wrap"></div>
+  </section>
+
   <!-- ===== Équipe ===== -->
   <section id="view-equipe" class="view hidden">
     <h1>👥 L'équipe du studio</h1>
@@ -372,6 +500,18 @@ h2 { font-size: 17px; margin: 14px 0 10px; color: var(--txt); }
           <option value="claude-haiku-4-5">Claude Haiku 4.5 (économique)</option>
         </select>
       </label>
+      <label>Agents qui travaillent en parallèle pendant une production
+        <select id="set-parallele">
+          <option value="1">1 (le plus prudent)</option>
+          <option value="2">2</option>
+          <option value="3">3 (recommandé)</option>
+          <option value="4">4</option>
+          <option value="6">6</option>
+          <option value="8">8 (comptes à limites élevées)</option>
+        </select>
+      </label>
+      <p class="muted" style="font-size:13px">Avec Claude Opus 5, le modèle de secours automatique est activé :
+      si une demande est déclinée, l'API la relance sur un autre modèle.</p>
       <button id="btn-save-settings" class="primary-btn">💾 Enregistrer</button>
     </div>
     <div class="settings-card">
@@ -447,6 +587,35 @@ h2 { font-size: 17px; margin: 14px 0 10px; color: var(--txt); }
     </div>
   </div>
 </div>
+
+<!-- ===== Modale : brief au studio ===== -->
+<div id="modal-prod" class="overlay hidden">
+  <div class="modal modal-large">
+    <h2>🚀 Brief au studio — les 50 agents</h2>
+    <p class="muted">Décrivez votre idée de map : le directeur créatif en tire le canon, 40 spécialistes livrent
+    leur partie, la QA relit, le chef de projet arbitre, puis la productrice planifie et le directeur écrit la bible.</p>
+    <label>Votre brief
+      <textarea id="prod-brief" rows="8" placeholder="L'idée, l'ambiance, les mécaniques, le public, ce qui doit rendre la map incroyable…"></textarea>
+    </label>
+    <div id="prod-estimation" class="estimation"></div>
+    <div class="btn-row right">
+      <button class="ghost-btn modal-close">Annuler</button>
+      <button id="btn-prod-go" class="primary-btn">🚀 Lancer les 50 agents</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modale : livrables d'un agent ===== -->
+<div id="modal-livrable" class="overlay hidden">
+  <div class="modal modal-large">
+    <div id="livrable-head"></div>
+    <div id="livrable-body" class="md"></div>
+    <div class="btn-row right">
+      <button class="ghost-btn modal-close">Fermer</button>
+    </div>
+  </div>
+</div>
+<input type="file" id="import-prod-file" accept=".json" class="hidden">
 
 <div id="toast" class="hidden"></div>
 
@@ -661,6 +830,431 @@ const PROJECT_TYPES = [
 </script>
 <script>
 /* =========================================================================
+   ATELIER ROBLOX — la production coordonnée
+   Un seul brief, 50 agents : ce module décrit QUI produit QUOI et dans
+   quel ordre. Il est partagé par l'application (navigateur) et par le
+   workflow Claude Code généré par generer.js : garder ce fichier sans
+   dépendance au DOM, à Node ou à l'horloge.
+   Nécessite agents.js (DEPTS, AGENTS, PHASES) chargé avant.
+   ========================================================================= */
+
+/* ---------- les étapes de la production ---------- */
+const ETAPES_PROD = [
+  { id: "vision",        nom: "Vision",        emoji: "🧭", detail: "Marché, direction artistique, puis canon du directeur créatif" },
+  { id: "contributions", nom: "Contributions", emoji: "🛠️", detail: "40 spécialistes livrent leur partie en respectant le canon" },
+  { id: "qa",            nom: "Revue QA",      emoji: "🧪", detail: "5 experts QA relisent et signalent les problèmes" },
+  { id: "coordination",  nom: "Coordination",  emoji: "🤝", detail: "Le chef de projet arbitre les conflits entre départements" },
+  { id: "revisions",     nom: "Révisions",     emoji: "✏️", detail: "Les agents concernés corrigent leur livrable" },
+  { id: "final",         nom: "Plan & Bible",  emoji: "📖", detail: "Plan de production et synthèse du directeur créatif" },
+];
+
+/* ---------- rôles fixes de la direction ---------- */
+const ROLES_PROD = {
+  benchmark: "a05",
+  da: "a04",
+  canon: "a01",
+  coordination: "a03",
+  plan: "a02",
+  bible: "a01",
+};
+const DEPTS_CREATEURS = ["gd", "ld", "env", "build", "code", "ui", "fx", "ops"];
+const CREATEURS = AGENTS.filter(a => DEPTS_CREATEURS.includes(a.dept)).map(a => a.id);
+const RELECTEURS_QA = AGENTS.filter(a => a.dept === "qa").map(a => a.id);
+
+/* ---------- ce que chaque agent livre ---------- */
+const LIVRABLES = {
+  /* Direction — phase Vision */
+  a05: "Analyse de marché : 5 à 8 jeux Roblox à succès proches du brief (ce qu'ils font bien, ce qui retient les joueurs, leurs faiblesses), les tendances actuelles du genre, le public cible réaliste (âge, plateforme, durée de session) et 3 opportunités de différenciation concrètes pour ce projet.",
+  a04: "Direction artistique : style visuel retenu (et pourquoi), palette de 6 à 10 couleurs en hexadécimal avec leur usage, règles de formes et de silhouettes, matériaux Roblox privilégiés, ambiance de chaque grande zone, 3 références visuelles décrites, et une liste « à ne jamais faire » pour garder la cohérence.",
+
+  /* Game Design */
+  a06: "Boucle de jeu : la boucle à 3 échelles (30 secondes, 5 minutes, une session complète) décrite pas à pas, les motivations du joueur à chaque échelle, les objectifs court / moyen / long terme, et ce qui donne envie de revenir le lendemain. Termine par un schéma textuel de la boucle.",
+  a07: "Économie : les monnaies et ressources (noms exacts du canon), un tableau sources / puits (d'où vient chaque ressource, où elle part), la table de prix des 15 premiers achats, la courbe de gains par heure de jeu sur les 5 premières heures, et les garde-fous anti-inflation.",
+  a08: "Progression : la formule d'expérience par niveau, un tableau des déblocages niveau par niveau (au moins 20 niveaux), le système de renaissance / prestige s'il y en a un, les récompenses quotidiennes et une liste de 10 badges Roblox avec leurs conditions.",
+  a09: "Mécaniques : chaque mécanique de jeu avec ses règles précises et ses valeurs chiffrées (WalkSpeed, JumpPower ou JumpHeight, dégâts, temps de recharge, portées en studs), le retour visuel et sonore attendu, et les contrôles PC, mobile et manette.",
+  a10: "Onboarding : le déroulé seconde par seconde des 90 premières secondes (apparition, premier objectif, première récompense), le tutoriel sans texte, les indices visuels utilisés, et les 3 mesures à suivre pour vérifier que les nouveaux joueurs restent.",
+
+  /* Level Design */
+  a11: "Plan de la map : un plan ASCII vu du dessus avec une échelle en studs, chaque zone du canon avec ses dimensions, sa fonction et ses accès, les chemins principaux et secondaires, les points de repère visibles de loin, l'emplacement du SpawnLocation et le flux des joueurs pendant une session type.",
+  a12: "Parcours et traversée : les sections de parcours (plateformes, grimpe, traversée) zone par zone, avec les distances de saut en studs adaptées au personnage Roblox standard, l'emplacement des checkpoints, la courbe de difficulté et les raccourcis pour les joueurs expérimentés. Si le brief n'a pas de parcours, conçois les déplacements qui rendent l'exploration agréable.",
+  a13: "Points d'intérêt : 10 à 12 lieux mémorables et secrets, chacun avec son emplacement (zone et repère), ce qui attire l'œil, la récompense, l'indice qui y mène et l'histoire qu'il raconte.",
+  a14: "Zones de tension : les zones d'affrontement ou de danger (combat, pièges, ennemis, chrono), avec lignes de vue, couvertures, points d'apparition équitables et règles anti-camping. Si le jeu n'a pas de combat, conçois les moments de pression et de danger.",
+  a15: "Énigmes : 4 énigmes environnementales intégrées aux zones du canon, avec pour chacune le principe, la solution, les indices visuels progressifs, la récompense et la mise en œuvre technique dans Roblox (ProximityPrompt, ClickDetector, Touched, états serveur).",
+
+  /* Terrain & Environnement */
+  a16: "Terrain : le plan de sculpture zone par zone (hauteurs et dimensions en studs, matériaux Terrain Roblox par zone, outils du Terrain Editor à utiliser), les transitions entre matériaux, et les consignes de performance (taille totale du terrain, zones vides, eau).",
+  a17: "Végétation : la palette de végétation par zone (arbres, buissons, herbe via Terrain Decoration), les densités, la composition naturelle (lisières, clairières), et le budget d'instances pour rester fluide sur mobile.",
+  a18: "Eau et climat : les réglages de l'eau du Terrain (WaterColor, WaterTransparency, WaterWaveSize, WaterWaveSpeed, WaterReflectance), la météo dynamique (pluie, brouillard, orages, cycle), les effets d'Atmosphere et un pseudo-code du système météo.",
+  a19: "Ciel et ambiance : les réglages Lighting et Atmosphere complets par moment de la journée (ClockTime, Brightness, Ambient, OutdoorAmbient, Density, Haze, Color), le Sky retenu, le cycle jour / nuit (durée, transitions) et l'humeur recherchée dans chaque zone.",
+  a20: "Biomes : chaque biome ou zone du canon avec son identité (couleurs, matériaux, végétation, sons, lumière), les transitions entre biomes, et ce que le joueur doit ressentir en entrant dans chacun.",
+
+  /* Construction & Modélisation */
+  a21: "Architecture : la liste des bâtiments et structures clés, chacun avec ses dimensions en studs, son style, sa silhouette lisible de loin, sa fonction dans le jeu et sa position dans le plan.",
+  a22: "Intérieurs : les intérieurs à aménager, pièce par pièce, avec le mobilier, l'histoire que la pièce raconte, les objets interactifs et les secrets éventuels.",
+  a23: "Kit de props : la liste des props modulaires (nom, dimensions, variantes, zones d'usage), la convention de nommage, l'organisation des dossiers dans Workspace et ReplicatedStorage, et les règles d'ancrage (Anchored, CanCollide, CanQuery).",
+  a24: "Modélisation 3D : la liste des MeshParts à produire avec leur budget de triangles, le pipeline Blender vers Roblox (échelle, pivots, import), les réglages de collision (CollisionFidelity, RenderFidelity) et l'ordre de production par priorité.",
+  a25: "Budget performance : les budgets globaux (nombre de parts, triangles, instances, textures, sons), la configuration de StreamingEnabled (StreamingMinRadius, StreamingTargetRadius, modèles persistants), les règles d'optimisation pour toute l'équipe et une checklist avant publication.",
+
+  /* Scripting Luau */
+  a26: "Scripts de gameplay : l'arborescence complète des scripts (ServerScriptService, ReplicatedStorage, StarterPlayerScripts, StarterGui) et le code Luau complet et fonctionnel des 2 mécaniques centrales du jeu, en ModuleScripts propres, autorité serveur.",
+  a27: "Systèmes serveur : le schéma des données du joueur, le code Luau complet de sauvegarde et de chargement avec DataStoreService (pcall, nouvelles tentatives, sauvegarde à la déconnexion et à BindToClose), et la liste des RemoteEvents / RemoteFunctions avec leur contrat.",
+  a28: "Scripts client : le code Luau des LocalScripts pour le HUD et les retours visuels (TweenService), les contrôles mobiles (ContextActionService) et la réception des événements serveur, sans jamais faire confiance au client pour les récompenses.",
+  a29: "Anti-exploit : les menaces principales pour ce jeu (téléportation, vitesse, remotes abusés, duplication), la validation serveur de chaque RemoteEvent, la limitation de fréquence, et le code Luau d'un module de validation réutilisable.",
+  a30: "Outillage : 3 outils qui accélèrent la production de cette map (plugin Studio ou script de la barre de commande), chacun avec son usage, et le code Luau complet du plus utile.",
+
+  /* UI / UX */
+  a31: "Design system : couleurs hexadécimales de l'interface, polices Roblox (Enum.Font), tailles, composants (bouton principal, secondaire, panneau, onglet, notification) avec leurs états, et l'arborescence des ScreenGui.",
+  a32: "HUD : la maquette textuelle du HUD avec la position de chaque élément (UDim2, AnchorPoint), ce qui est toujours visible ou repliable, les priorités d'information, et l'adaptation aux petits écrans (UIScale, UIAspectRatioConstraint).",
+  a33: "Menus et boutique : l'arborescence des menus, le parcours d'achat en 3 clics maximum, la maquette de la boutique et de l'inventaire, et les écrans de récompense.",
+  a34: "Icônes : la liste de toutes les icônes nécessaires (monnaies, objets, améliorations, boutons) avec pour chacune un brief visuel, le style commun et les tailles de déclinaison.",
+  a35: "UX mobile : la checklist mobile de ce jeu (zones du pouce, taille minimale des boutons, gestes, orientation), les adaptations précises des écrans et du HUD, et les pièges à éviter sur téléphone.",
+
+  /* Lumière, VFX & Audio */
+  a36: "Éclairage : la technologie Lighting retenue, les réglages par zone, le placement des PointLight / SpotLight / SurfaceLight pour guider le regard, les ombres et le budget de sources de lumière.",
+  a37: "Effets visuels : la liste des effets (ParticleEmitter, Beam, Trail) avec leurs propriétés clés (Rate, Lifetime, Speed, Texture, Color), l'action qu'ils accompagnent et leur priorité, pour que chaque action du joueur soit satisfaisante.",
+  a38: "Animations : la liste des animations à produire (personnages, ennemis, objets, interface) avec leur durée, leur AnimationPriority, leur boucle ou non, leur priorité de production et les intentions de timing.",
+  a39: "Sound design : la liste des effets sonores (action, retour, ambiance) avec leur spatialisation (RollOffMode, RollOffMaxDistance), l'organisation en SoundGroup et le mixage des volumes.",
+  a40: "Musique : la musique de chaque zone et de chaque état du jeu (exploration, danger, victoire), les transitions entre morceaux, la durée des boucles et les volumes, pour une ambiance qui ne lasse pas après une heure.",
+
+  /* Live Ops & Publication */
+  a46: "Monétisation : les game passes et developer products avec leur prix en Robux et leur justification, leur placement dans le jeu, et les règles pour ne jamais rendre le jeu payant pour gagner.",
+  a47: "Vignettes et icône : 3 concepts de vignette et 2 concepts d'icône du jeu (composition, personnages, texte éventuel, couleurs), et lequel tester en premier.",
+  a48: "Fiche du jeu : 5 propositions de titre, la description complète en français et en anglais, les mots-clés de recherche, le genre Roblox, les paramètres recommandés (nombre de joueurs par serveur, appareils) et le texte des premières mises à jour.",
+  a49: "Live ops : le calendrier des 3 premiers mois (mises à jour, événements saisonniers, week-ends bonus), avec pour chaque événement son contenu, sa durée et son objectif de rétention.",
+  a50: "Données : les indicateurs à suivre (visites, rétention J1 / J7 / J30, durée de session, conversion), les événements à instrumenter avec AnalyticsService, les objectifs chiffrés pour le premier mois et les entonnoirs à surveiller.",
+
+  /* QA — relecture croisée */
+  a41: "Relecture joueur : simule une première session complète en suivant les livrables, et liste chaque moment de confusion, de frustration ou d'ennui, avec l'étape précise et la correction proposée.",
+  a42: "Relecture performance : repère tout ce qui menace la fluidité sur un téléphone d'entrée de gamme (instances, terrain, lumières, particules, scripts en boucle) et chiffre l'impact et la correction.",
+  a43: "Relecture équilibrage : vérifie les chiffres de l'économie, de la progression et de la monétisation, calcule les temps de progression réels, et signale tout ce qui est trop lent, trop rapide ou payant pour gagner.",
+  a44: "Relecture technique : cherche dans le code et les règles les bugs probables, les cas limites (déconnexion, double clic, sauvegarde qui échoue, joueur coincé) et les failles d'exploit.",
+  a45: "Plan de playtests : à partir de toutes les décisions du studio, identifie les 8 hypothèses les plus risquées et écris le protocole de playtest pour les valider (profil des testeurs, scénario, questions, critères de succès).",
+};
+
+/* départements relus par chaque expert QA (a45 travaille sur la synthèse de tout) */
+const FOCUS_QA = {
+  a41: ["gd", "ld", "ui"],
+  a42: ["env", "build", "fx", "code"],
+  a43: ["gd", "ops"],
+  a44: ["code", "ld"],
+  a45: [],
+};
+
+/* ---------- où chaque livrable est rangé (workflow Claude Code) ---------- */
+function slugProd(s) {
+  return String(s).normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "production";
+}
+/* chemins relatifs au dossier de la production, sans extension */
+function cheminLivrable(a) {
+  const i = DEPTS.findIndex(d => d.id === a.dept);
+  return `${String(i).padStart(2, "0")}-${slugProd(DEPTS[i].nom)}/${a.id}-${slugProd(a.role)}`;
+}
+const CHEMINS_SPECIAUX = {
+  benchmark: "00-vision/a05-analyse-de-marche",
+  da: "00-vision/a04-direction-artistique",
+  canon: "00-vision/a01-canon",
+  coordination: "10-coordination/a03-coordination",
+  plan: "11-plan/a02-plan-de-production",
+  bible: "12-bible/a01-synthese",
+};
+
+/* ---------- règles communes du studio ---------- */
+const REGLES_STUDIO = `Règles du studio Atelier Roblox :
+- Tout est en français, sauf les noms d'API Roblox et le code.
+- Le canon du directeur créatif fait foi : reprends exactement ses noms (jeu, zones, monnaies, personnages). Si tu dois t'en écarter, dis-le explicitement dans tes décisions.
+- Sois concret et directement applicable dans Roblox Studio : services, instances, propriétés et valeurs chiffrées.
+- Pense mobile d'abord (la majorité des joueurs Roblox sont sur téléphone) et public jeune (règles communautaires Roblox).
+- Le code Luau est complet, idiomatique, avec autorité serveur : le client ne décide jamais d'une récompense.
+- Pas de remplissage : chaque phrase doit servir à l'équipe qui construira la map.`;
+
+const FORMAT_LIVRABLE = `Format du livrable : markdown dense et structuré (titres ##, listes, tableaux), entre 700 et 1600 mots, code Luau dans des blocs \`\`\`lua. Commence directement par le contenu, sans formule d'introduction.`;
+
+function personaPrompt(a) {
+  const d = DEPTS.find(x => x.id === a.dept);
+  return `Tu es ${a.nom}, ${a.role} au sein du département « ${d.nom} » d'Atelier Roblox, un studio de 50 experts spécialisé dans la création de maps et d'expériences Roblox. Tes spécialités : ${a.skills.join(", ")}. ${a.focus}`;
+}
+
+/* ---------- schémas des sorties structurées ---------- */
+function objet(props, requis) {
+  return { type: "object", additionalProperties: false, properties: props, required: requis || Object.keys(props) };
+}
+const S_TEXTE = { type: "string" };
+const S_LISTE_TEXTE = { type: "array", items: { type: "string" } };
+const S_TACHES_PROPOSEES = {
+  type: "array",
+  items: objet({
+    titre: { type: "string", description: "Tâche concrète et vérifiable" },
+    phase: { type: "integer", description: "Index de la phase de production, de 0 à 6" },
+    charge: { type: "string", enum: ["S", "M", "L"] },
+  }),
+};
+
+/* avecTexte = true : le texte long voyage dans la réponse (application).
+   avecTexte = false : l'agent l'écrit dans un fichier (workflow Claude Code). */
+const SCHEMAS = {
+  canon: avecTexte => objet(Object.assign(
+    { titre: { type: "string", description: "Titre définitif du jeu" },
+      pitch: { type: "string", description: "Le pitch en une ou deux phrases" } },
+    avecTexte ? { canon: { type: "string", description: "Le canon complet en markdown" } } : {})),
+  contribution: avecTexte => objet(Object.assign(
+    avecTexte ? { livrable: { type: "string", description: "Le livrable complet en markdown" } } : {},
+    { decisions: Object.assign({ description: "3 à 6 décisions clés que les autres départements doivent connaître" }, S_LISTE_TEXTE),
+      besoins: { type: "array", description: "Ce dont tu as besoin des autres départements", items: objet({
+        de: { type: "string", description: "Rôle du collègue concerné" }, besoin: S_TEXTE }) },
+      taches: S_TACHES_PROPOSEES })),
+  qa: avecTexte => objet(Object.assign(
+    avecTexte ? { rapport: { type: "string", description: "Le rapport de relecture en markdown" } } : {},
+    { problemes: { type: "array", items: objet({
+        gravite: { type: "string", enum: ["bloquant", "majeur", "mineur"] },
+        agent: { type: "string", description: "Identifiant de l'agent concerné (ex. a26), ou « studio » si transverse" },
+        probleme: S_TEXTE,
+        correction: S_TEXTE }) } })),
+  coordination: avecTexte => objet(Object.assign(
+    avecTexte ? { synthese: { type: "string", description: "La note de coordination en markdown" } } : {},
+    { conflits: { type: "array", items: objet({
+        sujet: S_TEXTE,
+        agents: Object.assign({ description: "Identifiants des agents concernés" }, S_LISTE_TEXTE),
+        arbitrage: S_TEXTE }) },
+      revisions: { type: "array", description: "12 révisions au maximum, les plus importantes", items: objet({
+        agent: { type: "string", description: "Identifiant de l'agent qui doit réviser (ex. a07)" },
+        consignes: S_TEXTE }) } })),
+  plan: avecTexte => objet(Object.assign(
+    avecTexte ? { plan: { type: "string", description: "Le plan de production en markdown" } } : {},
+    { taches: { type: "array", items: objet({
+        titre: S_TEXTE,
+        phase: { type: "integer", description: "Index de la phase de production, de 0 à 6" },
+        agents: Object.assign({ description: "Identifiants des agents assignés (ex. a16)" }, S_LISTE_TEXTE),
+        note: S_TEXTE }) } })),
+  bible: avecTexte => objet(Object.assign(
+    { titre: S_TEXTE, pitch: S_TEXTE },
+    avecTexte ? { bible: { type: "string", description: "La synthèse du directeur créatif en markdown" } } : {})),
+};
+
+/* ---------- résumés partagés entre agents ---------- */
+function listePhases() {
+  return PHASES.map((p, i) => `${i} = ${p}`).join(" ; ");
+}
+function annuaire(ids) {
+  return ids.map(id => {
+    const a = AGENTS.find(x => x.id === id);
+    return `${a.id} ${a.role} (${a.nom})`;
+  }).join(" ; ");
+}
+/* contributions : { a06: { decisions, besoins, taches, ... }, ... } */
+function digestDecisions(contributions) {
+  const lignes = [];
+  for (const d of DEPTS.filter(x => DEPTS_CREATEURS.includes(x.id))) {
+    const membres = AGENTS.filter(a => a.dept === d.id && contributions[a.id]);
+    if (!membres.length) continue;
+    lignes.push(`## ${d.emoji} ${d.nom}`);
+    for (const a of membres) {
+      const c = contributions[a.id];
+      lignes.push(`### ${a.id} — ${a.role} (${a.nom})`);
+      for (const dec of c.decisions || []) lignes.push(`- ${dec}`);
+      for (const b of c.besoins || []) lignes.push(`- Besoin auprès de ${b.de} : ${b.besoin}`);
+    }
+  }
+  return lignes.join("\n");
+}
+function digestProblemes(qa, gravites) {
+  const lignes = [];
+  for (const [id, r] of Object.entries(qa)) {
+    const a = AGENTS.find(x => x.id === id);
+    for (const p of r.problemes || []) {
+      if (gravites && !gravites.includes(p.gravite)) continue;
+      lignes.push(`- [${p.gravite}] signalé par ${a.role}, concerne ${p.agent} : ${p.probleme} → correction proposée : ${p.correction}`);
+    }
+  }
+  return lignes.join("\n");
+}
+function digestTaches(contributions) {
+  const lignes = [];
+  for (const [id, c] of Object.entries(contributions)) {
+    for (const t of c.taches || []) lignes.push(`- ${id} | phase ${t.phase} | charge ${t.charge} | ${t.titre}`);
+  }
+  return lignes.join("\n");
+}
+
+/* ---------- les consignes de chaque étape ---------- */
+function blocBrief(brief) {
+  return `# Le brief du client\n${brief}`;
+}
+function blocCanon(canon) {
+  return `# Le canon du directeur créatif (fait foi)\n${canon}`;
+}
+
+const TACHES = {
+  benchmark: brief => `${blocBrief(brief)}
+
+# Ta mission
+${LIVRABLES.a05}
+
+${FORMAT_LIVRABLE}`,
+
+  da: brief => `${blocBrief(brief)}
+
+# Ta mission
+${LIVRABLES.a04}
+
+${FORMAT_LIVRABLE}`,
+
+  canon: (brief, benchmark, da) => `${blocBrief(brief)}
+
+# L'analyse de marché de ${AGENTS.find(a => a.id === "a05").nom}
+${benchmark || "(indisponible)"}
+
+# La direction artistique de ${AGENTS.find(a => a.id === "a04").nom}
+${da || "(indisponible)"}
+
+# Ta mission
+Écris le CANON du projet : le document court que les 49 autres membres du studio respecteront à la lettre. Il contient obligatoirement ces sections :
+1. Titre et pitch.
+2. Les 3 piliers du jeu (ce qui doit être incroyable).
+3. Le public visé et la plateforme prioritaire.
+4. La boucle de jeu en 5 lignes.
+5. Les zones de la map : un nom officiel pour chacune (5 à 8 zones), sa fonction et son ambiance.
+6. Les noms officiels : monnaies, ressources, personnages, objets clés.
+7. La direction artistique résumée (reprends la palette hexadécimale retenue).
+8. Les contraintes techniques (appareils, nombre de joueurs par serveur, budget de performance global).
+9. Ce que le jeu n'est PAS (pour éviter les dérives).
+Le canon fait entre 600 et 1100 mots, en markdown. Intègre le meilleur de l'analyse de marché et de la direction artistique, et tranche : pas d'alternatives, des décisions.`,
+
+  contribution: (a, brief, canon) => `${blocBrief(brief)}
+
+${blocCanon(canon)}
+
+# Ta mission
+${LIVRABLES[a.id]}
+
+${FORMAT_LIVRABLE}
+
+Pour tes tâches proposées, utilise ces phases de production : ${listePhases()}.`,
+
+  qa: (a, brief, canon, dossier) => `${blocBrief(brief)}
+
+${blocCanon(canon)}
+
+# Ta mission de relecture
+${LIVRABLES[a.id]}
+
+# Ce que tu relis
+${dossier}
+
+# Consignes
+Pour chaque problème, indique l'identifiant de l'agent qui doit corriger (annuaire : ${annuaire(CREATEURS)}), sa gravité (bloquant, majeur, mineur) et une correction concrète. Sois exigeant mais juste : ne signale que des problèmes réels. Ton rapport est un markdown de 400 à 1000 mots.`,
+
+  coordination: (brief, canon, decisions, problemes) => `${blocBrief(brief)}
+
+${blocCanon(canon)}
+
+# Les décisions et besoins de chaque spécialiste
+${decisions}
+
+# Les problèmes signalés par la QA
+${problemes || "(aucun problème signalé)"}
+
+# Ta mission
+Tu coordonnes le studio. Repère les contradictions entre départements (deux agents qui décident des choses incompatibles), les besoins restés sans réponse et les écarts au canon, puis tranche. Liste ensuite les révisions à faire : au maximum 12, les plus importantes, chacune adressée à un seul agent (annuaire : ${annuaire(CREATEURS)}) avec des consignes précises qui intègrent tes arbitrages et les problèmes QA bloquants ou majeurs qui le concernent. Ta note de coordination est un markdown de 400 à 900 mots.`,
+
+  revision: (a, canon, livrable, consignes, problemes) => `${blocCanon(canon)}
+
+# Ton livrable actuel
+${livrable}
+
+# Consignes du chef de projet
+${consignes}
+
+# Problèmes QA te concernant
+${problemes || "(aucun)"}
+
+# Ta mission
+Réécris ton livrable complet en appliquant les consignes et en corrigeant les problèmes, sans perdre ce qui était bon. Mets à jour tes décisions, besoins et tâches.
+
+${FORMAT_LIVRABLE}
+
+Pour tes tâches proposées, utilise ces phases de production : ${listePhases()}.`,
+
+  plan: (brief, canon, taches, arbitrages) => `${blocBrief(brief)}
+
+${blocCanon(canon)}
+
+# Les tâches proposées par les spécialistes (agent | phase | charge | tâche)
+${taches}
+
+# Les arbitrages du chef de projet
+${arbitrages || "(aucun)"}
+
+# Ta mission
+Construis le plan de production : regroupe et dédoublonne les tâches, ordonne-les par phase (${listePhases()}), assigne chacune à 1 à 3 agents (annuaire : ${annuaire(AGENTS.map(x => x.id))}), et fixe les jalons avec leurs critères de validation. Vise 25 à 45 tâches concrètes et vérifiables. Ton plan est un markdown de 500 à 1100 mots (jalons, dépendances critiques, risques de planning).`,
+
+  bible: (brief, canon, decisions, arbitrages, problemes) => `${blocBrief(brief)}
+
+${blocCanon(canon)}
+
+# Les décisions finales du studio
+${decisions}
+
+# Les arbitrages de coordination
+${arbitrages || "(aucun)"}
+
+# Les problèmes QA bloquants et majeurs
+${problemes || "(aucun)"}
+
+# Ta mission
+Le studio a terminé ses livrables et la productrice rédige en parallèle le plan de production détaillé. Écris la synthèse de la bible de production, celle que lit en premier toute personne qui rejoint le projet. Sections obligatoires :
+1. Le jeu en une page (pitch, piliers, public).
+2. L'expérience du joueur : les 10 moments clés d'une première session, dans l'ordre.
+3. Ce qui rend cette map incroyable (la promesse, et comment chaque département y contribue).
+4. Les décisions structurantes, département par département.
+5. Les 5 risques principaux et leur parade.
+6. Les prochaines étapes immédiates.
+Markdown de 1000 à 1800 mots, inspirant et précis.`,
+};
+
+/* ---------- export de la bible complète en markdown ---------- */
+function productionEnMarkdown(prod) {
+  const out = [];
+  const titre = (prod.bible && prod.bible.titre) || (prod.vision && prod.vision.titre) || "Production";
+  out.push(`# 📖 ${titre} — Bible de production`);
+  out.push(`*Atelier Roblox · ${AGENTS.length} agents · ${prod.source === "claude-code" ? "workflow Claude Code" : "application"}*`);
+  if (prod.bible && prod.bible.pitch) out.push(`> ${prod.bible.pitch}`);
+  out.push(`## Le brief\n${prod.brief}`);
+  if (prod.bible && prod.bible.bible) out.push(`## ⭐ Synthèse du directeur créatif\n${prod.bible.bible}`);
+  if (prod.vision) {
+    if (prod.vision.canon) out.push(`## 🧭 Le canon\n${prod.vision.canon}`);
+    if (prod.vision.da) out.push(`## 🖼️ Direction artistique\n${prod.vision.da}`);
+    if (prod.vision.benchmark) out.push(`## ⚖️ Analyse de marché\n${prod.vision.benchmark}`);
+  }
+  for (const d of DEPTS.filter(x => DEPTS_CREATEURS.includes(x.id))) {
+    const membres = AGENTS.filter(a => a.dept === d.id && prod.contributions && prod.contributions[a.id]);
+    if (!membres.length) continue;
+    out.push(`## ${d.emoji} ${d.nom}`);
+    for (const a of membres) {
+      const c = prod.contributions[a.id];
+      out.push(`### ${a.emoji} ${a.role} — ${a.nom}${c.revise ? " (révisé)" : ""}\n${c.livrable || ""}`);
+    }
+  }
+  if (prod.qa && Object.keys(prod.qa).length) {
+    out.push(`## 🧪 Revue QA`);
+    for (const [id, r] of Object.entries(prod.qa)) {
+      const a = AGENTS.find(x => x.id === id);
+      out.push(`### ${a.emoji} ${a.role} — ${a.nom}\n${r.rapport || ""}`);
+    }
+  }
+  if (prod.coordination) out.push(`## 🤝 Coordination\n${prod.coordination.synthese || ""}`);
+  if (prod.plan) {
+    out.push(`## 📋 Plan de production\n${prod.plan.plan || ""}`);
+    const lignes = (prod.plan.taches || []).map(t =>
+      `| ${PHASES[t.phase] || t.phase} | ${t.titre} | ${(t.agents || []).join(", ")} |`);
+    if (lignes.length) out.push(`| Phase | Tâche | Agents |\n|---|---|---|\n${lignes.join("\n")}`);
+  }
+  return out.join("\n\n");
+}
+
+</script>
+<script>
+/* =========================================================================
    ATELIER ROBLOX — logique de l'application
    Suivi de projets de maps Roblox par un studio virtuel de 50 agents IA.
    Données en localStorage. Consultation IA optionnelle via l'API Anthropic
@@ -678,20 +1272,42 @@ function defaultState() {
   return {
     projects: [],
     log: [],
-    settings: { apiKey: "", model: "claude-opus-5" },
+    settings: { apiKey: "", model: "claude-opus-5", parallele: 3 },
   };
 }
 function load() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return defaultState();
-    const s = Object.assign(defaultState(), JSON.parse(raw));
-    s.settings = Object.assign(defaultState().settings, s.settings || {});
-    return s;
+    return normaliser(JSON.parse(raw));
   } catch (e) { return defaultState(); }
 }
+function normaliser(brut) {
+  const s = Object.assign(defaultState(), brut);
+  s.settings = Object.assign(defaultState().settings, s.settings || {});
+  for (const p of s.projects) {
+    p.productions = p.productions || [];
+    // une production « en cours » au chargement a été coupée par la fermeture de l'onglet
+    for (const pr of p.productions) if (pr.statut === "en_cours") pr.statut = "interrompu";
+  }
+  return s;
+}
+function productionActive() {
+  return typeof run !== "undefined" && run && run.actif;
+}
+let alerteStockage = false;
 function save() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    alerteStockage = false;
+    return true;
+  } catch (e) {
+    if (!alerteStockage) {
+      alerteStockage = true;
+      toast("⚠️ Stockage du navigateur plein : exportez vos données puis supprimez d'anciennes productions.");
+    }
+    return false;
+  }
 }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
@@ -741,6 +1357,7 @@ function showView(view) {
   if (view === "dash") renderDash();
   if (view === "projets") renderProjects();
   if (view === "equipe") renderTeam();
+  if (view === "production") rendreProduction();
   if (view === "reglages") renderSettings();
 }
 
@@ -824,6 +1441,7 @@ function openProject(id) {
       <button class="primary-btn" id="btn-add-task">＋ Nouvelle tâche</button>
       <button class="danger-btn" id="btn-del-project">🗑️ Supprimer le projet</button>
     </div>
+    ${htmlProductionsProjet(p)}
     <h2>Pipeline de production</h2>
     <div class="phase-list">${PHASES.map((ph, i) => `
       <div class="phase-item ${p.phases[i] ? "done" : ""}" data-i="${i}">
@@ -840,12 +1458,17 @@ function openProject(id) {
 
   d.querySelector("#btn-back").addEventListener("click", renderProjects);
   d.querySelector("#btn-add-task").addEventListener("click", () => openTaskModal(p));
+  brancherProductionsProjet(d, p);
   d.querySelector("#btn-cycle-status").addEventListener("click", () => {
     p.statut = { actif: "pause", pause: "termine", termine: "actif" }[p.statut];
     logEvent(`Projet <b>${esc(p.nom)}</b> passé en « ${p.statut} »`);
     save(); openProject(id);
   });
   d.querySelector("#btn-del-project").addEventListener("click", () => {
+    if (productionActive() && (p.productions || []).some(pr => pr.id === run.prodId)) {
+      toast("Une production de ce projet est en cours : interrompez-la d'abord.");
+      return;
+    }
     if (!confirm(`Supprimer définitivement le projet « ${p.nom} » ?`)) return;
     state.projects = state.projects.filter(x => x.id !== id);
     logEvent(`Projet <b>${esc(p.nom)}</b> supprimé`);
@@ -913,6 +1536,7 @@ document.getElementById("btn-project-save").addEventListener("click", () => {
     statut: "actif",
     phases: PHASES.map(() => false),
     tasks: [],
+    productions: [],
     created: Date.now(),
   };
   state.projects.unshift(p);
@@ -1001,15 +1625,13 @@ let chatAgent = null;
 let chatHistory = [];   // messages {role, content} de la conversation en cours
 
 function agentSystemPrompt(a) {
-  const d = deptById[a.dept];
   let ctx = "";
   const p = state.projects.find(x => x.id === currentProjectId);
   if (p) {
     ctx = `\n\nProjet en cours au studio : « ${p.nom} » (type : ${p.type}). ${p.desc || ""}` +
       `\nPhases validées : ${p.phases.map((v, i) => v ? PHASES[i] : null).filter(Boolean).join(", ") || "aucune"}.`;
   }
-  return `Tu es ${a.nom}, ${a.role} au sein du département ${d.nom} d'un studio expert en création de maps et d'expériences Roblox. ` +
-    `Tes spécialités : ${a.skills.join(", ")}. ${a.focus}` +
+  return personaPrompt(a) +
     `\nRéponds en français, de façon concrète et directement actionnable dans Roblox Studio ` +
     `(noms d'instances, services, propriétés et valeurs précises quand c'est pertinent). ` +
     `Reste dans ton domaine d'expertise ; si la question relève d'un autre département, dis-le et donne quand même une piste.` + ctx;
@@ -1071,20 +1693,24 @@ async function sendChat() {
 
   chatHistory.push({ role: "user", content: question });
   try {
+    const headers = {
+      "content-type": "application/json",
+      "x-api-key": state.settings.apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    };
+    const body = {
+      model: state.settings.model,
+      max_tokens: 16000,
+      system: agentSystemPrompt(chatAgent),
+      messages: chatHistory,
+    };
+    if (body.model === "claude-opus-5") {
+      headers["anthropic-beta"] = "server-side-fallback-2026-07-01";
+      body.fallbacks = "default";
+    }
     const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": state.settings.apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: state.settings.model,
-        max_tokens: 4096,
-        system: agentSystemPrompt(chatAgent),
-        messages: chatHistory,
-      }),
+      method: "POST", headers, body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -1120,10 +1746,12 @@ document.getElementById("chat-input").addEventListener("keydown", e => {
 function renderSettings() {
   document.getElementById("set-apikey").value = state.settings.apiKey;
   document.getElementById("set-model").value = state.settings.model;
+  document.getElementById("set-parallele").value = String(state.settings.parallele || 3);
 }
 document.getElementById("btn-save-settings").addEventListener("click", () => {
   state.settings.apiKey = document.getElementById("set-apikey").value.trim();
   state.settings.model = document.getElementById("set-model").value;
+  state.settings.parallele = Number(document.getElementById("set-parallele").value) || 3;
   save();
   refreshApiStatus();
   toast("Réglages enregistrés ✅");
@@ -1153,7 +1781,8 @@ document.getElementById("import-file").addEventListener("change", e => {
     try {
       const s = JSON.parse(r.result);
       if (!Array.isArray(s.projects)) throw new Error("format invalide");
-      state = Object.assign(defaultState(), s);
+      if (productionActive()) throw new Error("une production est en cours, interrompez-la d'abord");
+      state = normaliser(s);
       save();
       toast("Sauvegarde importée ✅");
       showView("dash");
@@ -1164,6 +1793,7 @@ document.getElementById("import-file").addEventListener("change", e => {
   e.target.value = "";
 });
 document.getElementById("btn-wipe").addEventListener("click", () => {
+  if (productionActive()) { toast("Une production est en cours : interrompez-la d'abord."); return; }
   if (!confirm("Effacer TOUTES les données du studio (projets, tâches, réglages) ?")) return;
   localStorage.removeItem(STORE_KEY);
   state = defaultState();
@@ -1198,6 +1828,801 @@ document.querySelectorAll(".overlay").forEach(o =>
 refreshApiStatus();
 showView("dash");
 if (!state.log.length) logEvent("Le studio <b>Atelier Roblox</b> est ouvert : 50 agents prêts à travailler 🏗️");
+
+</script>
+<script>
+/* =========================================================================
+   ATELIER ROBLOX — orchestrateur des productions complètes
+   Un brief → les 50 agents travaillent ensemble via l'API Anthropic,
+   directement depuis le navigateur (clé saisie dans les Réglages).
+   Chaque résultat est sauvegardé dès qu'il arrive : une production
+   interrompue reprend là où elle s'était arrêtée.
+   Utilise les globales d'app.js (state, save, toast, esc…) et de
+   production.js (TACHES, SCHEMAS, digest*…).
+   ========================================================================= */
+"use strict";
+
+const API_URL = "https://api.anthropic.com/v1/messages";
+const PRIX_MODELES = { "claude-opus-5": [5, 25], "claude-sonnet-5": [2, 10], "claude-haiku-4-5": [1, 5] };
+const NB_APPELS_PREVUS = 3 + CREATEURS.length + RELECTEURS_QA.length + 1 + 2;
+
+/* ========================= appels à l'API ========================= */
+
+class ErreurFatale extends Error {}
+
+function pause(ms, signal) {
+  return new Promise((ok, ko) => {
+    const t = setTimeout(ok, ms);
+    if (signal) signal.addEventListener("abort", () => { clearTimeout(t); ko(new DOMException("Interrompu", "AbortError")); }, { once: true });
+  });
+}
+
+/* lit un flux SSE de l'API Messages et reconstitue le texte final */
+async function lireFlux(res, onProgres) {
+  const lecteur = res.body.getReader();
+  const dec = new TextDecoder();
+  const r = { texte: "", stop: null, erreur: null, entree: 0, sortie: 0 };
+  let tampon = "";
+  const traiter = ev => {
+    switch (ev.type) {
+      case "message_start": {
+        const u = (ev.message && ev.message.usage) || {};
+        r.entree += (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
+        break;
+      }
+      case "content_block_start":
+        // après un basculement vers le modèle de secours, le texte partiel précédent est caduc
+        if (ev.content_block && ev.content_block.type === "fallback") r.texte = "";
+        else if (ev.content_block && ev.content_block.type === "text" && ev.content_block.text) r.texte += ev.content_block.text;
+        break;
+      case "content_block_delta":
+        if (ev.delta && ev.delta.type === "text_delta") {
+          r.texte += ev.delta.text;
+          if (onProgres) onProgres(r.texte.length);
+        }
+        break;
+      case "message_delta":
+        if (ev.delta && ev.delta.stop_reason) r.stop = ev.delta.stop_reason;
+        if (ev.usage && ev.usage.output_tokens) r.sortie = ev.usage.output_tokens;
+        break;
+      case "error":
+        r.erreur = ev.error || { type: "error", message: "erreur de flux" };
+        break;
+    }
+  };
+  for (;;) {
+    const { done, value } = await lecteur.read();
+    if (done) break;
+    tampon += dec.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+    let i;
+    while ((i = tampon.indexOf("\n\n")) >= 0) {
+      const bloc = tampon.slice(0, i);
+      tampon = tampon.slice(i + 2);
+      const data = bloc.split("\n").filter(l => l.startsWith("data:")).map(l => l.slice(5).trim()).join("");
+      if (!data) continue;
+      try { traiter(JSON.parse(data)); } catch (e) { /* ligne incomplète ou ping : ignorée */ }
+    }
+  }
+  return r;
+}
+
+/* un appel complet, avec nouvelles tentatives sur les erreurs passagères */
+async function appelClaude({ system, user, schema, signal, onProgres, usage }) {
+  const model = state.settings.model;
+  const body = { model, max_tokens: 32000, stream: true, system, messages: [{ role: "user", content: user }] };
+  if (schema) body.output_config = { format: { type: "json_schema", schema } };
+  const headers = {
+    "content-type": "application/json",
+    "x-api-key": state.settings.apiKey,
+    "anthropic-version": "2023-06-01",
+    "anthropic-dangerous-direct-browser-access": "true",
+  };
+  if (model === "claude-opus-5") {
+    headers["anthropic-beta"] = "server-side-fallback-2026-07-01";
+    body.fallbacks = "default";
+  }
+  let derniere = null;
+  for (let essai = 0; essai < 6; essai++) {
+    if (essai) await pause(Math.min(60000, 3000 * 2 ** (essai - 1)), signal);
+    let res;
+    try {
+      res = await fetch(API_URL, { method: "POST", headers, body: JSON.stringify(body), signal });
+    } catch (e) {
+      if (signal && signal.aborted) throw e;
+      derniere = new Error("connexion impossible à l'API");
+      continue;
+    }
+    if (!res.ok) {
+      let msg = `erreur HTTP ${res.status}`;
+      try { const d = await res.json(); if (d && d.error && d.error.message) msg = d.error.message; } catch (e) {}
+      if (res.status === 429 || res.status === 529 || res.status >= 500) {
+        derniere = new Error(msg);
+        const attente = Number(res.headers.get("retry-after"));
+        if (attente > 0) await pause(Math.min(attente, 90) * 1000, signal);
+        continue;
+      }
+      // clé invalide, requête refusée… : inutile d'insister, toute la production s'arrête
+      throw new ErreurFatale(msg);
+    }
+    let r;
+    try {
+      r = await lireFlux(res, onProgres);
+    } catch (e) {
+      if (signal && signal.aborted) throw e;
+      derniere = new Error("flux interrompu");
+      continue;
+    }
+    if (usage) { usage.entree += r.entree; usage.sortie += r.sortie; }
+    if (r.erreur) { derniere = new Error(r.erreur.message || r.erreur.type); continue; }
+    if (r.stop === "refusal") throw new Error("demande déclinée par le modèle");
+    if (r.stop === "max_tokens") throw new Error("réponse trop longue (limite de jetons atteinte)");
+    if (!r.stop) { derniere = new Error("réponse incomplète"); continue; }
+    if (!schema) return r.texte.trim();
+    try { return JSON.parse(r.texte); }
+    catch (e) { derniere = new Error("réponse JSON illisible"); continue; }
+  }
+  throw derniere || new Error("échec après plusieurs tentatives");
+}
+
+/* ========================= la production ========================= */
+
+let run = null;   // production en cours dans cet onglet
+
+function nouvelleProduction(brief) {
+  return {
+    id: uid(), source: "app", brief,
+    modele: state.settings.model, cree: Date.now(), statut: "prete",
+    vision: { benchmark: null, da: null, canon: null, titre: null, pitch: null },
+    contributions: {}, qa: {}, coordination: null, revisionsFaites: {},
+    plan: null, bible: null, scripts: {}, echecs: {},
+    usage: { entree: 0, sortie: 0 },
+  };
+}
+function trouverProduction(prodId) {
+  for (const p of state.projects)
+    for (const pr of (p.productions || []))
+      if (pr.id === prodId) return { projet: p, prod: pr };
+  return null;
+}
+function coutProduction(prod) {
+  if (!prod.usage) return null;
+  const [pe, ps] = PRIX_MODELES[prod.modele] || PRIX_MODELES["claude-opus-5"];
+  return (prod.usage.entree * pe + prod.usage.sortie * ps) / 1e6;
+}
+function estimationCout(model) {
+  const [pe, ps] = PRIX_MODELES[model] || PRIX_MODELES["claude-opus-5"];
+  return [(0.5e6 * pe + 0.25e6 * ps) / 1e6, (0.9e6 * pe + 0.45e6 * ps) / 1e6];
+}
+
+/* révisions demandées par la coordination, fusionnées par agent */
+function revisionsDemandees(prod) {
+  const out = {};
+  if (!prod.coordination) return out;
+  for (const r of prod.coordination.revisions || []) {
+    if (!prod.contributions[r.agent]) continue;
+    out[r.agent] = out[r.agent] ? `${out[r.agent]}\n${r.consignes}` : r.consignes;
+  }
+  return out;
+}
+function problemesDe(prod, id) {
+  return Object.values(prod.qa).flatMap(r => r.problemes || [])
+    .filter(p => p.agent === id)
+    .map(p => `- [${p.gravite}] ${p.probleme} → ${p.correction}`).join("\n");
+}
+function dossierQA(prod, id) {
+  const lus = AGENTS.filter(x => FOCUS_QA[id].includes(x.dept) && prod.contributions[x.id]);
+  const parts = lus.map(x => `## ${x.id} — ${x.role} (${x.nom})\n${prod.contributions[x.id].livrable}`);
+  parts.push(`## Les décisions de tout le studio\n${digestDecisions(prod.contributions)}`);
+  return parts.join("\n\n");
+}
+function arbitragesTexte(prod) {
+  if (!prod.coordination) return "";
+  return (prod.coordination.conflits || [])
+    .map(c => `- ${c.sujet} (${(c.agents || []).join(", ")}) → ${c.arbitrage}`).join("\n");
+}
+
+async function lancerProduction(prodId) {
+  const trouve = trouverProduction(prodId);
+  if (!trouve) return;
+  if (run && run.actif) { toast("Une production est déjà en cours dans cet onglet."); return; }
+  if (!state.settings.apiKey) { toast("Ajoutez d'abord votre clé API dans les Réglages."); return; }
+  const { projet, prod } = trouve;
+  run = { prodId, actif: true, ctrl: new AbortController(), statuts: {}, progres: {}, journal: [] };
+  const signal = run.ctrl.signal;
+  prod.modele = state.settings.model;
+  prod.statut = "en_cours";
+  prod.echecs = {};
+  delete prod.erreur;
+  if (!prod.usage) prod.usage = { entree: 0, sortie: 0 };
+  save();
+  noter(`🚀 Production lancée avec ${nomModele(prod.modele)}`);
+  const parallele = Math.max(1, Math.min(8, Number(state.settings.parallele) || 3));
+  const A = id => agentById[id];
+
+  const appel = (cle, a, tache, schema) => appelClaude({
+    system: `${personaPrompt(a)}\n\n${REGLES_STUDIO}`,
+    user: tache, schema, signal, usage: prod.usage,
+    onProgres: n => { run.progres[cle] = n; planifierRendu(); },
+  });
+
+  async function unite(cle, travail) {
+    if (signal.aborted) return;
+    run.statuts[cle] = "travail";
+    planifierRendu();
+    try {
+      await travail();
+      run.statuts[cle] = "fini";
+      delete prod.echecs[cle];
+    } catch (e) {
+      if (signal.aborted) { run.statuts[cle] = "attente"; return; }
+      run.statuts[cle] = "echec";
+      prod.echecs[cle] = e.message;
+      const [, id] = cle.split(":");
+      noter(`⚠️ ${A(id).nom} : ${e.message}`);
+      if (e instanceof ErreurFatale) {
+        prod.erreur = e.message;
+        run.ctrl.abort();
+      }
+    } finally {
+      save();
+      planifierRendu();
+    }
+  }
+  async function enParallele(ids, fn) {
+    let i = 0;
+    await Promise.all(Array.from({ length: Math.min(parallele, ids.length) }, async () => {
+      while (i < ids.length && !signal.aborted) await fn(ids[i++]);
+    }));
+  }
+  const verifier = () => { if (signal.aborted) throw new DOMException("Interrompu", "AbortError"); };
+
+  try {
+    /* 1. Vision */
+    const v = prod.vision;
+    await Promise.all([
+      !v.benchmark && unite("vision:a05", async () => { v.benchmark = await appel("vision:a05", A("a05"), TACHES.benchmark(prod.brief)); }),
+      !v.da && unite("vision:a04", async () => { v.da = await appel("vision:a04", A("a04"), TACHES.da(prod.brief)); }),
+    ].filter(Boolean));
+    verifier();
+    if (!v.canon) {
+      await unite("vision:a01", async () => {
+        const r = await appel("vision:a01", A("a01"), TACHES.canon(prod.brief, v.benchmark, v.da), SCHEMAS.canon(true));
+        Object.assign(v, { canon: r.canon, titre: r.titre, pitch: r.pitch });
+      });
+    }
+    verifier();
+    if (!v.canon) throw new Error("le canon n'a pas pu être écrit, la production s'arrête");
+    noter(`🧭 Canon établi : « ${v.titre} »`);
+
+    /* 2. Contributions */
+    await enParallele(CREATEURS.filter(id => !prod.contributions[id]), id => unite(`contrib:${id}`, async () => {
+      prod.contributions[id] = await appel(`contrib:${id}`, A(id), TACHES.contribution(A(id), prod.brief, v.canon), SCHEMAS.contribution(true));
+    }));
+    verifier();
+    noter(`🛠️ ${Object.keys(prod.contributions).length}/${CREATEURS.length} contributions livrées`);
+
+    /* 3. Revue QA */
+    await enParallele(RELECTEURS_QA.filter(id => !prod.qa[id]), id => unite(`qa:${id}`, async () => {
+      prod.qa[id] = await appel(`qa:${id}`, A(id), TACHES.qa(A(id), prod.brief, v.canon, dossierQA(prod, id)), SCHEMAS.qa(true));
+    }));
+    verifier();
+
+    /* 4. Coordination */
+    if (!prod.coordination) {
+      await unite("coord:a03", async () => {
+        prod.coordination = await appel("coord:a03", A("a03"),
+          TACHES.coordination(prod.brief, v.canon, digestDecisions(prod.contributions), digestProblemes(prod.qa)),
+          SCHEMAS.coordination(true));
+      });
+    }
+    verifier();
+
+    /* 5. Révisions */
+    const aReviser = Object.entries(revisionsDemandees(prod)).filter(([id]) => !prod.revisionsFaites[id]);
+    if (aReviser.length) noter(`✏️ ${aReviser.length} agents révisent leur livrable`);
+    await enParallele(aReviser, ([id, consignes]) => unite(`rev:${id}`, async () => {
+      const r = await appel(`rev:${id}`, A(id),
+        TACHES.revision(A(id), v.canon, prod.contributions[id].livrable, consignes, problemesDe(prod, id)),
+        SCHEMAS.contribution(true));
+      prod.contributions[id] = Object.assign(r, { revise: true });
+      prod.revisionsFaites[id] = true;
+    }));
+    verifier();
+
+    /* 6. Plan & Bible */
+    await Promise.all([
+      !prod.plan && unite("plan:a02", async () => {
+        prod.plan = await appel("plan:a02", A("a02"),
+          TACHES.plan(prod.brief, v.canon, digestTaches(prod.contributions), arbitragesTexte(prod)), SCHEMAS.plan(true));
+      }),
+      !prod.bible && unite("bible:a01", async () => {
+        prod.bible = await appel("bible:a01", A("a01"),
+          TACHES.bible(prod.brief, v.canon, digestDecisions(prod.contributions), arbitragesTexte(prod),
+            digestProblemes(prod.qa, ["bloquant", "majeur"])), SCHEMAS.bible(true));
+      }),
+    ].filter(Boolean));
+    verifier();
+
+    prod.statut = Object.keys(prod.echecs).length ? "incomplet" : "termine";
+    noter(prod.statut === "termine" ? "🎉 Production terminée !" : "⚠️ Production terminée avec des échecs : relancez pour les reprendre");
+  } catch (e) {
+    prod.statut = "interrompu";
+    if (prod.erreur) noter(`⛔ Arrêt : ${prod.erreur}`);
+    else if (e.name === "AbortError") noter("⏸️ Production interrompue — elle reprendra là où elle s'est arrêtée");
+    else noter(`⛔ ${e.message}`);
+  } finally {
+    run.actif = false;
+    save();
+    const titre = prod.vision.titre || projet.nom;
+    logEvent(`🎬 Production « ${esc(titre)} » : ${libelleStatut(prod.statut).toLowerCase()} (<b>${esc(projet.nom)}</b>)`);
+    rendreProduction();
+  }
+}
+
+function noter(msg) {
+  if (!run) return;
+  run.journal.unshift({ t: Date.now(), msg });
+  planifierRendu();
+}
+function nomModele(m) {
+  return { "claude-opus-5": "Claude Opus 5", "claude-sonnet-5": "Claude Sonnet 5", "claude-haiku-4-5": "Claude Haiku 4.5" }[m] || m;
+}
+function libelleStatut(s) {
+  return { prete: "Prête", en_cours: "En cours", termine: "Terminée", incomplet: "Incomplète", interrompu: "Interrompue" }[s] || s;
+}
+
+/* ========================= état des unités ========================= */
+
+/* toutes les unités de travail d'une production, avec leur état actuel */
+function unitesProduction(prod) {
+  const vivant = run && run.prodId === prod.id ? run.statuts : {};
+  const etat = (cle, fait) => vivant[cle] === "travail" ? "travail"
+    : fait ? "fini" : prod.echecs && prod.echecs[cle] ? "echec" : "attente";
+  const u = [
+    { cle: "vision:a05", etape: "vision", fait: !!prod.vision.benchmark },
+    { cle: "vision:a04", etape: "vision", fait: !!prod.vision.da },
+    { cle: "vision:a01", etape: "vision", fait: !!prod.vision.canon },
+    ...CREATEURS.map(id => ({ cle: `contrib:${id}`, etape: "contributions", fait: !!prod.contributions[id] })),
+    ...RELECTEURS_QA.map(id => ({ cle: `qa:${id}`, etape: "qa", fait: !!prod.qa[id] })),
+    { cle: "coord:a03", etape: "coordination", fait: !!prod.coordination },
+    ...Object.keys(revisionsDemandees(prod)).map(id => ({ cle: `rev:${id}`, etape: "revisions", fait: !!prod.revisionsFaites[id] })),
+    { cle: "plan:a02", etape: "final", fait: !!prod.plan },
+    { cle: "bible:a01", etape: "final", fait: !!prod.bible },
+  ];
+  for (const x of u) x.etat = etat(x.cle, x.fait);
+  return u;
+}
+
+/* ========================= interface ========================= */
+
+let prodAffichee = null;     // id de la production affichée
+let ongletProd = "salle";
+let renduPlanifie = null;
+
+function planifierRendu() {
+  if (renduPlanifie) return;
+  renduPlanifie = setTimeout(() => {
+    renduPlanifie = null;
+    if (currentView === "production") rendreProduction();
+  }, 500);
+}
+
+function ouvrirProduction(prodId, onglet) {
+  prodAffichee = prodId;
+  ongletProd = onglet || "salle";
+  showView("production");
+}
+
+function rendreProduction() {
+  const wrap = document.getElementById("prod-wrap");
+  if (!wrap) return;
+  const trouve = prodAffichee && trouverProduction(prodAffichee);
+  if (!trouve) {
+    const toutes = state.projects.flatMap(p => (p.productions || []).map(pr => ({ p, pr })));
+    wrap.innerHTML = `<h1>🎬 Salle de production</h1>
+      <p class="muted">Aucune production ouverte. Ouvrez un projet et cliquez sur « 🚀 Brief au studio » :
+      les 50 agents travailleront ensemble à partir d'un seul brief.</p>
+      ${toutes.length ? `<h2>Productions existantes</h2><div class="card-list">${toutes.map(({ p, pr }) => `
+        <div class="project-card" data-prod="${pr.id}">
+          <div class="pc-top"><div><div class="pc-nom">${esc(pr.vision.titre || p.nom)}</div>
+          <div class="pc-type">${esc(p.nom)} · ${new Date(pr.cree).toLocaleDateString("fr-FR")}</div></div>
+          <span class="badge ${classeStatut(pr.statut)}">${libelleStatut(pr.statut)}</span></div>
+        </div>`).join("")}</div>` : ""}`;
+    wrap.querySelectorAll("[data-prod]").forEach(el => el.addEventListener("click", () => ouvrirProduction(el.dataset.prod)));
+    return;
+  }
+  const { projet, prod } = trouve;
+  const enCours = run && run.actif && run.prodId === prod.id;
+  const unites = unitesProduction(prod);
+  const finies = unites.filter(u => u.etat === "fini").length;
+  const cout = coutProduction(prod);
+  const peutReprendre = !enCours && prod.statut !== "termine" && prod.source !== "claude-code";
+
+  wrap.innerHTML = `
+    <button class="ghost-btn" id="btn-prod-retour">← ${esc(projet.nom)}</button>
+    <div class="detail-head" style="margin-top:14px">
+      <h1>🎬 ${esc(prod.vision.titre || "Production en préparation")}</h1>
+      <span class="badge ${classeStatut(prod.statut)}">${libelleStatut(prod.statut)}</span>
+    </div>
+    ${prod.vision.pitch ? `<p class="detail-desc">${esc(prod.vision.pitch)}</p>` : ""}
+    <div class="prod-meta">
+      <span>🤖 ${esc(prod.source === "claude-code" ? "Workflow Claude Code" : nomModele(prod.modele))}</span>
+      <span>✅ ${finies}/${unites.length} étapes d'agents</span>
+      ${cout !== null && prod.source !== "claude-code" ? `<span>💶 ≈ ${cout.toFixed(2)} $ consommés</span>` : ""}
+      ${prod.erreur ? `<span class="txt-danger">⛔ ${esc(prod.erreur)}</span>` : ""}
+    </div>
+    <div class="progress big"><div style="width:${Math.round(100 * finies / unites.length)}%"></div></div>
+    <div class="btn-row" style="margin:14px 0">
+      ${enCours ? `<button class="danger-btn" id="btn-prod-stop">⏸️ Interrompre</button>` : ""}
+      ${peutReprendre ? `<button class="primary-btn" id="btn-prod-go2">${prod.statut === "prete" ? "🚀 Lancer" : "▶️ Reprendre / relancer les échecs"}</button>` : ""}
+      <button class="ghost-btn" id="btn-prod-md">⬇️ Télécharger la bible (.md)</button>
+      <button class="ghost-btn" id="btn-prod-json">⬇️ Exporter (.json)</button>
+      ${!enCours ? `<button class="danger-btn" id="btn-prod-del">🗑️ Supprimer</button>` : ""}
+    </div>
+    <div class="tabs">
+      <button class="tab ${ongletProd === "salle" ? "active" : ""}" data-tab="salle">🏭 Salle de production</button>
+      <button class="tab ${ongletProd === "bible" ? "active" : ""}" data-tab="bible">📖 Bible de production</button>
+    </div>
+    <div id="prod-contenu"></div>`;
+
+  const contenu = wrap.querySelector("#prod-contenu");
+  if (ongletProd === "salle") rendreSalle(contenu, prod, unites);
+  else rendreBible(contenu, projet, prod);
+
+  wrap.querySelector("#btn-prod-retour").addEventListener("click", () => openProject(projet.id));
+  wrap.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => { ongletProd = b.dataset.tab; rendreProduction(); }));
+  const stop = wrap.querySelector("#btn-prod-stop");
+  if (stop) stop.addEventListener("click", () => { run.ctrl.abort(); toast("Interruption demandée…"); });
+  const go = wrap.querySelector("#btn-prod-go2");
+  if (go) go.addEventListener("click", () => lancerProduction(prod.id));
+  wrap.querySelector("#btn-prod-md").addEventListener("click", () =>
+    telecharger(`${slugProd(prod.vision.titre || projet.nom)}-bible.md`, markdownComplet(prod), "text/markdown"));
+  wrap.querySelector("#btn-prod-json").addEventListener("click", () =>
+    telecharger(`${slugProd(prod.vision.titre || projet.nom)}-production.json`, JSON.stringify(prod, null, 2), "application/json"));
+  const del = wrap.querySelector("#btn-prod-del");
+  if (del) del.addEventListener("click", () => {
+    if (!confirm("Supprimer définitivement cette production ?")) return;
+    projet.productions = projet.productions.filter(x => x.id !== prod.id);
+    save();
+    openProject(projet.id);
+  });
+}
+
+function classeStatut(s) {
+  return { termine: "termine", en_cours: "actif", prete: "pause", incomplet: "pause", interrompu: "pause" }[s] || "pause";
+}
+
+function rendreSalle(el, prod, unites) {
+  const parEtape = id => unites.filter(u => u.etape === id);
+  const etatEtape = id => {
+    const us = parEtape(id);
+    if (!us.length) return id === "revisions" && prod.coordination ? "fini" : "attente";
+    if (us.some(u => u.etat === "travail")) return "travail";
+    if (us.every(u => u.etat === "fini")) return "fini";
+    if (us.some(u => u.etat === "echec")) return "echec";
+    return us.some(u => u.etat === "fini") ? "travail" : "attente";
+  };
+  const icone = { attente: "⏳", travail: "🔨", fini: "✅", echec: "⚠️" };
+  // état agrégé par agent : au travail > échec > fini > en attente
+  const etatAgent = {};
+  const rang = { travail: 3, echec: 2, fini: 1, attente: 0 };
+  for (const u of unites) {
+    const id = u.cle.split(":")[1];
+    if (etatAgent[id] === undefined || rang[u.etat] > rang[etatAgent[id]]) etatAgent[id] = u.etat;
+  }
+  const vivant = run && run.prodId === prod.id ? run : null;
+
+  el.innerHTML = `
+    <div class="timeline">${ETAPES_PROD.map(e => {
+      const st = etatEtape(e.id);
+      const us = parEtape(e.id);
+      return `<div class="tl-step ${st}">
+        <div class="tl-emoji">${e.emoji}</div>
+        <div class="tl-nom">${e.nom}</div>
+        <div class="tl-etat">${icone[st]} ${us.filter(u => u.etat === "fini").length}/${us.length || "—"}</div>
+      </div>`;
+    }).join("")}</div>
+    <div class="salle">${DEPTS.map(d => `
+      <div class="salle-dept">
+        <div class="salle-dept-nom" style="color:${d.color}">${d.emoji} ${d.nom}</div>
+        <div class="salle-agents">${AGENTS.filter(a => a.dept === d.id).map(a => {
+          const st = etatAgent[a.id] || "attente";
+          const car = vivant ? Object.entries(vivant.progres).filter(([k]) => k.endsWith(":" + a.id) && vivant.statuts[k] === "travail").map(([, n]) => n)[0] : 0;
+          return `<div class="tuile ${st}" data-aid="${a.id}" title="${esc(a.nom)} — ${esc(a.role)}">
+            <span class="tuile-emoji">${a.emoji}</span>
+            <span class="tuile-nom">${esc(a.nom.split(" ")[0])}</span>
+            <span class="tuile-etat">${icone[st]}${st === "travail" && car ? ` ${Math.round(car / 100) / 10}k` : ""}</span>
+          </div>`;
+        }).join("")}</div>
+      </div>`).join("")}
+    </div>
+    ${Object.keys(prod.echecs || {}).length ? `<div class="echecs"><b>Échecs à reprendre :</b> ${Object.entries(prod.echecs).map(([k, m]) => `${esc(k)} (${esc(m)})`).join(" · ")}</div>` : ""}
+    <h2>Journal</h2>
+    <div class="log-list">${vivant && vivant.journal.length
+      ? vivant.journal.slice(0, 30).map(j => `<div class="log-item">${esc(j.msg)} <span class="log-time">· ${timeAgo(j.t)}</span></div>`).join("")
+      : `<p class="muted">${prod.statut === "prete" ? "Cliquez sur « 🚀 Lancer » pour mettre le studio au travail." : "Le journal détaillé s'affiche pendant l'exécution."}</p>`}
+    </div>`;
+  el.querySelectorAll(".tuile").forEach(t => t.addEventListener("click", () => ouvrirLivrables(prod, t.dataset.aid)));
+}
+
+/* ------- ce qu'un agent a produit dans cette production ------- */
+function livrablesAgent(prod, id) {
+  const out = [];
+  if (id === "a05" && prod.vision.benchmark) out.push(["Analyse de marché", prod.vision.benchmark]);
+  if (id === "a04" && prod.vision.da) out.push(["Direction artistique", prod.vision.da]);
+  if (id === "a01" && prod.vision.canon) out.push(["Canon", prod.vision.canon]);
+  if (id === "a01" && prod.bible) out.push(["Synthèse de la bible", prod.bible.bible || "(voir le fichier de la production)"]);
+  if (prod.contributions[id]) {
+    const c = prod.contributions[id];
+    out.push([c.revise ? "Livrable (révisé)" : "Livrable", c.livrable || ""]);
+    if ((c.decisions || []).length) out.push(["Décisions clés", c.decisions.map(x => `- ${x}`).join("\n")]);
+  }
+  if (prod.qa[id]) {
+    out.push(["Rapport de relecture", prod.qa[id].rapport || ""]);
+    const pb = prod.qa[id].problemes || [];
+    if (pb.length) out.push(["Problèmes signalés", pb.map(p => `- **${p.gravite}** (${p.agent}) ${p.probleme} → ${p.correction}`).join("\n")]);
+  }
+  if (id === "a03" && prod.coordination) out.push(["Note de coordination", prod.coordination.synthese || ""]);
+  if (id === "a02" && prod.plan) out.push(["Plan de production", prod.plan.plan || ""]);
+  return out;
+}
+function ouvrirLivrables(prod, id) {
+  const a = agentById[id];
+  const d = deptById[a.dept];
+  const parts = livrablesAgent(prod, id);
+  const err = Object.entries(prod.echecs || {}).filter(([k]) => k.endsWith(":" + id));
+  document.getElementById("livrable-head").innerHTML = `
+    <div class="agent-profile"><span class="ap-emoji">${a.emoji}</span>
+    <div><h2>${esc(a.nom)}</h2><div class="ap-role">${esc(a.role)} · ${d.emoji} ${d.nom}</div></div></div>`;
+  document.getElementById("livrable-body").innerHTML = parts.length
+    ? parts.map(([t, md]) => `<h2 class="md-section">${esc(t)}</h2>${mdVersHtml(md)}`).join("")
+    : `<p class="muted">${err.length ? `⚠️ ${esc(err.map(([, m]) => m).join(" · "))}` : "Cet agent n'a encore rien livré pour cette production."}</p>`;
+  document.getElementById("modal-livrable").classList.remove("hidden");
+}
+
+/* ------- la bible ------- */
+function sectionsBible(prod) {
+  const s = [];
+  if (prod.bible && prod.bible.bible) s.push({ id: "synthese", titre: "⭐ Synthèse du directeur créatif", md: prod.bible.bible });
+  if (prod.vision.canon) s.push({ id: "canon", titre: "🧭 Le canon", md: prod.vision.canon });
+  if (prod.vision.da) s.push({ id: "da", titre: "🖼️ Direction artistique", md: prod.vision.da });
+  if (prod.vision.benchmark) s.push({ id: "marche", titre: "⚖️ Analyse de marché", md: prod.vision.benchmark });
+  for (const d of DEPTS.filter(x => DEPTS_CREATEURS.includes(x.id))) {
+    const membres = AGENTS.filter(a => a.dept === d.id && prod.contributions[a.id]);
+    if (!membres.length) continue;
+    s.push({ id: "dept-" + d.id, titre: `${d.emoji} ${d.nom}`, md: membres.map(a => {
+      const c = prod.contributions[a.id];
+      return `## ${a.emoji} ${a.role} — ${a.nom}${c.revise ? " ✏️ révisé" : ""}\n\n${c.livrable || ""}`;
+    }).join("\n\n") });
+  }
+  if (Object.keys(prod.qa).length) {
+    s.push({ id: "qa", titre: "🧪 Revue QA", md: Object.entries(prod.qa).map(([id, r]) =>
+      `## ${agentById[id].emoji} ${agentById[id].role} — ${agentById[id].nom}\n\n${r.rapport || ""}`).join("\n\n") });
+  }
+  if (prod.coordination) {
+    const conflits = (prod.coordination.conflits || []).map(c => `| ${c.sujet} | ${(c.agents || []).join(", ")} | ${c.arbitrage} |`);
+    s.push({ id: "coord", titre: "🤝 Coordination", md: (prod.coordination.synthese || "") +
+      (conflits.length ? `\n\n## Arbitrages\n\n| Sujet | Agents | Arbitrage |\n|---|---|---|\n${conflits.join("\n")}` : "") });
+  }
+  if (prod.plan) {
+    const lignes = (prod.plan.taches || []).map(t =>
+      `| ${esc(PHASES[t.phase] || String(t.phase))} | ${t.titre} | ${(t.agents || []).map(x => agentById[x] ? agentById[x].nom.split(" ")[0] : x).join(", ")} |`);
+    s.push({ id: "plan", titre: "📋 Plan de production", md: (prod.plan.plan || "") +
+      (lignes.length ? `\n\n## Tâches\n\n| Phase | Tâche | Agents |\n|---|---|---|\n${lignes.join("\n")}` : "") });
+  }
+  const scripts = Object.entries(prod.scripts || {});
+  if (scripts.length) s.push({ id: "scripts", titre: "📜 Scripts Luau", md: scripts.map(([n, c]) => `## ${n}\n\n\`\`\`lua\n${c.trim()}\n\`\`\``).join("\n\n") });
+  return s;
+}
+function rendreBible(el, projet, prod) {
+  const sections = sectionsBible(prod);
+  if (!sections.length) {
+    el.innerHTML = `<p class="muted">La bible se remplit au fur et à mesure que les agents livrent.</p>`;
+    return;
+  }
+  const nbTaches = prod.plan ? (prod.plan.taches || []).length : 0;
+  el.innerHTML = `
+    ${nbTaches ? `<div class="import-bar">📋 Le plan contient ${nbTaches} tâches assignées aux agents.
+      ${prod.tachesImportees ? `<span class="muted">✅ déjà ajoutées au tableau du projet</span>`
+        : `<button class="primary-btn" id="btn-import-taches">➕ Ajouter au tableau de « ${esc(projet.nom)} »</button>`}</div>` : ""}
+    <div class="bible">
+      <nav class="bible-toc">${sections.map(s => `<a href="#" data-sec="${s.id}">${esc(s.titre)}</a>`).join("")}</nav>
+      <article class="bible-corps md">${sections.map(s =>
+        `<section id="sec-${s.id}"><h1 class="bible-titre">${esc(s.titre)}</h1>${mdVersHtml(s.md)}</section>`).join("")}</article>
+    </div>`;
+  el.querySelectorAll(".bible-toc a").forEach(a => a.addEventListener("click", e => {
+    e.preventDefault();
+    const cible = el.querySelector("#sec-" + a.dataset.sec);
+    if (cible) cible.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
+  const imp = el.querySelector("#btn-import-taches");
+  if (imp) imp.addEventListener("click", () => importerTaches(projet, prod));
+}
+function importerTaches(projet, prod) {
+  for (const t of prod.plan.taches || []) {
+    projet.tasks.push({
+      id: uid(), titre: t.titre, statut: "todo",
+      agents: (t.agents || []).filter(x => agentById[x]),
+      note: `Phase : ${PHASES[t.phase] || t.phase}${t.note ? " — " + t.note : ""}`,
+      created: Date.now(),
+    });
+  }
+  prod.tachesImportees = true;
+  logEvent(`<b>${esc(projet.nom)}</b> : ${prod.plan.taches.length} tâches du plan de production ajoutées au tableau`);
+  save();
+  toast(`${prod.plan.taches.length} tâches ajoutées au tableau du projet ✅`);
+  rendreProduction();
+}
+function markdownComplet(prod) {
+  let md = productionEnMarkdown(prod);
+  const scripts = Object.entries(prod.scripts || {});
+  if (scripts.length) md += "\n\n## 📜 Scripts Luau\n\n" + scripts.map(([n, c]) => `### ${n}\n\`\`\`lua\n${c.trim()}\n\`\`\``).join("\n\n");
+  return md;
+}
+function telecharger(nom, contenu, type) {
+  const url = URL.createObjectURL(new Blob([contenu], { type }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nom;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* ------- rendu markdown minimal et sûr (tout est échappé d'abord) ------- */
+function mdEnLigne(s) {
+  return s
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[\s(])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+}
+function mdVersHtml(md) {
+  const lignes = esc(md || "").replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  let para = [];
+  const finPara = () => { if (para.length) { out.push(`<p>${mdEnLigne(para.join(" "))}</p>`); para = []; } };
+  for (let i = 0; i < lignes.length; i++) {
+    const l = lignes[i];
+    if (/^\s*```/.test(l)) {
+      finPara();
+      const code = [];
+      i++;
+      while (i < lignes.length && !/^\s*```/.test(lignes[i])) code.push(lignes[i++]);
+      out.push(`<pre><code>${code.join("\n")}</code></pre>`);
+      continue;
+    }
+    if (/^\s*\|.*\|\s*$/.test(l)) {
+      finPara();
+      const rangs = [];
+      while (i < lignes.length && /^\s*\|.*\|\s*$/.test(lignes[i])) rangs.push(lignes[i++]);
+      i--;
+      const cellules = r => r.trim().replace(/^\||\|$/g, "").split("|").map(c => mdEnLigne(c.trim()));
+      const corps = rangs.filter(r => !/^\s*\|[\s:|-]+\|\s*$/.test(r));
+      const [tete, ...reste] = corps;
+      out.push(`<div class="table-wrap"><table><thead><tr>${cellules(tete).map(c => `<th>${c}</th>`).join("")}</tr></thead><tbody>${
+        reste.map(r => `<tr>${cellules(r).map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+      continue;
+    }
+    const titre = l.match(/^(#{1,6})\s+(.*)$/);
+    if (titre) {
+      finPara();
+      const niveau = Math.min(6, titre[1].length + 1);
+      out.push(`<h${niveau}>${mdEnLigne(titre[2])}</h${niveau}>`);
+      continue;
+    }
+    const puce = l.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+    if (puce) {
+      finPara();
+      const retrait = Math.min(4, Math.floor(puce[1].length / 2));
+      const num = /\d/.test(puce[2]) ? `<span class="md-num">${puce[2]}</span> ` : "";
+      out.push(`<div class="md-li" style="margin-left:${retrait * 18}px">${num}${mdEnLigne(puce[3])}</div>`);
+      continue;
+    }
+    if (/^\s*&gt;\s?/.test(l)) {
+      finPara();
+      out.push(`<blockquote>${mdEnLigne(l.replace(/^\s*&gt;\s?/, ""))}</blockquote>`);
+      continue;
+    }
+    if (/^\s*(-{3,}|\*{3,})\s*$/.test(l)) { finPara(); out.push("<hr>"); continue; }
+    if (!l.trim()) { finPara(); continue; }
+    para.push(l.trim());
+  }
+  finPara();
+  return out.join("\n");
+}
+
+/* ------- productions dans la fiche projet ------- */
+function htmlProductionsProjet(p) {
+  const prods = p.productions || [];
+  return `
+    <div class="prod-card">
+      <div class="prod-card-head">
+        <div>
+          <h2 style="margin:0">🎬 Production complète — les 50 agents</h2>
+          <p class="muted" style="margin-top:4px">Un seul brief : vision, 40 spécialistes, revue QA, arbitrages, révisions, plan et bible de production.</p>
+        </div>
+        <div class="btn-row">
+          <button class="primary-btn" id="btn-brief-studio">🚀 Brief au studio</button>
+          <button class="ghost-btn" id="btn-import-prod">📥 Importer une production</button>
+        </div>
+      </div>
+      ${prods.length ? `<div class="prod-list">${prods.map(pr => `
+        <div class="prod-item" data-prod="${pr.id}">
+          <span>🎬 <b>${esc(pr.vision.titre || "Production")}</b>
+          <span class="muted">· ${new Date(pr.cree).toLocaleDateString("fr-FR")} · ${pr.source === "claude-code" ? "Claude Code" : esc(nomModele(pr.modele))}</span></span>
+          <span class="badge ${classeStatut(pr.statut)}">${libelleStatut(pr.statut)}</span>
+        </div>`).join("")}</div>` : ""}
+    </div>`;
+}
+function brancherProductionsProjet(racine, p) {
+  racine.querySelector("#btn-brief-studio").addEventListener("click", () => ouvrirModaleBrief(p));
+  racine.querySelector("#btn-import-prod").addEventListener("click", () => {
+    const input = document.getElementById("import-prod-file");
+    input.onchange = () => importerProductionFichier(p, input);
+    input.click();
+  });
+  racine.querySelectorAll(".prod-item").forEach(el => el.addEventListener("click", () => ouvrirProduction(el.dataset.prod)));
+}
+
+function ouvrirModaleBrief(p) {
+  const brief = document.getElementById("prod-brief");
+  brief.value = [p.nom, p.type !== "Autre" ? `Type de map : ${p.type}.` : "", p.desc].filter(Boolean).join("\n");
+  const [bas, haut] = estimationCout(state.settings.model);
+  const cle = !!state.settings.apiKey;
+  document.getElementById("prod-estimation").innerHTML = cle
+    ? `🤖 Modèle : <b>${nomModele(state.settings.model)}</b> · ${Math.max(1, Math.min(8, Number(state.settings.parallele) || 3))} agents en parallèle<br>
+       💶 Coût estimé : <b>≈ ${bas.toFixed(0)} à ${haut.toFixed(0)} $</b> pour ${NB_APPELS_PREVUS} à ${NB_APPELS_PREVUS + 12} appels selon le nombre de révisions (facturés sur votre compte Anthropic)<br>
+       ⏱️ Durée : 20 à 60 minutes selon le modèle et vos limites de débit. Gardez cet onglet ouvert ; si vous le fermez, la production reprendra là où elle s'était arrêtée.`
+    : `🔌 Aucune clé API : ajoutez-la dans ⚙️ Réglages pour lancer les 50 agents depuis l'application.
+       Vous pouvez aussi faire tourner la production dans Claude Code (workflow « atelier-roblox ») puis l'importer ici.`;
+  document.getElementById("btn-prod-go").disabled = !cle;
+  document.getElementById("btn-prod-go").onclick = () => {
+    const texte = brief.value.trim();
+    if (texte.length < 20) { toast("Décrivez un peu plus votre idée (20 caractères minimum)."); return; }
+    const prod = nouvelleProduction(texte);
+    if (!p.productions) p.productions = [];
+    p.productions.unshift(prod);
+    save();
+    closeModals();
+    ouvrirProduction(prod.id);
+    lancerProduction(prod.id);
+  };
+  document.getElementById("modal-prod").classList.remove("hidden");
+  brief.focus();
+}
+
+function importerProductionFichier(p, input) {
+  const f = input.files[0];
+  input.value = "";
+  if (!f) return;
+  const lecteur = new FileReader();
+  lecteur.onload = () => {
+    try {
+      const prod = JSON.parse(lecteur.result);
+      if (!prod || typeof prod !== "object" || !prod.vision || typeof prod.contributions !== "object")
+        throw new Error("ce fichier n'est pas une production Atelier Roblox");
+      prod.id = uid();
+      prod.qa = prod.qa || {};
+      prod.revisionsFaites = prod.revisionsFaites || {};
+      prod.echecs = prod.echecs || {};
+      prod.scripts = prod.scripts || {};
+      prod.cree = prod.cree || Date.now();
+      if (!p.productions) p.productions = [];
+      p.productions.unshift(prod);
+      if (!save()) {
+        p.productions.shift();
+        throw new Error("stockage du navigateur plein");
+      }
+      logEvent(`<b>${esc(p.nom)}</b> : production « ${esc(prod.vision.titre || "sans titre")} » importée 📥`);
+      ouvrirProduction(prod.id, "bible");
+    } catch (e) { toast("Import impossible : " + e.message); }
+  };
+  lecteur.readAsText(f);
+}
+
+window.addEventListener("beforeunload", e => {
+  if (run && run.actif) { e.preventDefault(); e.returnValue = ""; }
+});
 
 </script>
 </body>

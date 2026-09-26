@@ -24,6 +24,37 @@ Réglages pour faire une copie de sauvegarde ou changer d'ordinateur).
   clé, le bouton « 📋 Copier le prompt expert » permet de l'interroger dans
   n'importe quel chat IA. La clé reste stockée uniquement dans votre navigateur.
 
+## 🎬 Un seul brief, les 50 agents ensemble
+
+C'est le cœur du studio : vous écrivez **un seul brief** (votre idée de map) et
+les 50 agents se coordonnent pour produire une **bible de production complète**.
+
+| Étape | Qui | Ce qui se passe |
+|---|---|---|
+| 🧭 Vision | Analyste de marché, directrice artistique, puis directeur créatif | Étude des jeux Roblox similaires, direction artistique, puis le **canon** : titre, piliers, zones et noms officiels que tout le monde respectera |
+| 🛠️ Contributions | 40 spécialistes | Chacun livre sa partie à partir du canon : boucle de jeu, économie, plan de la map en studs, terrain, bâtiments, scripts Luau complets, HUD, lumière, sons, monétisation… |
+| 🧪 Revue QA | 5 experts QA | Relecture croisée : session joueur simulée, performance mobile, équilibrage chiffré, bugs et exploits, plan de playtests |
+| 🤝 Coordination | Chef de projet | Détecte les contradictions entre départements, tranche, et demande jusqu'à 12 révisions |
+| ✏️ Révisions | Agents concernés | Réécrivent leur livrable en appliquant les arbitrages et les corrections QA |
+| 📖 Plan & Bible | Productrice + directeur créatif | Plan de production (tâches assignées aux agents, importables dans le kanban) et synthèse de la bible |
+
+Deux façons de lancer une production :
+
+**1. Dans l'application** — ouvrez un projet, cliquez sur **🚀 Brief au studio**.
+Il faut une clé API Anthropic (⚙️ Réglages). La salle de production montre les
+50 agents au travail en direct ; la bible se remplit au fur et à mesure.
+Comptez 20 à 60 minutes et environ 9 à 16 $ avec Claude Opus 5 (3 à 6 $ avec
+Sonnet 5). Si l'onglet est fermé, la production reprend là où elle s'était
+arrêtée : rien de ce qui est déjà livré n'est refait ni refacturé.
+
+**2. Dans Claude Code** — demandez simplement :
+« lance le workflow atelier-roblox avec le brief : … ». Le workflow
+`.claude/workflows/atelier-roblox.js` fait travailler les 50 agents, écrit tous
+les livrables (et les scripts Luau au format Rojo) dans
+`studio/productions/<projet>/`, puis assemble `production.json` et
+`BIBLE-COMPLETE.md`. Importez `production.json` dans l'application avec
+**📥 Importer une production**.
+
 ## 👥 L'équipe (10 départements × 5 experts)
 
 | Département | Experts |
@@ -56,8 +87,9 @@ roblox-designer-obby-parkour de calibrer mes sauts »).
 
 ## 🛠️ Modifier l'équipe
 
-L'effectif est défini dans `agents.js`. Après une modification, régénérez les
-agents Claude Code et la version fichier unique :
+L'effectif est défini dans `agents.js`, et ce que chacun livre pendant une
+production dans `production.js`. Après une modification, régénérez les agents
+Claude Code, le workflow et la version fichier unique :
 
 ```bash
 node generer.js
