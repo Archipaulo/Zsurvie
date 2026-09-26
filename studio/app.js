@@ -206,6 +206,7 @@ function save() {
       run.nonSauve = false;
       const t = trouverProduction(run.prodId);
       if (t && /^Stockage du navigateur plein/.test(t.prod.erreur || "")) delete t.prod.erreur;
+      liberer();   // le travail est enregistré : les autres onglets peuvent reprendre la main
     }
     return true;
   } catch (e) {
@@ -268,7 +269,7 @@ window.addEventListener("storage", e => {
     try { autre = normaliser(JSON.parse(e.newValue)); } catch (err) { return; }
   }
   // la production de cet onglet (en cours, ou pas encore enregistrée) fait foi
-  const vivant = run && (run.actif || run.nonSauve) ? trouverProduction(run.prodId) : null;
+  const vivant = typeof run !== "undefined" && run && (run.actif || run.nonSauve) ? trouverProduction(run.prodId) : null;
   if (vivant) {
     const projet = autre.projects.find(p => p.id === vivant.projet.id);
     if (!projet) autre.projects.unshift(vivant.projet);

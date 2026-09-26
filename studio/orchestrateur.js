@@ -87,6 +87,8 @@ async function lireFlux(res, onProgres) {
   return r;
 }
 
+const CHAMPS_TEXTE = ["livrable", "rapport", "synthese", "plan", "bible", "canon"];
+
 /* estimation des jetons de sortie d'un flux coupé avant son bilan */
 const jetonsEstimes = caracteres => Math.ceil(caracteres / 3.5);
 
@@ -141,9 +143,16 @@ async function appelClaude({ model, apiKey, system, user, schema, signal, onProg
     if (r.stop === "refusal") throw new Error("demande déclinée par le modèle");
     if (r.stop === "max_tokens") throw new Error("réponse trop longue (limite de jetons atteinte)");
     if (!r.stop) { derniere = new Error("réponse incomplète"); continue; }
-    if (!schema) return r.texte.trim();
-    try { return JSON.parse(r.texte); }
+    if (!schema) {
+      if (!r.texte.trim()) { derniere = new Error("réponse vide"); continue; }
+      return r.texte.trim();
+    }
+    let obj;
+    try { obj = JSON.parse(r.texte); }
     catch (e) { derniere = new Error("réponse JSON illisible"); continue; }
+    // le texte principal d'un livrable ne peut pas être vide
+    if (CHAMPS_TEXTE.some(c => c in obj && !String(obj[c] || "").trim())) { derniere = new Error("livrable vide"); continue; }
+    return obj;
   }
   throw derniere || new Error("échec après plusieurs tentatives");
 }
@@ -221,6 +230,15 @@ function aFaire(prod, cle, fait) {
 
 class ArretEtape extends Error {}
 
+/* fin de l'exclusivité : battement arrêté, verrous levés */
+function liberer() {
+  if (!run) return;
+  clearInterval(run.battement);
+  run.battement = null;
+  leverVerrou();
+  if (run.libererVerrou) { run.libererVerrou(); run.libererVerrou = null; }
+}
+
 /* exclusivité stricte entre onglets (navigator.locks, libéré automatiquement si l'onglet se ferme) */
 function prendreVerrouExclusif() {
   if (!navigator.locks || !navigator.locks.request) return Promise.resolve({ ok: true, liberer: () => {} });
@@ -231,7 +249,7 @@ function prendreVerrouExclusif() {
     }).catch(() => resolve({ ok: true, liberer: () => {} }));
   });
 }
-window.addEventListener("pagehide", () => { if (run && run.actif) leverVerrou(); });
+window.addEventListener("pagehide", () => { if (run && (run.actif || run.nonSauve)) leverVerrou(); });
 
 async function lancerProduction(prodId) {
   const trouve = trouverProduction(prodId);
@@ -246,6 +264,7 @@ async function lancerProduction(prodId) {
     return;
   }
   const nonSauveAvant = !!(run && run.nonSauve);
+  if (nonSauveAvant) liberer();   // même production : on relâche l'ancien verrou avant de le reprendre
   // le modèle et la clé sont figés pour toute la durée de cette exécution
   run = {
     prodId, actif: true, ctrl: new AbortController(), statuts: {}, progres: {}, journal: [],
@@ -271,9 +290,10 @@ async function lancerProduction(prodId) {
     Object.assign(prod, { statut: avant.statut === "en_cours" ? "interrompu" : avant.statut, echecs: avant.echecs });
     if (avant.erreur) prod.erreur = avant.erreur;
     run.actif = false;
-    run.nonSauve = true;
-    run.libererVerrou();
-    leverVerrou();
+    // des résultats de la tentative précédente restent-ils en mémoire seulement ? on les protège
+    run.nonSauve = nonSauveAvant;
+    if (nonSauveAvant) run.battement = setInterval(() => poserVerrou(prodId), 4000);
+    else liberer();
     toast("Stockage du navigateur plein : exportez cette production, puis supprimez d'anciennes productions.");
     rendreProduction();
     return;
@@ -425,10 +445,9 @@ async function lancerProduction(prodId) {
     }
   } finally {
     run.actif = false;
-    clearInterval(run.battement);
-    leverVerrou();
-    if (run.libererVerrou) run.libererVerrou();
     if (!save() && !run.nonSauve) run.nonSauve = true;
+    // tant que des résultats ne sont pas enregistrés, aucun autre onglet ne doit reprendre cette production
+    if (!run.nonSauve) liberer();
     const titre = prod.vision.titre || projet.nom;
     logEvent(`🎬 Production « ${titre} » : ${libelleStatut(prod.statut).toLowerCase()} (<b>${projet.nom}</b>)`);
     // la vue affichée (production, fiche projet, tableau de bord…) reflète le statut final
@@ -437,9 +456,17 @@ async function lancerProduction(prodId) {
 }
 
 /* les échecs actuels ne bloquent plus : l'étape suivante se fera sans eux */
+/* une production peut-elle démarrer maintenant dans cet onglet ? (message sinon) */
+function lancementPossible(prodId) {
+  if (run && run.actif) { toast("Une production est déjà en cours dans cet onglet."); return false; }
+  if (run && run.nonSauve && run.prodId !== prodId) { toast("Une production n'est pas enregistrée : exportez-la ou libérez de la place d'abord."); return false; }
+  if (verrouAutreOnglet()) { toast("Une production tourne déjà dans un autre onglet : attendez qu'elle se termine."); return false; }
+  return true;
+}
+
 function ignorerEchecs(prodId) {
   const t = trouverProduction(prodId);
-  if (!t) return;
+  if (!t || !lancementPossible(prodId)) return;
   const cles = Object.keys(t.prod.echecs || {}).filter(k => !t.prod.ignores[k]);
   if (cles.includes("vision:a01")) { toast("Le canon est indispensable : réessayez-le."); return; }
   for (const k of cles) t.prod.ignores[k] = true;
@@ -574,7 +601,8 @@ function rendreProduction() {
   const ignores = unites.filter(u => u.etat === "ignore").length;
   const echecs = unites.filter(u => u.etat === "echec").length;
   const cout = coutProduction(prod);
-  const peutReprendre = !enCours && !ailleurs && statut !== "termine" && prod.source !== "claude-code";
+  const autreIci = !!(run && (run.actif || run.nonSauve) && run.prodId !== prod.id);
+  const peutReprendre = !enCours && !ailleurs && !autreIci && statut !== "termine" && prod.source !== "claude-code";
   clearTimeout(expirationVerrouPlanifiee);
   if (ailleurs) expirationVerrouPlanifiee = setTimeout(() => { if (currentView === "production") rendreProduction(); },
     Math.max(1000, FRAICHEUR_VERROU - ageVerrou() + 500));
@@ -594,6 +622,7 @@ function rendreProduction() {
       <span id="prod-cout">${cout !== null ? `💶 ≈ ${cout.toFixed(2)} $ consommés` : ""}</span>
       ${prod.erreur ? `<span class="txt-danger">⛔ ${esc(prod.erreur)}</span>` : ""}
       ${ailleurs ? `<span>🔒 En cours dans un autre onglet</span>` : ""}
+      ${autreIci && statut !== "termine" ? `<span>⏳ Une autre production occupe cet onglet</span>` : ""}
     </div>
     <div class="progress big"><div id="prod-barre" style="width:${Math.round(100 * finies / unites.length)}%"></div></div>
     <div class="btn-row" style="margin:14px 0">
@@ -1010,7 +1039,7 @@ function ouvrirModaleBrief(projetId) {
   document.getElementById("btn-prod-go").onclick = () => {
     const texte = brief.value.trim();
     if (texte.length < 20) { toast("Décrivez un peu plus votre idée (20 caractères minimum)."); return; }
-    if (verrouAutreOnglet()) { toast("Une production tourne déjà dans un autre onglet."); return; }
+    if (!lancementPossible(null)) return;
     const projet = state.projects.find(x => x.id === projetId);
     if (!projet) { toast("Ce projet n'existe plus."); closeModals(); return; }
     const prod = nouvelleProduction(texte);
