@@ -1,5 +1,5 @@
--- Interface/Batte : frappe à la batte (clic, touche F, bouton mobile), anneau de recharge près du réticule,
--- et effets locaux de l'étourdissement (étoiles au-dessus de la tête, léger flou).
+-- Interface/Batte : frappe à la batte (clic, touche F, bouton mobile), gros rond de recharge en bas au centre, « BONK ! » géant à la frappe,
+-- et effets locaux de l'étourdissement (étoiles 💫 cernées au-dessus de la tête, léger flou).
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -15,8 +15,7 @@ local FLOU = 8
 local NB_ETOILES = 3
 
 function M.demarrer(ctx)
-	local Charte = ctx.Charte
-	local Outils = ctx.Outils
+	local Style = ctx.Style
 	local Bus = ctx.Bus
 	local Reseau = ctx.Reseau
 	local E = ctx.Equilibrage
@@ -99,6 +98,50 @@ function M.demarrer(ctx)
 		end
 	end
 
+	-- ===== « BONK ! » géant cerné qui pop au moment de la frappe =====
+	local bonkActuel = nil
+	local function montrerBonk()
+		if bonkActuel then
+			pcall(function() bonkActuel:Destroy() end)
+			bonkActuel = nil
+		end
+		local bonk = Style.texte(ctx.gui, {
+			Name = "Bonk",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5 + (math.random() - 0.5) * 0.06, 0, 0.36, 0),
+			Size = UDim2.new(0.5, 0, 0.14, 0),
+			Rotation = math.random(-10, 10),
+			Text = "BONK !",
+			titre = true,
+			contour = 5,
+			tailleMax = 96,
+			ZIndex = 20,
+		})
+		Style.degrade(bonk, Style.boutons.jaune[1], Style.boutons.orange[2])
+		local contrainte = Instance.new("UISizeConstraint")
+		contrainte.MaxSize = Vector2.new(520, 110)
+		contrainte.MinSize = Vector2.new(220, 56)
+		contrainte.Parent = bonk
+		bonkActuel = bonk
+		Style.pop(bonk, 1.3)
+		task.delay(0.35, function()
+			if not bonk.Parent then return end
+			local infos = TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+			pcall(function()
+				TweenService:Create(bonk, infos, {
+					TextTransparency = 1,
+					Position = bonk.Position - UDim2.new(0, 0, 0.05, 0),
+				}):Play()
+				local trait = bonk:FindFirstChild("Contour")
+				if trait then TweenService:Create(trait, infos, { Transparency = 1 }):Play() end
+			end)
+			task.delay(0.4, function()
+				if bonkActuel == bonk then bonkActuel = nil end
+				pcall(function() bonk:Destroy() end)
+			end)
+		end)
+	end
+
 	-- ===== frappe =====
 	local function frapper(outil)
 		local _, humanoid = humanoidVivant()
@@ -110,6 +153,7 @@ function M.demarrer(ctx)
 		finRecharge = maintenant + dureeRecharge
 		pcall(function() Reseau.Frapper:FireServer() end)
 		Bus.emettre("Son", "frappe")
+		pcall(montrerBonk)
 		if outil then
 			task.spawn(animerElan, outil)
 		end
@@ -156,51 +200,61 @@ function M.demarrer(ctx)
 	end)
 	Bus.ecouter("Frapper", frapperAuClavier)
 
-	-- ===== anneau de recharge sous le réticule =====
+	-- ===== gros rond de recharge en bas au centre, au-dessus du bouton Collecter =====
+	-- le bouton Collecter (HUD) occupe le bas de l'écran jusqu'à 178 px du bord : le rond reste au-dessus.
+	local TAILLE_ROND = 76
 	local anneau = Instance.new("Frame")
 	anneau.Name = "RechargeBatte"
-	anneau.AnchorPoint = Vector2.new(0.5, 0.5)
-	anneau.Position = UDim2.new(0.5, 0, 0.5, 40)
-	anneau.Size = UDim2.new(0, 34, 0, 34)
-	anneau.BackgroundColor3 = Charte.encre
-	anneau.BackgroundTransparency = 0.45
+	anneau.AnchorPoint = Vector2.new(0.5, 1)
+	anneau.Position = UDim2.new(0.5, 0, 1, -192)
+	anneau.Size = UDim2.fromOffset(TAILLE_ROND, TAILLE_ROND)
+	anneau.BackgroundColor3 = Style.couleurs.fond
+	anneau.BackgroundTransparency = 0.1
 	anneau.BorderSizePixel = 0
 	anneau.Visible = false
 	anneau.Parent = ctx.gui
-	local rond = Instance.new("UICorner")
-	rond.CornerRadius = UDim.new(1, 0)
-	rond.Parent = anneau
-	local trait = Instance.new("UIStroke")
-	trait.Thickness = 3
-	trait.Color = Charte.dore
-	trait.Parent = anneau
+	Style.coins(anneau, TAILLE_ROND)
+	local trait = Style.bordure(anneau, 4)
 
-	-- disque intérieur qui grandit pendant la recharge
+	-- disque intérieur en dégradé qui grandit pendant la recharge (jaune), vert quand c'est prêt
 	local remplissage = Instance.new("Frame")
 	remplissage.Name = "Remplissage"
 	remplissage.AnchorPoint = Vector2.new(0.5, 0.5)
 	remplissage.Position = UDim2.fromScale(0.5, 0.5)
 	remplissage.Size = UDim2.fromScale(0, 0)
-	remplissage.BackgroundColor3 = Charte.dore
-	remplissage.BackgroundTransparency = 0.35
+	remplissage.BackgroundColor3 = Color3.new(1, 1, 1)
 	remplissage.BorderSizePixel = 0
+	remplissage.ZIndex = 2
 	remplissage.Parent = anneau
-	local rond2 = Instance.new("UICorner")
-	rond2.CornerRadius = UDim.new(1, 0)
-	rond2.Parent = remplissage
+	Style.coins(remplissage, TAILLE_ROND)
+	local degradeRemplissage = Style.degrade(remplissage, Style.boutons.jaune[1], Style.boutons.jaune[2])
 
-	local compteur = Outils.etiquette(anneau, {
+	local compteur = Style.texte(anneau, {
 		Name = "Compteur",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.7, 0.55),
-		Font = Charte.police,
-		TextColor3 = Charte.creme,
+		Size = UDim2.fromScale(0.78, 0.6),
 		Text = "F",
+		titre = true,
+		contour = 3,
+		tailleMax = 40,
 		ZIndex = 3,
 	})
 
+	-- petite légende « BATTE » sous le rond
+	local legende = Style.texte(anneau, {
+		Name = "Legende",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 1, -8),
+		Size = UDim2.new(1.3, 0, 0, 20),
+		Text = "🏏 BATTE",
+		contour = 2.5,
+		tailleMax = 18,
+		ZIndex = 4,
+	})
+
 	local tactile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+	local etatRond = nil -- "recharge" ou "pret" : pour ne refaire les réglages qu'au changement
 
 	RunService.RenderStepped:Connect(function()
 		local reste = finRecharge - os.clock()
@@ -210,21 +264,32 @@ function M.demarrer(ctx)
 			local p = 1 - reste / math.max(dureeRecharge, 0.01)
 			if p < 0 then p = 0 end
 			remplissage.Size = UDim2.fromScale(p, p)
-			remplissage.Visible = true
-			trait.Color = Charte.pierre
+			if etatRond ~= "recharge" then
+				etatRond = "recharge"
+				degradeRemplissage.Color = ColorSequence.new(Style.boutons.jaune[1], Style.boutons.jaune[2])
+				compteur.TextColor3 = Style.couleurs.revenu
+				trait.Color = Style.couleurs.contour
+			end
 			local texte = string.format("%.1f", reste)
 			compteur.Text = string.gsub(texte, "%.", ",")
 		elseif equipee then
 			anneau.Visible = true
-			remplissage.Visible = false
-			trait.Color = Charte.dore
+			remplissage.Size = UDim2.fromScale(1, 1)
+			if etatRond ~= "pret" then
+				etatRond = "pret"
+				degradeRemplissage.Color = ColorSequence.new(Style.boutons.vert[1], Style.boutons.vert[2])
+				compteur.TextColor3 = Style.couleurs.texte
+				trait.Color = Style.couleurs.contour
+				Style.pop(anneau, 1.15)
+			end
 			if tactile then
-				compteur.Text = ""
+				compteur.Text = "✔"
 			else
 				compteur.Text = "F"
 			end
 		else
 			anneau.Visible = false
+			etatRond = nil
 		end
 	end)
 
@@ -269,24 +334,23 @@ function M.demarrer(ctx)
 		local bb = Instance.new("BillboardGui")
 		bb.Name = "EtoilesEtourdi"
 		bb.Adornee = tete
-		bb.Size = UDim2.new(4, 0, 1.6, 0)
-		bb.StudsOffset = Vector3.new(0, 2.2, 0)
+		bb.Size = UDim2.new(5, 0, 2, 0)
+		bb.StudsOffset = Vector3.new(0, 2.4, 0)
 		bb.AlwaysOnTop = false
+		bb.LightInfluence = 0
 		bb.ResetOnSpawn = false
 		local liste = {}
+		local contours = {}
 		for i = 1, NB_ETOILES do
-			local etoile = Outils.etiquette(bb, {
+			local etoile = Style.texte(bb, {
 				Name = "Etoile" .. i,
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				Size = UDim2.fromScale(0.3, 0.75),
-				Text = "★",
-				TextColor3 = Charte.dore,
+				Size = UDim2.fromScale(0.3, 0.7),
+				Text = "💫",
+				contour = 3,
 			})
-			local contour = Instance.new("UIStroke")
-			contour.Color = Charte.ombre(Charte.bois)
-			contour.Thickness = 1.5
-			contour.Parent = etoile
 			table.insert(liste, etoile)
+			table.insert(contours, etoile:FindFirstChild("Contour"))
 		end
 		-- dans PlayerGui : un BillboardGui n'est pas rendu à l'intérieur d'un ScreenGui
 		bb.Parent = ctx.gui.Parent
@@ -299,7 +363,9 @@ function M.demarrer(ctx)
 				local a = t + (i - 1) * (2 * math.pi / NB_ETOILES)
 				local profondeur = (math.sin(a) + 1) / 2
 				etoile.Position = UDim2.fromScale(0.5 + 0.38 * math.cos(a), 0.5 + 0.18 * math.sin(a))
-				etoile.TextTransparency = 0.35 - 0.35 * profondeur
+				local transparence = 0.35 - 0.35 * profondeur
+				etoile.TextTransparency = transparence
+				if contours[i] then contours[i].Transparency = transparence end
 				etoile.ZIndex = 1 + math.floor(profondeur * 2)
 			end
 		end)

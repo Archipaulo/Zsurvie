@@ -45,18 +45,23 @@ function M.construire(ctx)
 	local Y_METEORITE = 3.3
 	local HAUT_FOND = 0.2
 
-	-- couleurs (toutes dérivées de la Charte)
-	local PIERRE = Charte.pierre
-	local PIERRE_OMBRE = Charte.ombre(Charte.pierre)
-	local PIERRE_SOMBRE = Charte.encre:Lerp(Charte.pierre, 0.35)
-	local ROCHE_METEORE = Charte.encre:Lerp(Charte.mutations.Meteore or Charte.violet, 0.6)
-	local FOND = Charte.ombre(Charte.encre:Lerp(Charte.pierre, 0.55))
-	local BRULE = Charte.encre:Lerp(Charte.pierre, 0.2)
+	-- couleurs « simulateur » : pierre lilas claire et saturée, fond violet profond, Neon bien visible
+	-- même au repos (plus vif encore pendant un événement)
+	local hex = Charte.hex
+	local Style = ctx.Style
+	local PIERRE = hex("A596D6")        -- roches claires du rebord
+	local PIERRE_OMBRE = hex("8171C2")  -- talus et roches moyennes
+	local PIERRE_SOMBRE = hex("5B4A9E") -- socles, éclats, cailloux
+	local ROCHE_METEORE = hex("46287F") -- corps de la météorite
+	local FOND = hex("33245E")
+	local BRULE = hex("241848")
 	local VIOLET = Charte.violet
-	local VIOLET_VIF = Charte.lumiere(Charte.violet)
-	local VIOLET_FAIBLE = Charte.ombre(Charte.ombre(Charte.violet))
+	local VIOLET_VIF = hex("E0A3FF")
+	local VIOLET_FAIBLE = hex("A45CFF")
 	local GEMME = Charte.gemme
-	local GEMME_FAIBLE = Charte.ombre(Charte.ombre(Charte.gemme))
+	local GEMME_FAIBLE = hex("2BB8E0")
+	local TRANSP_REPOS = 0.15
+	local FUMEE = hex("D9D2F2")
 
 	-- teinte des lumières selon l'événement en cours
 	local COULEURS_EVENEMENT = {
@@ -135,7 +140,7 @@ function M.construire(ctx)
 			CFrame = CFrame.new(p) * CFrame.Angles(0, a, 0),
 			Color = VIOLET_FAIBLE,
 			Material = Enum.Material.Neon,
-			Transparency = 0.4,
+			Transparency = TRANSP_REPOS,
 			CanCollide = false,
 			CanTouch = false,
 			CanQuery = false,
@@ -273,7 +278,7 @@ function M.construire(ctx)
 			CFrame = CFrame.lookAt(p, p + d) * CFrame.Angles(0, 0, rng:NextNumber(0, 6.28)),
 			Color = VIOLET_FAIBLE,
 			Material = Enum.Material.Neon,
-			Transparency = 0.4,
+			Transparency = TRANSP_REPOS,
 			CanCollide = false,
 			CanTouch = false,
 			CanQuery = false,
@@ -291,7 +296,7 @@ function M.construire(ctx)
 		CFrame = CFrame.new(centreMeteorite + Vector3.new(0, RAYON_METEORITE - 0.6, 0)),
 		Color = VIOLET_FAIBLE,
 		Material = Enum.Material.Neon,
-		Transparency = 0.3,
+		Transparency = 0.1,
 		CanCollide = false,
 		CanTouch = false,
 		CastShadow = false,
@@ -310,7 +315,7 @@ function M.construire(ctx)
 		end
 		local ok, fumee = pcall(function()
 			local s = Instance.new("Smoke")
-			s.Color = PIERRE
+			s.Color = FUMEE
 			s.Opacity = 0.12
 			s.RiseVelocity = 3
 			s.Size = taille
@@ -332,7 +337,7 @@ function M.construire(ctx)
 		CFrame = CFrame.new(CX, Y_METEORITE + RAYON_METEORITE + 4, CZ) * CFrame.Angles(0, math.rad(45), math.rad(12)),
 		Color = VIOLET_FAIBLE,
 		Material = Enum.Material.Neon,
-		Transparency = 0.4,
+		Transparency = TRANSP_REPOS,
 		CanCollide = false,
 		CanTouch = false,
 		CanQuery = false,
@@ -381,7 +386,7 @@ function M.construire(ctx)
 				CFrame = cf,
 				Color = faible,
 				Material = Enum.Material.Neon,
-				Transparency = 0.4,
+				Transparency = TRANSP_REPOS,
 				CanCollide = false,
 				CanTouch = false,
 				CastShadow = false,
@@ -391,7 +396,7 @@ function M.construire(ctx)
 			end
 		end
 		if socle then
-			local l = Outils.lumiere(socle, { Range = 8, Brightness = 0.4, Color = vif })
+			local l = Outils.lumiere(socle, { Range = 8, Brightness = 0.8, Color = vif })
 			l.Shadows = false
 			table.insert(lumieres, l)
 		end
@@ -399,30 +404,79 @@ function M.construire(ctx)
 
 	-- ===== panneau « Zone des événements » dans l'ouverture sud =====
 	local plaqueTextes = {}
+	local ligneEtat = nil -- ligne jaune sous le titre flottant
+
+	-- texte de SurfaceGui au look simulateur : blanc (ou coloré), police du jeu, cerné de noir épais
+	local function styliserTexte(etiquette, couleur)
+		if not etiquette then
+			return
+		end
+		etiquette.TextColor3 = couleur or Color3.new(1, 1, 1)
+		if Style then
+			etiquette.Font = Style.police
+			Style.contour(etiquette, 3)
+		end
+	end
+
 	if compteur + 3 <= BUDGET then
 		local posPanneau = Vector3.new(CX, 0, CZ + RAYON - 1.8)
 		local panneau = Outils.panneau(modele, {
 			nom = "PanneauEvenements",
 			position = posPanneau,
-			texte = "Zone des événements",
+			texte = "ZONE DES ÉVÉNEMENTS",
 			largeur = 9,
 			angle = 0,
-			couleur = Charte.creme,
-			couleurTexte = Charte.violet,
+			couleur = Charte.violet,
+			couleurTexte = Color3.new(1, 1, 1),
 		})
 		compteur = compteur + 2
+		local planche = panneau:FindFirstChild("Planche")
+		if planche then
+			for _, d in ipairs(planche:GetDescendants()) do
+				if d:IsA("TextLabel") then
+					styliserTexte(d, Color3.new(1, 1, 1))
+				end
+			end
+		end
+		local poteau = panneau:FindFirstChild("Poteau")
+		if poteau then
+			poteau.Color = PIERRE_SOMBRE
+		end
 		local plaque = bloc(panneau, {
 			Name = "Plaque",
 			-- plus épaisse que le poteau (0,6) : sinon il traverse la plaque et masque le milieu du texte
 			Size = Vector3.new(7, 0.9, 0.8),
 			CFrame = CFrame.new(posPanneau.X, 3.45, posPanneau.Z),
-			Color = Charte.encre,
+			Color = Style and Style.couleurs.fond or Charte.encre,
 			CanCollide = false,
 			CanTouch = false,
 		})
 		if plaque then
-			table.insert(plaqueTextes, Outils.texte(plaque, "Front", "", { couleur = Charte.creme }))
-			table.insert(plaqueTextes, Outils.texte(plaque, "Back", "", { couleur = Charte.creme }))
+			local avant = Outils.texte(plaque, "Front", "", { couleur = Charte.dore })
+			local arriere = Outils.texte(plaque, "Back", "", { couleur = Charte.dore })
+			styliserTexte(avant, Style and Style.couleurs.revenu or Charte.dore)
+			styliserTexte(arriere, Style and Style.couleurs.revenu or Charte.dore)
+			table.insert(plaqueTextes, avant)
+			table.insert(plaqueTextes, arriere)
+		end
+
+		-- titre géant flottant « ☄️ ÉVÉNEMENTS » au-dessus du panneau, lisible de loin (et sur mobile) ;
+		-- le titre de l'événement en cours, lui, flotte au-dessus de la météorite (Systemes/Evenements)
+		if Style and planche then
+			pcall(function()
+				local _, textes = Style.etiquette(planche, {
+					{ texte = "☄️ ÉVÉNEMENTS", taille = 1.5, titre = true, rarete = "Epique", contour = 4, nom = "Titre" },
+					{ texte = "", taille = 1, couleur = Style.couleurs.revenu, contour = 3.5, nom = "Etat" },
+				}, {
+					Name = "EtiquetteCratere",
+					largeur = 16,
+					hauteurLigne = 2,
+					StudsOffset = Vector3.new(0, 4.6, 0),
+					MaxDistance = 220,
+					AlwaysOnTop = false,
+				})
+				ligneEtat = textes[2]
+			end)
 		end
 	end
 
@@ -496,6 +550,38 @@ function M.construire(ctx)
 		return texte
 	end
 
+	-- ligne courte sous le titre flottant : compte à rebours jaune, ou « EN COURS ! » rouge vif
+	local function ecrireLigneEtat(cle)
+		if not ligneEtat or not ligneEtat.Parent then
+			return
+		end
+		local texte = "⏳ BIENTÔT"
+		local couleur = Charte.dore
+		if Style then
+			couleur = Style.couleurs.revenu
+		end
+		if cle ~= "" then
+			texte = "🔥 EN COURS !"
+			couleur = Charte.alerte
+		else
+			local prochain = lireAttribut("ProchainEvenement")
+			if type(prochain) == "number" and prochain > 0 then
+				local reste = math.floor(prochain - workspace:GetServerTimeNow())
+				if reste > 0 then
+					texte = string.format("⏳ %d:%02d", math.floor(reste / 60), reste % 60)
+				else
+					texte = "⏳ IMMINENT !"
+				end
+			end
+		end
+		if ligneEtat.Text ~= texte then
+			ligneEtat.Text = texte
+		end
+		if ligneEtat.TextColor3 ~= couleur then
+			ligneEtat.TextColor3 = couleur
+		end
+	end
+
 	local function animerVers(inst, props, duree)
 		local ok = pcall(function()
 			local info = TweenInfo.new(duree, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
@@ -531,7 +617,7 @@ function M.construire(ctx)
 				if actif then
 					animerVers(v, { Color = VIOLET_VIF, Transparency = 0 }, duree)
 				else
-					animerVers(v, { Color = VIOLET_FAIBLE, Transparency = 0.4 }, duree)
+					animerVers(v, { Color = VIOLET_FAIBLE, Transparency = TRANSP_REPOS }, duree)
 				end
 			end
 		end
@@ -540,7 +626,7 @@ function M.construire(ctx)
 				if actif then
 					animerVers(fiche.part, { Color = fiche.vif, Transparency = 0.05 }, duree)
 				else
-					animerVers(fiche.part, { Color = fiche.faible, Transparency = 0.4 }, duree)
+					animerVers(fiche.part, { Color = fiche.faible, Transparency = TRANSP_REPOS }, duree)
 				end
 			end
 		end
@@ -560,7 +646,7 @@ function M.construire(ctx)
 					if i == 1 then
 						animerVers(l, { Brightness = 0.6, Range = 12, Color = VIOLET }, duree)
 					else
-						animerVers(l, { Brightness = 0.4, Range = 8 }, duree)
+						animerVers(l, { Brightness = 0.8, Range = 8 }, duree)
 					end
 				end
 			end
@@ -568,10 +654,10 @@ function M.construire(ctx)
 		for _, s in ipairs(fumees) do
 			if s.Parent then
 				if actif then
-					animerVers(s, { Opacity = 0.3, Color = PIERRE:Lerp(teinte, 0.4) }, duree)
+					animerVers(s, { Opacity = 0.3, Color = FUMEE:Lerp(teinte, 0.4) }, duree)
 					s.RiseVelocity = 6
 				else
-					animerVers(s, { Opacity = 0.12, Color = PIERRE }, duree)
+					animerVers(s, { Opacity = 0.12, Color = FUMEE }, duree)
 					s.RiseVelocity = 3
 				end
 			end
@@ -617,7 +703,7 @@ function M.construire(ctx)
 	verifier()
 
 	-- plaque d'annonce : rafraîchie chaque seconde tant que la map existe
-	if #plaqueTextes > 0 then
+	if #plaqueTextes > 0 or ligneEtat then
 		task.spawn(function()
 			while dossier.Parent do
 				pcall(function()
@@ -627,6 +713,7 @@ function M.construire(ctx)
 					else
 						ecrirePlaque(texteAttente())
 					end
+					ecrireLigneEtat(cle)
 				end)
 				task.wait(1)
 			end

@@ -59,25 +59,29 @@ function M.construire(ctx)
 	local compte = 0
 	local collision = false -- collision des parts du prop en cours de construction
 
-	-- ===== couleurs (toutes issues de la Charte) =====
-	local OS = Charte.creme
-	local OS_BOUT = Charte.lumiere(Charte.sable)
-	local EMPREINTE = Charte.ombre(Charte.terre)
-	local CAISSE = Charte.terre
-	local CERCLAGE = Charte.bois
-	local TONNEAU = Charte.bois
-	local COUVERCLE = Charte.ombre(Charte.bois)
-	local METAL = Charte.pierre
+	local Style = ctx.Style
+
+	-- ===== couleurs : palette cartoon vive (style simulateur, voir STYLE.md) =====
+	local hex = Charte.hex
+	local OS = hex("FFFBF0")          -- os blanc éclatant, lisible de loin
+	local OS_BOUT = hex("FFE9B8")     -- rotules crème chaude
+	local EMPREINTE = hex("B8743A")   -- empreinte terre bien contrastée sur l'herbe
+	local CAISSE = hex("FF9E3D")      -- caisse orange vif
+	local CERCLAGE = hex("B5561C")
+	local TONNEAU = hex("E8453C")     -- tonneau rouge cartoon
+	local COUVERCLE = hex("A82A24")
+	local METAL = hex("FFD23F")       -- cerclages jaunes
 	local SOMBRE = Charte.encre
-	local ROCHE = Charte.pierre
-	local ROCHE_CLAIRE = Charte.lumiere(Charte.pierre)
-	local JEEP = Charte.sable
-	local JEEP_CAPOT = Charte.lumiere(Charte.sable)
-	local BANDE = Charte.jungle
+	local ROCHE = hex("A9A3C2")       -- pierre claire lavande
+	local ROCHE_CLAIRE = hex("D6D2EA")
+	local JEEP = hex("FFD23F")        -- jeep jaune vif
+	local JEEP_CAPOT = hex("FFE77A")
+	local BANDE = hex("2ECC55")       -- bande verte
 	local VITRE = Charte.gemme
 	local FEU = Charte.dore
-	local RUBAN = Charte.dore
-	local TAS = Charte.terre
+	local RUBAN = hex("FFE14D")
+	local TAS = hex("D9884A")
+	local MANCHE = hex("C8742F")
 
 	-- ===== fabrication des parts (budget compté ici) =====
 	local function piece(genre, parent, props)
@@ -194,8 +198,15 @@ function M.construire(ctx)
 		end
 		if corps then
 			pcall(function()
-				Outils.texte(corps, "Front", "FRAGILE", { couleur = Charte.alerte })
-				Outils.texte(corps, "Right", "FOSSILES", { couleur = Charte.encre })
+				-- texte blanc cerné de noir, police du jeu (grammaire « simulateur »)
+				local t1 = Outils.texte(corps, "Front", "FRAGILE", { couleur = Charte.alerte })
+				local t2 = Outils.texte(corps, "Right", "🦴", { couleur = Style and Style.couleurs.texte or Charte.creme })
+				if Style then
+					t1.Font = Style.policeTitre
+					t2.Font = Style.police
+					Style.contour(t1, 3)
+					Style.contour(t2, 3)
+				end
 			end)
 		end
 	end
@@ -251,7 +262,7 @@ function M.construire(ctx)
 
 	-- lanterne suspendue à un poteau de bois (la lueur respire doucement)
 	function fabriques.lanterne(m, cf, s)
-		cylindre(m, { Name = "Poteau", Size = Vector3.new(3.2 * s, 0.3 * s, 0.3 * s), CFrame = ici(cf, 0, 1.6 * s, 0.45 * s, 0, 0, 90), Color = TONNEAU })
+		cylindre(m, { Name = "Poteau", Size = Vector3.new(3.2 * s, 0.3 * s, 0.3 * s), CFrame = ici(cf, 0, 1.6 * s, 0.45 * s, 0, 0, 90), Color = MANCHE })
 		bloc(m, { Name = "Bras", Size = Vector3.new(0.18 * s, 0.18 * s, 1.0 * s), CFrame = ici(cf, 0, 3.1 * s, 0), Color = SOMBRE })
 		local verre = bloc(m, {
 			Name = "Verre",
@@ -275,7 +286,7 @@ function M.construire(ctx)
 	function fabriques.pelle(m, cf, s)
 		boule(m, { Name = "Tas", Size = Vector3.new(1.8 * s, 1.8 * s, 1.8 * s), CFrame = ici(cf, 0, -0.45 * s, 0), Color = TAS })
 		local penche = ici(cf, 0, 0, 0, 12, 0, 0)
-		cylindre(m, { Name = "Manche", Size = Vector3.new(2.6 * s, 0.2 * s, 0.2 * s), CFrame = ici(penche, 0, 1.6 * s, 0, 0, 0, 90), Color = TONNEAU })
+		cylindre(m, { Name = "Manche", Size = Vector3.new(2.6 * s, 0.2 * s, 0.2 * s), CFrame = ici(penche, 0, 1.6 * s, 0, 0, 0, 90), Color = MANCHE })
 		bloc(m, { Name = "Lame", Size = Vector3.new(0.8 * s, 0.9 * s, 0.1 * s), CFrame = ici(penche, 0, 0.3 * s, 0), Color = METAL })
 		bloc(m, { Name = "Poignee", Size = Vector3.new(0.6 * s, 0.16 * s, 0.16 * s), CFrame = ici(penche, 0, 2.95 * s, 0), Color = SOMBRE })
 	end
@@ -328,7 +339,7 @@ function M.construire(ctx)
 		local x0, zA, zB = 2.4 * s, -7.4 * s, 6.3 * s
 		for _, sx in ipairs({ -1, 1 }) do
 			for _, z in ipairs({ zA, zB }) do
-				bloc(m, { Name = "Piquet", Size = Vector3.new(0.3, 1.0, 0.3), CFrame = ici(cf, sx * x0, 0.5, z), Color = TONNEAU, CanCollide = false })
+				bloc(m, { Name = "Piquet", Size = Vector3.new(0.3, 1.0, 0.3), CFrame = ici(cf, sx * x0, 0.5, z), Color = MANCHE, CanCollide = false })
 			end
 			bloc(m, {
 				Name = "Ruban",
@@ -534,63 +545,32 @@ function M.construire(ctx)
 	-- ===== 1. les couloirs entre les Bases =====
 	-- collision coupée : les courses-poursuites de vol ne s'accrochent jamais au décor
 	local zoneCouloir = { genre = "couloir", collision = false, dossier = Outils.dossier(dossier, "Couloirs") }
-	local ECHELLES_COULOIR = { os = 0.9, caisse = 0.9, tonneau = 0.9, pelle = 1, rocher = 0.65, crane = 0.7, lanterne = 1 }
-	local KIT_COULOIR = { "os", "caisse", "tonneau", "pelle", "rocher", "crane" }
+	-- style simulateur : couloirs dégagés, seulement deux gros props bien lisibles par moitié de couloir
+	-- (un gros os blanc et un crâne), collés aux murs des Bases, jamais au milieu de l'allée
+	local ECHELLES_COULOIR = { os = 1.3, crane = 0.8 }
 	local DX = reglage("decalageProp")
-
-	local function orientationLongue()
-		if rng:NextInteger(0, 1) == 0 then
-			return 0
-		end
-		return 180
-	end
 
 	for i, c in ipairs(xCouloirs) do
 		for _, sens in ipairs({ 1, -1 }) do
-			-- une moitié de couloir sur deux porte la piste d'un géant qui marche vers le Tapis
-			local avecPiste = (sens == 1 and i % 2 == 1) or (sens == -1 and i % 2 == 0)
-			local positions
-			if avecPiste then
-				local ryPiste = 0
-				if sens == -1 then
-					ryPiste = 180
-				end
-				local distances = { 40.5, 35, 29.5, 24 }
-				for k, dz in ipairs(distances) do
-					local cote = 1
-					if k % 2 == 0 then
-						cote = -1
-					end
-					poser(zoneCouloir, "empreinte", c + cote * DX, sens * dz, ryPiste, 0.8)
-				end
-				positions = { 47, 55, 63 }
-			else
-				positions = { 26, 37, 48, 59 }
+			local premier, second = "os", "crane"
+			if (i + (sens + 1) / 2) % 2 == 0 then
+				premier, second = "crane", "os"
 			end
-			-- props contre les murs, en alternant les côtés ; une lanterne en tête
 			local cote = 1
-			if rng:NextInteger(0, 1) == 0 then
+			if sens == -1 then
 				cote = -1
 			end
-			local precedent = 0
-			for k, dz in ipairs(positions) do
-				local nom = "lanterne"
-				if k > 1 then
-					-- tirage sans répéter le prop précédent
-					local indice = rng:NextInteger(1, #KIT_COULOIR)
-					if indice == precedent then
-						indice = (precedent + rng:NextInteger(0, #KIT_COULOIR - 2)) % #KIT_COULOIR + 1
-					end
-					precedent = indice
-					nom = KIT_COULOIR[indice]
-				end
-				local ry = 0
-				if nom == "os" or nom == "caisse" or nom == "crane" or nom == "lanterne" then
-					ry = orientationLongue()
-				end
-				poser(zoneCouloir, nom, c + cote * DX, sens * dz, ry, ECHELLES_COULOIR[nom] or 1)
-				cote = -cote
+			-- le crâne regarde vers le Tapis (z = 0)
+			local ryCrane = 0
+			if sens == -1 then
+				ryCrane = 180
 			end
+			local ry1, ry2 = 0, ryCrane
+			if premier == "crane" then
+				ry1, ry2 = ryCrane, 0
+			end
+			poser(zoneCouloir, premier, c + cote * DX, sens * 33, ry1, ECHELLES_COULOIR[premier])
+			poser(zoneCouloir, second, c - cote * DX, sens * 54, ry2, ECHELLES_COULOIR[second])
 		end
 	end
 
@@ -631,7 +611,18 @@ function M.construire(ctx)
 			return cx + lx, sgn * (zMilieu + lz)
 		end
 		local x, z = en(0, 0)
-		poser(zone, "squelette", x, z, ryCorps, 1)
+		local squelette = poser(zone, "squelette", x, z, ryCorps, 1)
+		-- petite étiquette flottante façon simulateur au-dessus du chantier
+		if squelette and Style and type(Style.etiquette) == "function" then
+			local support = squelette:FindFirstChild("Boite") or squelette:FindFirstChildWhichIsA("BasePart")
+			if support then
+				pcall(function()
+					Style.etiquette(support, {
+						{ texte = "🦴 FOUILLES", titre = true, couleur = Style.couleurs.revenu },
+					}, { Name = "EtiquetteFouilles", largeur = 9, hauteurLigne = 2, StudsOffset = Vector3.new(0, 4, 0), MaxDistance = 80 })
+				end)
+			end
+		end
 		x, z = en(9, -4.8)
 		poser(zone, "lanterne", x, z, 90, 1)
 		x, z = en(-10, 4.5)

@@ -178,9 +178,9 @@ for (const [x, y, z, w, h, lignes] of etiquettes) {
     g.strokeText(texte, W / 2, ty);
     if (degrade && degrade.length) {
       const lg = g.createLinearGradient(W * 0.2, 0, W * 0.8, 0);
-      degrade.forEach((c, i) => lg.addColorStop(degrade.length === 1 ? 0 : i / (degrade.length - 1), c));
+      degrade.forEach((c, i) => lg.addColorStop(degrade.length === 1 ? 0 : i / (degrade.length - 1), "#" + String(c).replace("#", "")));
       g.fillStyle = lg;
-    } else g.fillStyle = couleur || "#fff";
+    } else g.fillStyle = couleur ? "#" + String(couleur).replace("#", "") : "#fff";
     g.fillText(texte, W / 2, ty);
     yCur -= hl;
   }

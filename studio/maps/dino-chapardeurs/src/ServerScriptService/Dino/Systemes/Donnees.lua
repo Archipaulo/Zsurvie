@@ -301,7 +301,7 @@ function M.demarrer(ctx)
 
 		if not charges[uid] then
 			if magasin then
-				notifier(joueur, "Tes données n'ont pas pu être chargées : ta progression de cette partie ne sera pas sauvegardée.", "alerte")
+				notifier(joueur, "⚠️ SAUVEGARDE INDISPONIBLE ! Ta partie ne sera pas enregistrée.", "alerte")
 			end
 			return
 		end

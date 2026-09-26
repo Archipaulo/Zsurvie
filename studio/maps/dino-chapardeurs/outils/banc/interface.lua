@@ -16,14 +16,20 @@ local function enfantDeClasse(o, classe)
 	return nil
 end
 
-local function udim(u, total) return u.Scale * total + u.Offset end
+-- facteur d'échelle cumulé des UIScale parents (les Offset sont multipliés, comme dans Roblox)
+local K = 1
+local function udim(u, total) return u.Scale * total + u.Offset * K end
 
 local function degrade(o)
 	local g = enfantDeClasse(o, "UIGradient")
 	if not g or g.Enabled == false then return nil end
 	local pts = {}
 	for _, k in ipairs(g.Color.Keypoints) do table.insert(pts, { k.Time, hex(k.Value) }) end
-	return { rotation = g.Rotation, points = pts, anime = g:GetAttribute("Anime") }
+	local transp = {}
+	if g.Transparency and g.Transparency.Keypoints then
+		for _, k in ipairs(g.Transparency.Keypoints) do table.insert(transp, { k.Time, k.Value }) end
+	end
+	return { rotation = g.Rotation, points = pts, transp = transp, anime = g:GetAttribute("Anime") }
 end
 
 local function contours(o)
@@ -54,6 +60,13 @@ local function taille(o, pw, ph)
 	local ar = enfantDeClasse(o, "UIAspectRatioConstraint")
 	if ar and ar.AspectRatio > 0 then
 		if w / math.max(h, 1) > ar.AspectRatio then w = h * ar.AspectRatio else h = w / ar.AspectRatio end
+	end
+	if o.AutomaticSize and o.AutomaticSize ~= Enum.AutomaticSize.None and (o:IsA("TextLabel") or o:IsA("TextButton")) then
+		local texte = string.gsub(tostring(o.Text or ""), "<[^>]+>", "")
+		local n = utf8.len(texte) or #texte
+		local fs = o.TextScaled and h * 0.85 or (o.TextSize or 14) * K
+		if o.AutomaticSize == Enum.AutomaticSize.X or o.AutomaticSize == Enum.AutomaticSize.XY then w = math.max(w, n * fs * 0.56 + 6) end
+		if o.AutomaticSize == Enum.AutomaticSize.Y or o.AutomaticSize == Enum.AutomaticSize.XY then h = math.max(h, fs * 1.2) end
 	end
 	local sc = enfantDeClasse(o, "UISizeConstraint")
 	if sc then
@@ -86,6 +99,7 @@ local function tailleTexte(o, w, h)
 	return o.TextSize
 end
 
+local d_echelle = 1
 local noeud
 noeud = function(o, px, py, pw, ph)
 	-- (px, py, pw, ph) : rectangle absolu du contenu du parent ; renvoie la description de o
@@ -98,10 +112,13 @@ end
 local function decrire(o, x, y, w, h)
 	local s = echelle(o)
 	if s ~= 1 then
-		local cx, cy = x + w / 2, y + h / 2
+		-- UIScale agrandit l'objet depuis son AnchorPoint
+		local ax, ay = o.AnchorPoint.X, o.AnchorPoint.Y
+		local px, py = x + ax * w, y + ay * h
 		w, h = w * s, h * s
-		x, y = cx - w / 2, cy - h / 2
+		x, y = px - ax * w, py - ay * h
 	end
+	d_echelle = s
 	local d = { c = o.ClassName, n = o.Name, x = x, y = y, w = w, h = h, z = o.ZIndex or 1, e = {} }
 	d.bg = hex(o.BackgroundColor3)
 	d.bgT = o.BackgroundTransparency
@@ -220,7 +237,10 @@ local function exporterEnfants(parent, dParent, cx, cy, cw, ch)
 		local r = rects[i]
 		local d = decrire(e, r[1], r[2], r[3], r[4])
 		table.insert(dParent.e, d)
+		local ancienK = K
+		K = K * (d_echelle or 1)
 		exporterEnfants(e, d, d.x, d.y, d.w, d.h)
+		K = ancienK
 	end
 end
 

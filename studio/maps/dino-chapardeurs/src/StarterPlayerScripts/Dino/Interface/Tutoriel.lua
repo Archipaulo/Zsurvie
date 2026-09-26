@@ -1,5 +1,8 @@
 -- Interface Tutoriel : bulles d'aide montrées une seule fois par session (7 s ou un clic pour fermer),
 -- et flèche locale vers le Tapis tant que le joueur n'a rien acheté.
+-- Look « simulateur » (STYLE.md) : ruban jaune en dégradé cerné de noir, texte blanc cerné, pop à
+-- l'apparition, petite flèche qui rebondit ; dans le monde, grosse flèche « ⬇ » cernée qui rebondit
+-- au-dessus de la cible de l'étape (Tapis, dalle de collecte, bouton de verrou).
 -- Tout est local à ce client : aucune part, seulement des Attachments, un Beam et un BillboardGui.
 
 local Players = game:GetService("Players")
@@ -12,7 +15,7 @@ local PAUSE_ENTRE = 0.8      -- pause entre deux bulles
 local PERIODE = 0.5          -- rafraîchissement des conditions et de la flèche
 local DELAI_DEPART = 2       -- première bulle après l'arrivée
 local ATTENTE_DONNEES = 8    -- attente max du chargement des données
-local PROCHE_TAPIS = 10      -- en dessous de cette distance, la flèche s'efface
+local PROCHE_TAPIS = 10      -- en dessous de cette distance, le faisceau s'efface
 
 local TEXTES = {
 	"Va au Tapis rouge et achète ton premier dino 🦖",
@@ -23,8 +26,14 @@ local TEXTES = {
 	"Bientôt la renaissance ♻️ à l'Autel !",
 }
 
+-- étapes qui montrent un objet de la base du joueur : enfant de la Base et libellé de la flèche
+local CIBLES_BASE = {
+	[2] = { enfant = "Collecte", libelle = "COLLECTE 💰" },
+	[3] = { enfant = "BoutonVerrou", libelle = "VERROU 🔒" },
+}
+
 function M.demarrer(ctx)
-	local Charte = ctx.Charte
+	local Style = ctx.Style
 	local Outils = ctx.Outils
 	local Plan = ctx.Plan
 	local E = ctx.Equilibrage or {}
@@ -32,96 +41,123 @@ function M.demarrer(ctx)
 	local joueur = ctx.joueur
 	local gui = ctx.gui
 	local dinos = ctx.dinos
+	local racine = ctx.racine
 
-	local ENCRE = Charte.encre or Color3.new(0.1, 0.1, 0.2)
-	local CREME = Charte.creme or Color3.new(1, 1, 1)
-	local DORE = Charte.dore or Color3.new(1, 0.8, 0.2)
-	local ROUGE = Charte.tapis or Color3.new(0.85, 0.15, 0.25)
+	local JAUNE = Style.boutons.jaune
+	local ORANGE = Style.boutons.orange
 
 	local uid = joueur.UserId
 	local vues = {}        -- vues[n] = true : bulle déjà montrée (ou en file)
 	local file = {}        -- bulles en attente
 	local actif = true
+	local etapeEnCours = nil -- numéro de la bulle affichée (pilote la flèche du monde)
 
-	-- ===== la bulle =====
-	local bulle = Outils.bouton(gui, {
-		Name = "Tutoriel",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, 40),
-		Size = UDim2.new(0.9, 0, 0, 86),
-		BackgroundColor3 = ENCRE,
-		BackgroundTransparency = 0.1,
-		AutoButtonColor = false,
-		Text = "",
-		TextScaled = false,
-		Visible = false,
-		ZIndex = 30,
-	})
+	-- rebond infini (aller-retour) ; sans effet si le tween échoue
+	local function rebond(inst, duree, props)
+		pcall(function()
+			local info = TweenInfo.new(duree, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+			TweenService:Create(inst, info, props):Play()
+		end)
+	end
+
+	-- ===== la bulle : ruban jaune cerné =====
+	local bulle = Instance.new("TextButton")
+	bulle.Name = "Tutoriel"
+	bulle.AnchorPoint = Vector2.new(0.5, 1)
+	bulle.Position = UDim2.new(0.5, 0, 1, 40)
+	bulle.Size = UDim2.new(0.92, 0, 0, 96)
+	bulle.BackgroundColor3 = Color3.new(1, 1, 1)
+	bulle.BorderSizePixel = 0
+	bulle.AutoButtonColor = false
+	bulle.Text = ""
+	bulle.Visible = false
+	bulle.ZIndex = 30
+	Style.coins(bulle, 20)
+	Style.bordure(bulle, 4)
+	Style.degrade(bulle, JAUNE[1], JAUNE[2])
 	local limite = Instance.new("UISizeConstraint")
-	limite.MaxSize = Vector2.new(580, 86)
+	limite.MaxSize = Vector2.new(620, 96)
 	limite.Parent = bulle
-	local contour = Instance.new("UIStroke")
-	contour.Color = DORE
-	contour.Thickness = 3
-	contour.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	contour.Parent = bulle
+	bulle.Parent = gui
 
-	local pastille = Outils.cadre(bulle, {
-		Name = "Pastille",
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 10, 0.5, 0),
-		Size = UDim2.new(0, 56, 0, 56),
-		BackgroundColor3 = DORE,
-		BackgroundTransparency = 0,
-		ZIndex = 31,
-	})
-	local numero = Outils.etiquette(pastille, {
+	-- pastille ronde orange avec le numéro de l'étape
+	local pastille = Instance.new("Frame")
+	pastille.Name = "Pastille"
+	pastille.AnchorPoint = Vector2.new(0, 0.5)
+	pastille.Position = UDim2.new(0, 12, 0.5, 0)
+	pastille.Size = UDim2.new(0, 62, 0, 62)
+	pastille.BackgroundColor3 = Color3.new(1, 1, 1)
+	pastille.BorderSizePixel = 0
+	pastille.ZIndex = 31
+	Style.coins(pastille, 31)
+	Style.bordure(pastille, 3)
+	Style.degrade(pastille, ORANGE[1], ORANGE[2])
+	pastille.Parent = bulle
+	local numero = Style.texte(pastille, {
 		Name = "Numero",
-		Size = UDim2.fromScale(1, 1),
+		Size = UDim2.new(1, -12, 1, -12),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		Text = "1",
-		TextColor3 = ENCRE,
-		Font = Charte.police,
+		titre = true,
+		contour = 3,
 		ZIndex = 32,
 	})
-	local texte = Outils.etiquette(bulle, {
+
+	local texte = Style.texte(bulle, {
 		Name = "Texte",
-		Position = UDim2.new(0, 78, 0, 8),
-		Size = UDim2.new(1, -90, 1, -24),
+		Position = UDim2.new(0, 86, 0, 8),
+		Size = UDim2.new(1, -100, 1, -30),
 		Text = "",
-		TextColor3 = CREME,
-		Font = Charte.police,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextWrapped = true,
+		contour = 3,
 		ZIndex = 31,
 	})
 	local tailleTexte = Instance.new("UITextSizeConstraint")
-	tailleTexte.MaxTextSize = 24
-	tailleTexte.MinTextSize = 12
+	tailleTexte.MaxTextSize = 26
+	tailleTexte.MinTextSize = 14
 	tailleTexte.Parent = texte
-	Outils.etiquette(bulle, {
+
+	Style.texte(bulle, {
 		Name = "Indice",
 		AnchorPoint = Vector2.new(1, 1),
-		Position = UDim2.new(1, -12, 1, -6),
-		Size = UDim2.new(0, 160, 0, 12),
-		Text = "clic pour fermer",
-		TextColor3 = CREME,
-		TextTransparency = 0.4,
-		Font = Charte.policeTexte or Charte.police,
+		Position = UDim2.new(1, -14, 1, -6),
+		Size = UDim2.new(0, 170, 0, 16),
+		Text = "touche pour fermer",
 		TextXAlignment = Enum.TextXAlignment.Right,
-		ZIndex = 31,
-	})
-	local barre = Outils.cadre(bulle, {
-		Name = "Temps",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 78, 1, -4),
-		Size = UDim2.new(0, 0, 0, 3),
-		BackgroundColor3 = DORE,
-		BackgroundTransparency = 0,
+		contour = 2,
 		ZIndex = 31,
 	})
 
+	-- barre de temps : blanche cernée
+	local barre = Instance.new("Frame")
+	barre.Name = "Temps"
+	barre.AnchorPoint = Vector2.new(0, 1)
+	barre.Position = UDim2.new(0, 86, 1, -8)
+	barre.Size = UDim2.new(0, 0, 0, 6)
+	barre.BackgroundColor3 = Style.couleurs.texte
+	barre.BorderSizePixel = 0
+	barre.ZIndex = 31
+	Style.coins(barre, 3)
+	Style.bordure(barre, 2)
+	barre.Parent = bulle
+
+	-- petite flèche qui rebondit sous le ruban (« regarde le monde »)
+	local petiteFleche = Style.texte(bulle, {
+		Name = "Fleche",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 1, 2),
+		Size = UDim2.new(0, 40, 0, 36),
+		Text = "⬇",
+		TextColor3 = JAUNE[1],
+		contour = 3,
+		ZIndex = 31,
+	})
+	rebond(petiteFleche, 0.4, { Position = UDim2.new(0.5, 0, 1, 12) })
+
 	local POS_VISIBLE = UDim2.new(0.5, 0, 1, -186)
-	local POS_CACHEE = UDim2.new(0.5, 0, 1, 120)
+	local POS_CACHEE = UDim2.new(0.5, 0, 1, 140)
 
 	local fermeeParClic = false
 	bulle.Activated:Connect(function()
@@ -136,23 +172,31 @@ function M.demarrer(ctx)
 		return t
 	end
 
+	local majFleche -- définie plus bas
+
 	local function montrer(n)
 		numero.Text = tostring(n)
 		texte.Text = TEXTES[n] or ""
 		fermeeParClic = false
+		etapeEnCours = n
 		bulle.Position = POS_CACHEE
 		bulle.Visible = true
-		barre.Size = UDim2.new(1, -90, 0, 3)
-		tween(bulle, 0.45, { Position = POS_VISIBLE })
+		barre.Size = UDim2.new(1, -100, 0, 6)
+		tween(bulle, 0.4, { Position = POS_VISIBLE })
+		pcall(Style.pop, bulle, 1.08)
+		pcall(Style.pop, pastille, 1.25)
 		pcall(function()
-			TweenService:Create(barre, TweenInfo.new(DUREE_BULLE, Enum.EasingStyle.Linear), { Size = UDim2.new(0, 0, 0, 3) }):Play()
+			TweenService:Create(barre, TweenInfo.new(DUREE_BULLE, Enum.EasingStyle.Linear), { Size = UDim2.new(0, 0, 0, 6) }):Play()
 		end)
+		if majFleche then pcall(majFleche) end
 		Bus.emettre("TutorielEtape", n)
 		Bus.emettre("Son", "clic")
 		local debut = os.clock()
 		while os.clock() - debut < DUREE_BULLE and not fermeeParClic and actif do
 			task.wait(0.1)
 		end
+		etapeEnCours = nil
+		if majFleche then pcall(majFleche) end
 		pcall(function()
 			TweenService:Create(bulle, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Position = POS_CACHEE }):Play()
 		end)
@@ -172,7 +216,10 @@ function M.demarrer(ctx)
 			if #file > 0 then
 				local n = table.remove(file, 1)
 				local ok = pcall(montrer, n)
-				if not ok then bulle.Visible = false end
+				if not ok then
+					etapeEnCours = nil
+					bulle.Visible = false
+				end
 				task.wait(PAUSE_ENTRE)
 			else
 				task.wait(0.2)
@@ -180,34 +227,43 @@ function M.demarrer(ctx)
 		end
 	end)
 
-	-- ===== flèche locale vers le Tapis =====
+	-- ===== grosse flèche du monde (Tapis, puis objets de la base pendant l'étape) =====
 	local flecheActive = false
 	local cible = Instance.new("Attachment")
 	cible.Name = "TutorielCibleTapis"
 	local panneau = Instance.new("BillboardGui")
 	panneau.Name = "TutorielTapis"
-	panneau.Size = UDim2.new(0, 150, 0, 50)
+	panneau.Size = UDim2.new(4, 60, 6, 80)
 	panneau.StudsOffset = Vector3.new(0, 4, 0)
 	panneau.AlwaysOnTop = true
+	panneau.LightInfluence = 0
 	panneau.MaxDistance = 400
 	panneau.Enabled = false
 	panneau.Parent = cible
-	Outils.etiquette(panneau, {
+	local libelleMonde = Style.texte(panneau, {
 		Name = "Texte",
-		Size = UDim2.fromScale(1, 1),
-		Text = "⬇ Tapis 🦖",
-		TextColor3 = CREME,
-		TextStrokeColor3 = ROUGE,
-		TextStrokeTransparency = 0,
-		Font = Charte.police,
+		Size = UDim2.fromScale(1, 0.3),
+		Text = "TAPIS 🦖",
+		titre = true,
+		contour = 4,
 	})
+	local grosseFleche = Style.texte(panneau, {
+		Name = "Fleche",
+		Position = UDim2.fromScale(0, 0.28),
+		Size = UDim2.fromScale(1, 0.72),
+		Text = "⬇",
+		contour = 5,
+	})
+	Style.degrade(grosseFleche, JAUNE[1], JAUNE[2])
+	rebond(panneau, 0.45, { StudsOffset = Vector3.new(0, 6, 0) })
+
 	local depart = Instance.new("Attachment")
 	depart.Name = "TutorielDepart"
 	local faisceau = Instance.new("Beam")
 	faisceau.Name = "TutorielFleche"
 	faisceau.Attachment0 = depart
 	faisceau.Attachment1 = cible
-	faisceau.Color = ColorSequence.new(DORE, ROUGE)
+	faisceau.Color = ColorSequence.new(JAUNE[1], JAUNE[2])
 	faisceau.Transparency = NumberSequence.new({
 		NumberSequenceKeypoint.new(0, 0.6),
 		NumberSequenceKeypoint.new(0.5, 0.2),
@@ -243,9 +299,31 @@ function M.demarrer(ctx)
 		return Vector3.new(x, h + 2, (a.Z + b.Z) / 2)
 	end
 
-	local function majFleche()
+	-- objet de la base du joueur visé par l'étape en cours (nil si aucun)
+	local function pointBase()
+		local def = etapeEnCours and CIBLES_BASE[etapeEnCours]
+		if not def then return nil end
+		local index = tonumber(joueur:GetAttribute("Base"))
+		if not index then return nil end
+		local dossier = racine or workspace:FindFirstChild("Dino")
+		local bases = dossier and dossier:FindFirstChild("Bases")
+		local base = bases and bases:FindFirstChild("Base" .. index)
+		local objet = base and base:FindFirstChild(def.enfant)
+		if not objet or not objet:IsA("BasePart") then return nil end
+		return objet.Position + Vector3.new(0, objet.Size.Y / 2 + 1, 0), def.libelle
+	end
+
+	majFleche = function()
 		local rp = racineDe()
-		if not flecheActive or not rp then
+		local point, libelle = nil, nil
+		if rp then
+			point, libelle = pointBase()
+			if not point and flecheActive then
+				point = pointTapis(rp.Position)
+				libelle = "TAPIS 🦖"
+			end
+		end
+		if not point then
 			faisceau.Enabled = false
 			panneau.Enabled = false
 			return
@@ -254,11 +332,14 @@ function M.demarrer(ctx)
 			depart.Parent = rp
 			faisceau.Parent = rp
 		end
-		local point = pointTapis(rp.Position)
 		cible.WorldPosition = point
+		if libelleMonde.Text ~= libelle then libelleMonde.Text = libelle end
 		local proche = Outils.distanceXZ and Outils.distanceXZ(rp.Position, point) or (rp.Position - point).Magnitude
 		faisceau.Enabled = proche > PROCHE_TAPIS
-		panneau.Enabled = true
+		if not panneau.Enabled then
+			panneau.Enabled = true
+			pcall(Style.pop, grosseFleche, 1.3)
+		end
 	end
 
 	local function arreterFleche()

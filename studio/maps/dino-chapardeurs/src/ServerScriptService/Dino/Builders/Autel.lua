@@ -79,6 +79,14 @@ function M.construire(ctx)
 	local PIERRE_OMBRE = Charte.ombre(Charte.pierre)
 	local PIERRE_CLAIRE = Charte.lumiere(Charte.pierre)
 	local NEON = Enum.Material.Neon
+	local Style = ctx.Style
+	-- violet « renaissance » vif du style simulateur (bouton violet de Style), sinon Charte
+	local VIOLET_VIF = Charte.violet
+	local VIOLET_CLAIR = Charte.lumiere(Charte.violet)
+	if Style and Style.boutons and Style.boutons.violet then
+		VIOLET_CLAIR = Style.boutons.violet[1]
+		VIOLET_VIF = Style.boutons.violet[2]
+	end
 
 	local modele = Outils.modele(ctx.dossier, "AutelDesRenaissances")
 
@@ -111,13 +119,16 @@ function M.construire(ctx)
 	-- ===== 1. dalle ronde cerclée de Neon =====
 	pcall(function()
 		local diametre = R.rayon * 2
-		cylindre(modele, {
+		local cercle = cylindre(modele, {
 			Name = "Cercle",
 			Size = Vector3.new(0.24, diametre, diametre),
 			CFrame = vertical(loc(0, 0.12, 0)),
-			Color = Charte.violet,
+			Color = VIOLET_VIF,
 			Material = NEON,
 		})
+		if cercle then
+			Outils.animer(cercle, "pulse", R.vitessePulse * 0.5)
+		end
 		cylindre(modele, {
 			Name = "Dalle",
 			Size = Vector3.new(0.3, diametre - 1, diametre - 1),
@@ -171,14 +182,18 @@ function M.construire(ctx)
 				Color = couleurs[i],
 			})
 			hautAutel = hautAutel + R.hauteurGradin
-			-- liseré doré sur le nez de chaque marche, côté Place
-			bloc(modele, {
+			-- liseré Neon violet sur le nez de chaque marche, côté Place (bien visible de loin)
+			local nez = bloc(modele, {
 				Name = "Nez" .. i,
-				Size = Vector3.new(cote - 0.4, 0.12, 0.3),
-				CFrame = loc(0, hautAutel + 0.06, -cote / 2 + 0.15),
-				Color = Charte.dore,
+				Size = Vector3.new(cote - 0.4, 0.16, 0.34),
+				CFrame = loc(0, hautAutel + 0.08, -cote / 2 + 0.17),
+				Color = VIOLET_CLAIR,
+				Material = NEON,
 				CanCollide = false,
 			})
+			if nez then
+				Outils.animer(nez, "pulse", R.vitessePulse)
+			end
 		end
 
 		-- pierres usées sur les angles des gradins (aspect ancien)
@@ -210,17 +225,29 @@ function M.construire(ctx)
 			CFrame = loc(0, hautAutel + 1.7, 0),
 			Color = Charte.dore,
 		})
+		-- ceinture Neon violet autour de la table (l'autel « s'allume »)
+		local ceinture = bloc(modele, {
+			Name = "Ceinture",
+			Size = Vector3.new(4.6, 0.3, 4.6),
+			CFrame = loc(0, hautAutel + 1.1, 0),
+			Color = VIOLET_VIF,
+			Material = NEON,
+			CanCollide = false,
+		})
+		if ceinture then
+			Outils.animer(ceinture, "pulse", R.vitessePulse)
+		end
 		local socle = cylindre(modele, {
 			Name = "Sceau",
-			Size = Vector3.new(0.15, 3, 3),
+			Size = Vector3.new(0.15, 3.6, 3.6),
 			CFrame = vertical(loc(0, hautAutel + 1.875, 0)),
-			Color = Charte.violet,
+			Color = VIOLET_CLAIR,
 			Material = NEON,
 			CanCollide = false,
 		})
 		if socle then
 			Outils.animer(socle, "pulse", R.vitessePulse)
-			Outils.lumiere(socle, { Range = 14, Brightness = 1.5, Color = Charte.violet })
+			Outils.lumiere(socle, { Range = 20, Brightness = 3, Color = VIOLET_VIF })
 		end
 		-- griffes fossiles qui montent vers l'œuf
 		for i = 0, 3 do
@@ -238,7 +265,14 @@ function M.construire(ctx)
 			-- bonus affiché sur la face de l'autel tournée vers la Place
 			local bonus = texteBonus(ctx.Equilibrage)
 			if bonus ~= "" then
-				Outils.texte(partAutel, "Front", bonus, { couleur = Charte.dore, pixelsParStud = 30 })
+				local etiquetteBonus = Outils.texte(partAutel, "Front", bonus, { couleur = Charte.dore, pixelsParStud = 30 })
+				if etiquetteBonus and Style then
+					pcall(function()
+						etiquetteBonus.Font = Style.police
+						etiquetteBonus.TextColor3 = Style.couleurs.revenu
+						Style.contour(etiquetteBonus, 3)
+					end)
+				end
 			end
 		end
 	end)
@@ -450,10 +484,18 @@ function M.construire(ctx)
 					pcall(function()
 						etiquette.Parent.Name = "Affiche"
 						etiquette.Name = "Titre"
-						local contour = Instance.new("UIStroke")
-						contour.Color = Charte.encre
-						contour.Thickness = 2
-						contour.Parent = etiquette
+						if Style then
+							-- texte blanc cerné de noir épais, teinté d'un dégradé violet
+							etiquette.Font = Style.policeTitre
+							etiquette.TextColor3 = Style.couleurs.texte
+							Style.contour(etiquette, 4)
+							Style.degrade(etiquette, VIOLET_CLAIR, VIOLET_VIF)
+						else
+							local contour = Instance.new("UIStroke")
+							contour.Color = Charte.encre
+							contour.Thickness = 2
+							contour.Parent = etiquette
+						end
 						local marge = Instance.new("UIPadding")
 						marge.PaddingLeft = UDim.new(0.04, 0)
 						marge.PaddingRight = UDim.new(0.04, 0)
@@ -501,6 +543,50 @@ function M.construire(ctx)
 					feu.Heat = 6
 					feu.Parent = flamme
 				end)
+			end
+		end)
+	end
+
+	-- ===== 6 bis. titre flottant géant « ♻️ RENAISSANCE » (style simulateur) =====
+	if Style and type(Style.etiquette) == "function" then
+		pcall(function()
+			local hautTitre = hautFronton
+			if hautTitre <= 0 then
+				hautTitre = 14.1
+			end
+			-- ancre invisible au-dessus du fronton : le titre se voit depuis toute la Place
+			local ancre = bloc(modele, {
+				Name = "AncreTitre",
+				Size = Vector3.new(1, 1, 1),
+				CFrame = loc(0, hautTitre + 4, 3),
+				Transparency = 1,
+				CanCollide = false,
+				CanQuery = false,
+				CanTouch = false,
+				CastShadow = false,
+			})
+			if not ancre then
+				return
+			end
+			local lignes = {
+				{ texte = "♻️ RENAISSANCE", titre = true, taille = 1.6, contour = 4, rarete = "Divin", nom = "Titre" },
+				{ texte = "Renais plus fort !", taille = 0.8, contour = 3, nom = "SousTitre" },
+			}
+			local bonus = texteBonus(ctx.Equilibrage)
+			if bonus ~= "" then
+				table.insert(lignes, { texte = bonus, couleur = Style.couleurs.revenu, taille = 0.8, contour = 3, nom = "Bonus" })
+			end
+			local _, textes = Style.etiquette(ancre, lignes, {
+				Name = "TitreRenaissance",
+				largeur = 24,
+				hauteurLigne = 2.4,
+				StudsOffset = Vector3.new(0, 2, 0),
+				MaxDistance = 260,
+				AlwaysOnTop = false,
+			})
+			-- sous-titre en dégradé violet (texte blanc teinté)
+			if textes and textes[2] then
+				Style.degrade(textes[2], VIOLET_CLAIR, VIOLET_VIF)
 			end
 		end)
 	end

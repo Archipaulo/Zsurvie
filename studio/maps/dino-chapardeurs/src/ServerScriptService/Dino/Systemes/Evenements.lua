@@ -48,6 +48,63 @@ function M.demarrer(ctx)
 		dossier.Parent = ctx.racine
 	end
 
+	-- ===== titre flottant geant au-dessus du Cratere (style simulateur) =====
+	local Style = ctx.Style
+	local ICONES = {
+		PluieDeMeteores = "☄️",
+		Eruption = "🌋",
+		LuneDoree = "🌕",
+	}
+	local titre = nil        -- BillboardGui
+	local lignesTitre = nil  -- { icone, nom, chrono }
+	pcall(function()
+		if not Style then
+			return
+		end
+		local scene = ctx.racine:FindFirstChild("TitreEvenement")
+		if not scene then
+			scene = Instance.new("Folder")
+			scene.Name = "TitreEvenement"
+			scene.Parent = ctx.racine
+		end
+		local ancre = Instance.new("Part")
+		ancre.Name = "AncreTitre"
+		ancre.Anchored = true
+		ancre.CanCollide = false
+		ancre.CanQuery = false
+		ancre.CanTouch = false
+		ancre.CastShadow = false
+		ancre.Transparency = 1
+		ancre.Size = Vector3.new(1, 1, 1)
+		ancre.Position = Plan.cratere.centre + Vector3.new(0, 14, 0)
+		ancre.Parent = scene
+		local g, textes = Style.etiquette(ancre, {
+			{ texte = "⭐", taille = 1.2, nom = "Icone" },
+			{ texte = "", taille = 1.6, titre = true, rarete = "Divin", contour = 4, nom = "Nom" },
+			{ texte = "", taille = 1, couleur = Style.couleurs.revenu, contour = 3.5, nom = "Chrono" },
+		}, {
+			Name = "TitreEvenement",
+			largeur = 40,
+			hauteurLigne = 3.4,
+			StudsOffset = Vector3.new(0, 6, 0),
+			MaxDistance = 400,
+			AlwaysOnTop = false,
+		})
+		g.Enabled = false
+		titre = g
+		lignesTitre = textes
+	end)
+
+	local function chrono(secondes)
+		secondes = math.max(0, math.floor(secondes))
+		local m = math.floor(secondes / 60)
+		local s = secondes % 60
+		if s < 10 then
+			return m .. ":0" .. s
+		end
+		return m .. ":" .. s
+	end
+
 	-- noms des evenements (tries pour un tirage stable)
 	local noms = {}
 	for cle in pairs(liste) do
@@ -61,6 +118,38 @@ function M.demarrer(ctx)
 			return infos.nom
 		end
 		return cle
+	end
+
+	-- affiche le titre pendant un evenement (nom arc-en-ciel + compte a rebours), le masque sinon
+	local function majTitre()
+		if not titre or not lignesTitre then
+			return
+		end
+		pcall(function()
+			local nom = Etat:GetAttribute("Evenement")
+			if type(nom) ~= "string" or nom == "" then
+				if titre.Enabled then
+					titre.Enabled = false
+				end
+				return
+			end
+			local fin = tonumber(Etat:GetAttribute("EvenementFin")) or 0
+			local icone = ICONES[nom] or "⭐"
+			local texteNom = string.upper(nomAffiche(nom))
+			local texteChrono = "⏱ " .. chrono(fin - maintenant())
+			if lignesTitre[1].Text ~= icone then
+				lignesTitre[1].Text = icone
+			end
+			if lignesTitre[2].Text ~= texteNom then
+				lignesTitre[2].Text = texteNom
+			end
+			if lignesTitre[3].Text ~= texteChrono then
+				lignesTitre[3].Text = texteChrono
+			end
+			if not titre.Enabled then
+				titre.Enabled = true
+			end
+		end)
 	end
 
 	-- ===== choix d'un point d'impact =====
@@ -135,17 +224,58 @@ function M.demarrer(ctx)
 		return p
 	end
 
-	local function eclats(impact)
-		for i = 1, 4 do
-			local angle = alea:NextNumber(0, math.pi * 2)
-			local dist = alea:NextNumber(1.5, 4)
-			local taille = alea:NextNumber(0.8, 1.6)
-			local couleur = Charte.pierre
-			if i % 2 == 0 then
-				couleur = Charte.lave
+	-- couleurs cartoon des meteorites (jaune -> orange -> rose, comme les degrades des boutons)
+	local JAUNE = Charte.dore
+	local ORANGE = Charte.lave
+	local ROSE = Charte.alerte
+	if Style then
+		JAUNE = Style.couleurs.revenu
+		ORANGE = Style.boutons.orange[2]
+		ROSE = Style.boutons.rose[2]
+	end
+	local ROCHE = Charte.encre:Lerp(Charte.pierre, 0.45)
+
+	-- fait disparaitre une part en douceur puis la detruit
+	local function effacer(part, attente, duree)
+		task.delay(attente, function()
+			if part.Parent then
+				TweenService:Create(part, TweenInfo.new(duree, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Transparency = 1 }):Play()
 			end
+		end)
+		Debris:AddItem(part, attente + duree + 0.2)
+	end
+
+	-- disque plat (cylindre couche) centre sur un point du sol
+	local function disque(nom, centre, diametre, epaisseur, couleur, materiau)
+		return nouvellePart({
+			Name = nom,
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(epaisseur, diametre, diametre),
+			CFrame = CFrame.new(centre + Vector3.new(0, epaisseur / 2, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+			Color = couleur,
+			Material = materiau,
+		})
+	end
+
+	-- cratere cartoon : rebord sombre, coeur Neon qui brille puis s'eteint, gros eclats colores
+	local function eclats(impact, rayon)
+		local rebord = disque("CratereRebord", impact, rayon * 3.4, 0.5, ROCHE, Enum.Material.SmoothPlastic)
+		effacer(rebord, 3.5, 1.2)
+		local coeur = disque("CratereCoeur", impact, rayon * 2.1, 0.7, ORANGE, Enum.Material.Neon)
+		effacer(coeur, 0.8, 2.5)
+		local centre = disque("CratereCentre", impact, rayon * 1, 0.8, JAUNE, Enum.Material.Neon)
+		effacer(centre, 0.4, 1.5)
+		for i = 1, 6 do
+			local angle = (i / 6) * math.pi * 2 + alea:NextNumber(-0.3, 0.3)
+			local dist = rayon * 1.4 + alea:NextNumber(0, 1.5)
+			local taille = alea:NextNumber(1.2, 2.2)
+			local couleur = ROCHE
 			local materiau = Enum.Material.SmoothPlastic
-			if couleur == Charte.lave then
+			if i % 3 == 0 then
+				couleur = JAUNE
+				materiau = Enum.Material.Neon
+			elseif i % 3 == 1 then
+				couleur = ORANGE
 				materiau = Enum.Material.Neon
 			end
 			local eclat = nouvellePart({
@@ -156,45 +286,63 @@ function M.demarrer(ctx)
 				Color = couleur,
 				Material = materiau,
 			})
-			Debris:AddItem(eclat, 4)
+			effacer(eclat, 3, 1)
 		end
 	end
 
 	local function lancerMeteore()
 		local impact = pointAleatoire()
 		local depart = impact + Vector3.new(alea:NextNumber(-40, 40), HAUTEUR_CHUTE, alea:NextNumber(-40, 40))
-		local rayon = alea:NextNumber(3, 5)
+		local rayon = alea:NextNumber(5, 7.5)
 		local boule = nouvellePart({
 			Name = "Meteore",
 			Shape = Enum.PartType.Ball,
 			Size = Vector3.new(rayon, rayon, rayon),
 			Position = depart,
-			Color = Charte.lave,
+			Color = ORANGE,
 			Material = Enum.Material.Neon,
 		})
 		Debris:AddItem(boule, DUREE_CHUTE + 3)
 
-		-- trainee de feu
+		-- trainee coloree large (jaune -> orange -> rose)
 		local a0 = Instance.new("Attachment")
-		a0.Position = Vector3.new(0, rayon * 0.4, 0)
+		a0.Position = Vector3.new(0, rayon * 0.5, 0)
 		a0.Parent = boule
 		local a1 = Instance.new("Attachment")
-		a1.Position = Vector3.new(0, -rayon * 0.4, 0)
+		a1.Position = Vector3.new(0, -rayon * 0.5, 0)
 		a1.Parent = boule
 		local trainee = Instance.new("Trail")
 		trainee.Attachment0 = a0
 		trainee.Attachment1 = a1
-		trainee.Lifetime = 0.6
+		trainee.Lifetime = 0.9
 		trainee.LightEmission = 1
 		trainee.FaceCamera = true
-		trainee.Color = ColorSequence.new(Charte.dore, Charte.lave)
-		trainee.Transparency = NumberSequence.new(0, 1)
-		trainee.WidthScale = NumberSequence.new(1, 0.2)
+		trainee.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, JAUNE),
+			ColorSequenceKeypoint.new(0.45, ORANGE),
+			ColorSequenceKeypoint.new(1, ROSE),
+		})
+		trainee.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(0.6, 0.35),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		trainee.WidthScale = NumberSequence.new(1.2, 0.1)
 		trainee.Parent = boule
+		-- etincelles cartoon
+		local etincelles = Instance.new("ParticleEmitter")
+		etincelles.Color = ColorSequence.new(JAUNE, ORANGE)
+		etincelles.LightEmission = 1
+		etincelles.Rate = 30
+		etincelles.Lifetime = NumberRange.new(0.4, 0.7)
+		etincelles.Speed = NumberRange.new(4, 9)
+		etincelles.SpreadAngle = Vector2.new(180, 180)
+		etincelles.Size = NumberSequence.new(1.2, 0)
+		etincelles.Parent = boule
 		local lueur = Instance.new("PointLight")
-		lueur.Color = Charte.lave
-		lueur.Range = 16
-		lueur.Brightness = 2
+		lueur.Color = ORANGE
+		lueur.Range = 22
+		lueur.Brightness = 3
 		lueur.Parent = boule
 
 		local tween = TweenService:Create(
@@ -204,7 +352,7 @@ function M.demarrer(ctx)
 		)
 		tween.Completed:Connect(function()
 			effetTous("Meteore", impact, {})
-			pcall(eclats, impact)
+			pcall(eclats, impact, rayon)
 			if boule.Parent then
 				boule:Destroy()
 			end
@@ -226,6 +374,7 @@ function M.demarrer(ctx)
 		generation = generation + 1
 		Etat:SetAttribute("Evenement", "")
 		Etat:SetAttribute("EvenementFin", 0)
+		majTitre()
 		Bus.emettre("EvenementFin", nom)
 		notifierTous(nomAffiche(nom) .. " : c'est fini !", "info")
 	end
@@ -252,6 +401,7 @@ function M.demarrer(ctx)
 		Etat:SetAttribute("Evenement", nom)
 		Etat:SetAttribute("EvenementFin", debut + duree)
 		Etat:SetAttribute("ProchainEvenement", debut + intervalle)
+		majTitre()
 		Bus.emettre("EvenementDebut", nom)
 		notifierTous("Événement : " .. nomAffiche(nom) .. " !", "alerte")
 		effetTous("Evenement", Plan.cratere.centre, { nom = nom })
@@ -272,6 +422,14 @@ function M.demarrer(ctx)
 	Etat:SetAttribute("Evenement", "")
 	Etat:SetAttribute("EvenementFin", 0)
 	Etat:SetAttribute("ProchainEvenement", maintenant() + PREMIER_DELAI)
+
+	-- compte a rebours du titre, rafraichi plus souvent que l'horloge
+	task.spawn(function()
+		while true do
+			majTitre()
+			task.wait(0.5)
+		end
+	end)
 
 	while true do
 		task.wait(1)

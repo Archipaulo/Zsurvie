@@ -1,21 +1,25 @@
--- Constructeur Lumieres : torches tiki en bambou qui balisent le Tapis et entourent la Place.
--- Chaque torche : pied de pierre, fût de bambou ligaturé, coupe en bois,
--- flamme Neon qui palpite (animation « pulse » côté client), feu et lumière chaude.
+-- Constructeur Lumieres : torches cartoon (style simulateur, voir STYLE.md) qui balisent le Tapis
+-- et entourent la Place. Formes simples et nettes, couleurs franches, SmoothPlastic partout,
+-- Neon seulement pour la flamme.
+-- Chaque torche : socle de pierre claire, fût de bambou vif, anneau sombre, coupe en bois,
+-- flamme Neon orange vif surmontée d'une pointe jaune (animation « pulse » côté client),
+-- feu et lumière chaude.
 -- La nuit (Lighting.ClockTime < 6,5 ou > 18,5, vérifié toutes les 5 s), les torches brillent plus fort.
--- Emprise (CONTRAT §10) : le long du Tapis (z = ±8, tous les 16 studs de x = -104 à 104)
--- et autour de la Place (r = 23, tous les 45°, décalées de 22,5° pour laisser les allées libres).
+-- Emprise (CONTRAT §10) : le long du Tapis (z = ±8, tous les 32 studs de x = -104 à 104,
+-- soit une position sur deux de la grille de 16) et autour de la Place (r = 23, tous les 45°,
+-- décalées de 22,5° pour laisser les allées libres).
 local M = {}
 
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 
 local BUDGET = 200 -- parts au maximum pour ce constructeur
-local PARTS_PAR_TORCHE = 5 -- 36 torches x 5 = 180 parts
+local PARTS_PAR_TORCHE = 6 -- 22 torches x 6 = 132 parts
 
 -- valeurs par défaut, remplaçables par Equilibrage.lumieres
 local DEFAUTS = {
 	tapisZ = 8,             -- distance des torches à l'axe du Tapis
-	tapisPas = 16,          -- écart entre deux torches le long du Tapis
+	tapisPas = 32,          -- écart entre deux torches le long du Tapis (moins nombreuses, plus lisibles)
 	tapisDebutX = -104,
 	tapisFinX = 104,
 	placeRayon = 23,        -- rayon du cercle de torches autour de la Place
@@ -72,19 +76,31 @@ function M.construire(ctx)
 	local Charte = ctx.Charte
 	local Outils = ctx.Outils
 	local Plan = ctx.Plan
+	local Style = ctx.Style
 	local dossier = ctx.dossier
 	local R = lireReglages(ctx)
 
 	local compte = 0
 	local lumieres = {} -- { lumiere = PointLight, feu = Fire }
 
-	-- couleurs
-	local BAMBOU = Charte.lumiere(Charte.sable)
-	local LIGATURE = Charte.bois
-	local PIED = Charte.pierre
-	local COUPE = Charte.ombre(Charte.bois)
-	local FLAMME = Charte.lave
-	local LUEUR = Charte.lumiere(Charte.dore)
+	-- couleurs franches (palette de Style : orange et jaune des boutons, jaune des revenus)
+	local orange = { Charte.lave, Charte.dore }
+	local jaune = { Charte.dore, Charte.dore }
+	local teinteRevenu = Charte.dore
+	if Style and Style.boutons then
+		orange = Style.boutons.orange or orange
+		jaune = Style.boutons.jaune or jaune
+	end
+	if Style and Style.couleurs and Style.couleurs.revenu then
+		teinteRevenu = Style.couleurs.revenu
+	end
+	local BAMBOU = jaune[1]:Lerp(Charte.sable, 0.45) -- bambou vif, bien lisible sur l'herbe
+	local ANNEAU = Charte.ombre(Charte.bois)
+	local PIED = Charte.lumiere(Charte.pierre) -- pierre claire pour les socles
+	local COUPE = Charte.bois
+	local FLAMME = Charte.lave:Lerp(orange[2], 0.35) -- orange vif
+	local POINTE = teinteRevenu -- pointe jaune de la flamme
+	local LUEUR = orange[1]:Lerp(teinteRevenu, 0.5)
 
 	-- propriétés communes des parts de décor (rien ne gêne les joueurs ni les dinos)
 	local function decor(props)
@@ -103,52 +119,62 @@ function M.construire(ctx)
 		local h = R.hauteur
 		local m = Outils.modele(parent, nom)
 
-		-- pied de pierre
-		Outils.bloc(m, decor({
+		-- socle rond de pierre claire (large et bas : silhouette « jouet »)
+		Outils.cylindre(m, decor({
 			Name = "Pied",
-			Size = Vector3.new(1.8, 0.6, 1.8),
-			CFrame = Outils.surSol(Vector3.new(1.8, 0.6, 1.8), x, z, 45, y0),
+			Size = Vector3.new(0.8, 2.4, 2.4),
+			CFrame = vertical(x, y0 + 0.4, z),
 			Color = PIED,
 		}))
-		-- fût de bambou
+		-- fût de bambou épais
 		local fut = Outils.cylindre(m, decor({
 			Name = "Bambou",
-			Size = Vector3.new(h, 0.7, 0.7),
-			CFrame = vertical(x, y0 + 0.6 + h / 2, z),
+			Size = Vector3.new(h, 0.9, 0.9),
+			CFrame = vertical(x, y0 + 0.8 + h / 2, z),
 			Color = BAMBOU,
 		}))
 		m.PrimaryPart = fut
-		-- ligature de corde sous la coupe
+		-- anneau sombre sous la coupe (contour net, comme un trait noir de dessin animé)
 		Outils.cylindre(m, decor({
 			Name = "Ligature",
-			Size = Vector3.new(0.3, 0.85, 0.85),
-			CFrame = vertical(x, y0 + 0.6 + h * 0.8, z),
-			Color = LIGATURE,
+			Size = Vector3.new(0.45, 1.15, 1.15),
+			CFrame = vertical(x, y0 + 0.8 + h * 0.82, z),
+			Color = ANNEAU,
 		}))
-		-- coupe en bois au sommet
-		local yCoupe = y0 + 0.6 + h + 0.4
+		-- coupe en bois au sommet, large
+		local yCoupe = y0 + 0.8 + h + 0.45
 		Outils.cylindre(m, decor({
 			Name = "Coupe",
-			Size = Vector3.new(0.8, 1.6, 1.6),
+			Size = Vector3.new(0.9, 2.2, 2.2),
 			CFrame = vertical(x, yCoupe, z),
 			Color = COUPE,
 		}))
-		-- flamme Neon
+		-- flamme Neon orange vif
 		local flamme = Outils.boule(m, decor({
 			Name = "Flamme",
-			Size = Vector3.new(1.3, 1.3, 1.3),
-			CFrame = CFrame.new(x, yCoupe + 0.8, z),
+			Size = Vector3.new(1.9, 1.9, 1.9),
+			CFrame = CFrame.new(x, yCoupe + 1.05, z),
 			Color = FLAMME,
 			Material = Enum.Material.Neon,
 			CanQuery = false,
 		}))
 		Outils.animer(flamme, "pulse", 1.5)
+		-- pointe jaune au-dessus : flamme en deux tons, lisible de loin
+		local pointe = Outils.boule(m, decor({
+			Name = "Pointe",
+			Size = Vector3.new(1.05, 1.05, 1.05),
+			CFrame = CFrame.new(x, yCoupe + 2.2, z),
+			Color = POINTE,
+			Material = Enum.Material.Neon,
+			CanQuery = false,
+		}))
+		Outils.animer(pointe, "pulse", 2)
 
 		local feu = nil
 		pcall(function()
 			feu = Instance.new("Fire")
-			feu.Color = Charte.lave
-			feu.SecondaryColor = Charte.dore
+			feu.Color = FLAMME
+			feu.SecondaryColor = POINTE
 			feu.Size = R.feu
 			feu.Heat = 6
 			feu.Parent = flamme

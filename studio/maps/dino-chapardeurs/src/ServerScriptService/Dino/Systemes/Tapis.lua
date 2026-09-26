@@ -23,17 +23,6 @@ function M.demarrer(ctx)
 
 	-- ===== outils internes =====
 
-	-- somme lisible, avec une décimale pour les petits revenus non entiers
-	local function argentFin(n)
-		n = tonumber(n) or 0
-		if n < 100 and math.abs(n - math.floor(n)) > 0.01 then
-			local texte = string.format("%.1f", n)
-			texte = string.gsub(texte, "%.", ",")
-			return texte .. " $"
-		end
-		return Charte.argent(n)
-	end
-
 	local function partsDe(modele)
 		local liste = {}
 		for _, d in ipairs(modele:GetDescendants()) do
@@ -128,56 +117,44 @@ function M.demarrer(ctx)
 		return haut
 	end
 
-	-- étiquette flottante : nom, rareté, prix, revenu
+	-- étiquette flottante « style simulateur » (STYLE.md §3) :
+	-- mutation · NOM · rareté (dégradé) · prix vert · revenu jaune
 	local function poserEtiquette(modele, corps, espece, rarete, mutation, prix, revenu)
 		local ancienne = corps:FindFirstChild("Etiquette")
 		if ancienne then
 			ancienne:Destroy()
 		end
-		local gui = Instance.new("BillboardGui")
-		gui.Name = "Etiquette"
-		gui.Adornee = corps
-		gui.AlwaysOnTop = false
-		gui.MaxDistance = 80
-		gui.LightInfluence = 0
-		gui.Size = UDim2.new(7, 0, 3.2, 0)
-		gui.StudsOffset = Vector3.new(0, hauteurAuDessus(modele, corps) + 2, 0)
-		gui.Parent = corps
-
-		local liste = Instance.new("UIListLayout")
-		liste.FillDirection = Enum.FillDirection.Vertical
-		liste.HorizontalAlignment = Enum.HorizontalAlignment.Center
-		liste.SortOrder = Enum.SortOrder.LayoutOrder
-		liste.Parent = gui
-
-		local function ligne(nom, ordre, texte, couleur, hauteur, police)
-			local t = Instance.new("TextLabel")
-			t.Name = nom
-			t.LayoutOrder = ordre
-			t.Size = UDim2.new(1, 0, hauteur, 0)
-			t.BackgroundTransparency = 1
-			t.Text = texte
-			t.TextScaled = true
-			t.Font = police or Charte.police
-			t.TextColor3 = couleur
-			t.TextStrokeColor3 = Charte.encre
-			t.TextStrokeTransparency = 0.2
-			t.Parent = gui
-			return t
-		end
-
-		local couleurNom = Charte.creme
-		if mutation ~= "Normal" and Charte.mutations[mutation] then
-			couleurNom = Charte.mutations[mutation]
-			if mutation == "Meteore" then
-				couleurNom = Charte.violet
-			end
-		end
+		local Style = ctx.Style
+		local infosEspece = E.especes[espece]
 		local infosRarete = E.raretes[rarete]
-		ligne("Nom", 1, nomAffiche(espece, mutation), couleurNom, 0.3)
-		ligne("Rarete", 2, (infosRarete and infosRarete.nom) or rarete, Charte.raretes[rarete] or Charte.creme, 0.24)
-		ligne("Prix", 3, Charte.argent(prix), Charte.dore, 0.24)
-		ligne("Revenu", 4, "+" .. argentFin(revenu) .. "/s", Charte.herbe, 0.22, Charte.policeTexte)
+		local lignes = {}
+
+		local mut = E.mutations[mutation]
+		if mutation ~= "Normal" and mut then
+			local couleurMut = Charte.mutations[mutation] or Style.couleurs.texte
+			if mutation == "Meteore" then
+				couleurMut = Charte.violet -- la teinte Météore est trop sombre pour être lue
+			end
+			local nomMut = (mut.nom and mut.nom ~= "" and mut.nom) or mutation
+			table.insert(lignes, { nom = "Mutation", texte = string.upper(nomMut), couleur = couleurMut, taille = 0.8 })
+		end
+		table.insert(lignes, {
+			nom = "Nom",
+			texte = string.upper((infosEspece and infosEspece.nom) or espece),
+			titre = true,
+			taille = 1.4,
+			contour = 3.5,
+		})
+		table.insert(lignes, { nom = "Rarete", texte = (infosRarete and infosRarete.nom) or rarete, rarete = rarete, taille = 0.9 })
+		table.insert(lignes, { nom = "Prix", texte = Charte.argent(prix), couleur = Style.couleurs.argent, taille = 1 })
+		table.insert(lignes, { nom = "Revenu", texte = Style.revenu(revenu), couleur = Style.couleurs.revenu, taille = 0.9 })
+
+		local gui = Style.etiquette(corps, lignes, {
+			Name = "Etiquette",
+			largeur = 10,
+			StudsOffset = Vector3.new(0, hauteurAuDessus(modele, corps) + 3, 0),
+			MaxDistance = 90,
+		})
 		return gui
 	end
 

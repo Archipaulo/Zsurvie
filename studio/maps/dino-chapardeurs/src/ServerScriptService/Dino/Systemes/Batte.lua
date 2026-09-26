@@ -70,7 +70,13 @@ function M.demarrer(ctx)
 		soudure.Parent = part
 	end
 
-	-- couleur du bout : bois, ou or brillant avec la Batte dorée
+	-- palette cartoon (STYLE.md §3 : couleurs saturées, SmoothPlastic, Neon seulement pour ce qui brille)
+	local Style = ctx.Style
+	local BOIS_CLAIR = Charte.hex and Charte.hex("F2C27B") or Color3.fromRGB(242, 194, 123)
+	local BANDE = (Style and Style.boutons and Style.boutons.rouge and Style.boutons.rouge[2]) or Charte.tapis
+	local ENCRE = (Style and Style.couleurs and Style.couleurs.contour) or Charte.encre
+
+	-- couleur du bout : bois clair, ou or brillant avec la Batte dorée
 	local function colorerBout(outil, dore)
 		local bout = outil:FindFirstChild("Bout")
 		if not bout then return end
@@ -78,7 +84,7 @@ function M.demarrer(ctx)
 			bout.Color = Charte.dore
 			bout.Material = Enum.Material.Neon
 		else
-			bout.Color = Charte.bois
+			bout.Color = BOIS_CLAIR
 			bout.Material = Enum.Material.SmoothPlastic
 		end
 	end
@@ -92,11 +98,18 @@ function M.demarrer(ctx)
 		-- tenue par le manche, bout épais vers le haut
 		outil.Grip = CFrame.new(0, 0, -1.5, 0, 0, 1, 1, 0, 0, 0, 1, 0)
 
-		local handle = nouvellePart("Handle", Vector3.new(0.6, 0.6, 4), Charte.bois, outil)
-		local bout = nouvellePart("Bout", Vector3.new(0.95, 0.95, 1.5), Charte.bois, outil)
-		souder(bout, handle, CFrame.new(0, 0, 1.4))
-		local manche = nouvellePart("Manche", Vector3.new(0.7, 0.7, 0.8), Charte.encre, outil)
-		souder(manche, handle, CFrame.new(0, 0, -1.6))
+		-- corps en bois clair, bout nettement plus gros (silhouette cartoon lisible de loin)
+		local handle = nouvellePart("Handle", Vector3.new(0.6, 0.6, 4), BOIS_CLAIR, outil)
+		local bout = nouvellePart("Bout", Vector3.new(1.15, 1.15, 1.7), BOIS_CLAIR, outil)
+		souder(bout, handle, CFrame.new(0, 0, 1.5))
+		-- bande rouge vif entre le corps et le bout
+		local bande = nouvellePart("Bande", Vector3.new(0.78, 0.78, 0.35), BANDE, outil)
+		souder(bande, handle, CFrame.new(0, 0, 0.45))
+		-- manche encre (grip) et pommeau épais au bout
+		local manche = nouvellePart("Manche", Vector3.new(0.72, 0.72, 0.9), ENCRE, outil)
+		souder(manche, handle, CFrame.new(0, 0, -1.55))
+		local pommeau = nouvellePart("Pommeau", Vector3.new(0.95, 0.95, 0.3), ENCRE, outil)
+		souder(pommeau, handle, CFrame.new(0, 0, -2.1))
 
 		colorerBout(outil, aBatteOr(joueur))
 		return outil

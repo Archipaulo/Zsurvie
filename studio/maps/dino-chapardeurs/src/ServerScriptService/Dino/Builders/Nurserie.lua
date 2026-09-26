@@ -2,6 +2,9 @@
 -- Deux croissants de nid (paille et branches) de part et d'autre du couloir du Tapis, œufs géants tachetés
 -- aux couleurs des raretés (certains fissurés, d'autres qui « respirent »), lampes chauffantes orangées
 -- et arche d'entrée « NURSERIE » au-dessus du couloir, tournée vers le début du Tapis.
+-- Style simulateur (STYLE.md) : paille dorée vive, œufs aux couleurs pleines des raretés tachetés de blanc,
+-- arche violette et or, enseigne orange au texte blanc cerné de noir, et titre géant flottant « 🥚 NURSERIE »
+-- (Style.etiquette) lisible de loin.
 -- Emprise (CONTRAT §10) : disque de rayon 14 autour de Plan.nurserie.centre ; couloir |z| ≤ 6 laissé libre
 -- (seules l'enseigne et la poutre de l'arche le survolent, bien au-dessus des dinos).
 local M = {}
@@ -13,6 +16,7 @@ function M.construire(ctx)
 	local Outils = ctx.Outils
 	local Plan = ctx.Plan
 	local dossier = ctx.dossier
+	local Style = ctx.Style
 
 	-- réglages facultatifs (Equilibrage.nurserie), sinon valeurs par défaut
 	local reglages = {}
@@ -42,16 +46,27 @@ function M.construire(ctx)
 
 	local rng = Outils.aleatoire(reglage("graine", 1128))
 
-	-- couleurs (toutes dérivées de la Charte)
-	local PAILLE = Charte.sable
-	local PAILLE_OMBRE = Charte.ombre(Charte.sable)
-	local TERRE = Charte.terre
+	-- couleurs (toutes dérivées de la Charte) : vives et saturées, style jouet
+	local PAILLE = Charte.dore
+	local PAILLE_OMBRE = Charte.sable
+	local TERRE = Charte.lave:Lerp(Charte.dore, 0.55)
 	local BOIS = Charte.bois
 	local BOIS_OMBRE = Charte.ombre(Charte.bois)
 	local CREME = Charte.creme
 	local ENCRE = Charte.encre
 	local DORE = Charte.dore
 	local CHALEUR = Charte.lave:Lerp(Charte.dore, 0.35)
+	local ROUGE = Charte.alerte
+	local ARCHE = Charte.violet
+	local ENSEIGNE = Charte.lave
+	local SOCLE = Charte.pierre:Lerp(Charte.creme, 0.6) -- pierre claire
+	local BLANC = Charte.creme
+	if Style and Style.couleurs and Style.couleurs.texte then
+		BLANC = Style.couleurs.texte
+	end
+	if Style and Style.couleurs and Style.couleurs.contour then
+		ENCRE = Style.couleurs.contour
+	end
 
 	-- couleurs des raretés, triées de la plus commune à la plus rare
 	local raretes = {}
@@ -301,10 +316,11 @@ function M.construire(ctx)
 	for i, info in ipairs(listeOeufs) do
 		local cleRarete = rareteNumero(ordreRaretes[i] or i)
 		local teinte = couleurRarete(cleRarete)
-		local coquille = Charte.lumiere(teinte)
-		local motif = Charte.ombre(teinte)
+		-- coquille à la couleur pleine de la rareté, grosses taches blanches bien lisibles
+		local coquille = teinte
+		local motif = BLANC
 		if cleRarete == "Secret" then
-			motif = Charte.pierre
+			motif = ENCRE
 		end
 
 		local m = Outils.modele(oeufs, "Oeuf" .. i)
@@ -360,7 +376,7 @@ function M.construire(ctx)
 				{ dir = versCouloir + Vector3.new(0.35, 0.35, 0), rot = 25 },
 			}
 			for _, pf in ipairs(pointsFissure) do
-				fissure(m, centreBas, R, pf.dir, pf.rot, teinte)
+				fissure(m, centreBas, R, pf.dir, pf.rot, Charte.lumiere(DORE))
 			end
 			-- lueur de la rareté qui filtre par les fissures
 			if bas then
@@ -420,7 +436,7 @@ function M.construire(ctx)
 			Name = "Poteau",
 			Size = Vector3.new(0.7, HAUTEUR_LAMPE, 0.7),
 			CFrame = CFrame.new(xP, HAUTEUR_LAMPE / 2, zP),
-			Color = BOIS_OMBRE,
+			Color = BOIS,
 			CanCollide = true,
 		})
 		if poteau then
@@ -430,7 +446,7 @@ function M.construire(ctx)
 				Name = "Bras",
 				Size = Vector3.new(3.8, 0.45, 0.45),
 				CFrame = CFrame.new(xB, HAUTEUR_LAMPE - 0.2, zB) * CFrame.Angles(0, -math.rad(angle), 0),
-				Color = ENCRE,
+				Color = ROUGE,
 			})
 			-- abat-jour (cylindre vertical) et ampoule Neon
 			local xL, zL = polaire(angle, 9.5)
@@ -438,7 +454,7 @@ function M.construire(ctx)
 				Name = "AbatJour",
 				Size = Vector3.new(1, 2.2, 2.2),
 				CFrame = CFrame.new(xL, HAUTEUR_LAMPE - 0.7, zL) * CFrame.Angles(0, 0, math.pi / 2),
-				Color = ENCRE,
+				Color = ROUGE,
 			})
 			local ampoule = poser("boule", lampe, {
 				Name = "Ampoule",
@@ -466,14 +482,14 @@ function M.construire(ctx)
 			Name = "Socle",
 			Size = Vector3.new(2, 1, 2),
 			CFrame = CFrame.new(xA, 0.5, CZ + cote * (ZP + 0.1)),
-			Color = Charte.pierre,
+			Color = SOCLE,
 			CanCollide = true,
 		})
 		poser("bloc", arche, {
 			Name = "Pilier",
 			Size = Vector3.new(1.4, HAUTEUR_POTEAU, 1.4),
 			CFrame = CFrame.new(xA, HAUTEUR_POTEAU / 2, CZ + cote * ZP),
-			Color = BOIS,
+			Color = ARCHE,
 			CanCollide = true,
 		})
 		poser("boule", arche, {
@@ -502,7 +518,7 @@ function M.construire(ctx)
 		Name = "Poutre",
 		Size = Vector3.new(1.8, 1.2, 2 * ZP + 2),
 		CFrame = CFrame.new(xA, HAUTEUR_POTEAU + 0.5, CZ),
-		Color = BOIS_OMBRE,
+		Color = DORE,
 	})
 
 	-- enseigne suspendue sous la poutre, lisible des deux côtés
@@ -511,25 +527,33 @@ function M.construire(ctx)
 		Name = "Cadre",
 		Size = Vector3.new(0.4, 2.9, largeurEnseigne + 0.4),
 		CFrame = CFrame.new(xA, HAUTEUR_POTEAU - 1.45, CZ),
-		Color = DORE,
+		Color = ENCRE, -- liseré noir épais, comme les contours de l'interface
 	})
 	local enseigne = poser("bloc", arche, {
 		Name = "Enseigne",
 		Size = Vector3.new(0.6, 2.5, largeurEnseigne),
 		CFrame = CFrame.new(xA, HAUTEUR_POTEAU - 1.45, CZ),
-		Color = CREME,
+		Color = ENSEIGNE,
 	})
 	if enseigne then
 		for _, face in ipairs({ "Right", "Left" }) do
 			pcall(function()
-				local etiquette = Outils.texte(enseigne, face, "NURSERIE", { couleur = Charte.lave, pixelsParStud = 40 })
+				local police = nil
+				if Style then
+					police = Style.policeTitre
+				end
+				local etiquette = Outils.texte(enseigne, face, "🥚 NURSERIE", { couleur = BLANC, pixelsParStud = 40, police = police })
 				local gui = etiquette.Parent
 				gui.Name = "Affiche"
 				etiquette.Name = "Titre"
-				local contour = Instance.new("UIStroke")
-				contour.Color = ENCRE
-				contour.Thickness = 3
-				contour.Parent = etiquette
+				if Style then
+					Style.contour(etiquette, 4)
+				else
+					local contour = Instance.new("UIStroke")
+					contour.Color = ENCRE
+					contour.Thickness = 4
+					contour.Parent = etiquette
+				end
 				local marge = Instance.new("UIPadding")
 				marge.PaddingTop = UDim.new(0.1, 0)
 				marge.PaddingBottom = UDim.new(0.1, 0)
@@ -563,6 +587,28 @@ function M.construire(ctx)
 		Color = Charte.ombre(couleurArche),
 	})
 	Outils.animer(oeufArche, "pulse", 0.4)
+
+	-- ===== 5. titre géant flottant « 🥚 NURSERIE » (lisible de loin, même sur mobile) =====
+	local support = enseigne or dossier:FindFirstChild("Poutre", true)
+	if Style and support then
+		pcall(function()
+			local _, textes = Style.etiquette(support, {
+				{ texte = "🥚 NURSERIE", titre = true, taille = 1.6, contour = 4, nom = "Titre" },
+				{ texte = "Les dinos éclosent ici !", couleur = Style.couleurs.revenu, taille = 0.8, nom = "SousTitre" },
+			}, {
+				Name = "TitreNurserie",
+				largeur = 22,
+				hauteurLigne = 2.6,
+				StudsOffset = Vector3.new(0, 9, 0),
+				MaxDistance = 320,
+				AlwaysOnTop = false,
+			})
+			-- titre blanc qui se dore vers le bas, comme les grands titres des simulateurs
+			if textes and textes[1] then
+				Style.degrade(textes[1], BLANC, DORE)
+			end
+		end)
+	end
 
 	dossier:SetAttribute("Parts", compteur)
 end

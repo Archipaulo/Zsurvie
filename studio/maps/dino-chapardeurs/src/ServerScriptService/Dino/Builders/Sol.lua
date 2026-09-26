@@ -1,16 +1,19 @@
--- Constructeur Sol : le sol de tout le monde (dessus à Y = 0, épaisseur 4) en grandes dalles,
--- herbe en damier doux au centre, sable près de la rivière, terre brûlée près du Volcan ;
--- allées de terre (Place <-> Tapis par les couloirs entre les Bases, anneau autour de la Place),
--- touffes d'herbe et fleurs plates (hauteur <= 0,3) hors zones construites, murs invisibles au bord.
+-- Constructeur Sol : le sol de tout le monde (dessus à Y = 0, épaisseur 4) en grandes dalles.
+-- Style simulateur (STYLE.md §1.7 et §3) : herbe UNIE vert vif #6BD64A (variation à peine
+-- perceptible, pas de damier), sable près de la rivière, terre brûlée près du Volcan ;
+-- allées sable nettes à liseré propre (Place <-> Tapis par les couloirs entre les Bases, anneau
+-- autour de la Place), touffes et fleurs plates (hauteur <= 0,3) seulement en périphérie,
+-- le centre de jeu reste dégagé ; murs invisibles au bord.
 local M = {}
 
 -- réglages par défaut (surchargés par Equilibrage.sol s'il existe)
 local DEFAUTS = {
 	budget = 600,          -- parts au maximum pour ce constructeur
 	epaisseur = 4,         -- épaisseur des dalles
-	colonnes = 10,         -- dalles d'ouest en est
-	rangsNord = 2,         -- rangées de terre brûlée
-	rangsCentre = 7,       -- rangées d'herbe
+	colonnes = 4,          -- dalles d'ouest en est (grandes dalles)
+	rangsNord = 1,         -- rangées de terre brûlée
+	rangsCentre = 3,       -- rangées d'herbe
+	variation = 0.035,     -- écart de teinte entre dalles voisines (quasi invisible)
 	rangsSud = 1,          -- rangées de sable
 	zVolcan = -110,        -- au nord de cette ligne : terre brûlée
 	zSable = 120,          -- au sud de cette ligne : sable
@@ -24,10 +27,14 @@ local DEFAUTS = {
 	largeurAnneau = 4,
 	segmentsAnneau = 16,
 	largeurLien = 5,       -- allées Place -> Comptoir et Place -> Autel
+	lisere = 0.8,          -- bord plus soutenu de chaque côté des allées
 	hauteurMur = 60,
 	epaisseurMur = 4,
 	braises = 18,          -- éclats de braise dans la bande brûlée libre
-	essaisDecor = 5000,
+	essaisDecor = 1500,
+	xPeripherie = 110,     -- touffes seulement au-delà de |x| (entre Bases et jungles)
+	zPeripherieNord = -92, -- ou au nord de cette ligne (autour du Volcan)
+	touffesMax = 60,       -- touffes et fleurs au total (le centre reste dégagé)
 	graine = 2026,
 }
 
@@ -68,11 +75,18 @@ function M.construire(ctx)
 		return c:Lerp(Charte.ombre(c), t)
 	end
 
-	-- teintes des trois zones (damier doux : deux ou trois nuances proches)
+	-- style simulateur : herbe unie vert vif (STYLE.md §3), variation à peine perceptible
+	local herbeVive = Charte.herbe
+	if Charte.hex then
+		herbeVive = Charte.hex("6BD64A")
+	end
+	local VAR = reglage(ctx, "variation")
+
+	-- teintes des trois zones : base + deux nuances presque identiques (pas de damier visible)
 	local teintes = {
-		herbe = { Charte.herbe, douce(Charte.herbe, 0.55), sombre(Charte.herbe, 0.45) },
-		sable = { Charte.sable, douce(Charte.sable, 0.6), sombre(Charte.sable, 0.25) },
-		brule = { Charte.encre:Lerp(Charte.lave, 0.26), Charte.encre:Lerp(Charte.lave, 0.18) },
+		herbe = { herbeVive, douce(herbeVive, VAR), sombre(herbeVive, VAR) },
+		sable = { Charte.sable, douce(Charte.sable, VAR), sombre(Charte.sable, VAR) },
+		brule = { Charte.encre:Lerp(Charte.lave, 0.26), Charte.encre:Lerp(Charte.lave, 0.22) },
 	}
 
 	local monde = Plan.monde
@@ -92,6 +106,7 @@ function M.construire(ctx)
 			Size = Vector3.new(x1 - x0, EP, z1 - z0),
 			CFrame = CFrame.new((x0 + x1) / 2, -EP / 2, (z0 + z1) / 2),
 			Color = couleur,
+			Material = Enum.Material.SmoothPlastic,
 			CanCollide = true,
 			CanQuery = true,
 			CanTouch = true,
@@ -122,14 +137,9 @@ function M.construire(ctx)
 					local za = z0 + (r - 1) * pasZ
 					for c = 1, colonnes do
 						local xa = xMin + (c - 1) * largeurCol
-						-- damier doux : une case sur deux en teinte de base, les autres alternent
-						local teinte
-						if (c + rangGlobal) % 2 == 0 then
-							teinte = palette[1]
-						else
-							local k = 2 + (math.floor((c + 1) / 2) + rangGlobal) % (#palette - 1)
-							teinte = palette[k]
-						end
+						-- teinte quasi unie : on fait tourner les trois nuances proches, sans motif marqué
+						local k = 1 + (c * 2 + rangGlobal) % #palette
+						local teinte = palette[k]
 						dalle(dalles, "Dalle", xa, xa + largeurCol, za, za + pasZ, teinte)
 					end
 				end
@@ -137,7 +147,7 @@ function M.construire(ctx)
 		end
 
 		-- bordure entre le monde et les murs, pour qu'il n'y ait aucun trou
-		local tBrule, tHerbe, tSable = teintes.brule[2], sombre(Charte.herbe, 0.3), teintes.sable[1]
+		local tBrule, tHerbe, tSable = teintes.brule[2], herbeVive, teintes.sable[1]
 		local zA = math.max(zMin, zVolcan)
 		local zB = math.min(zMax, zSable)
 		for _, cote in ipairs({ { -bord, xMin }, { xMax, bord } }) do
@@ -190,15 +200,35 @@ function M.construire(ctx)
 
 	ok, err = pcall(function()
 		local allees = Outils.dossier(dossier, "Allees")
-		local terre = Charte.terre
-		local terreClaire = douce(Charte.terre, 0.35)
+		-- allées sable nettes (STYLE.md §3) : dessus sable franc, liseré un ton plus soutenu dessous
+		local sable = Charte.sable
+		local sableClair = douce(Charte.sable, 0.2)
+		local sableBord = sombre(Charte.sable, 0.28)
+		local LIS = reglage(ctx, "lisere")
+		local EL = EA * 0.7 -- le liseré affleure juste sous le dessus de l'allée
 
 		local function allee(nom, cf, sx, sz, couleur)
+			-- CFrame fourni centré à EA / 2 : on recentre le liseré à EL / 2 dans le même repère
+			local base = cf - Vector3.new(0, EA / 2, 0)
+			if LIS > 0 then
+				part(allees, {
+					Name = "Lisere",
+					Size = Vector3.new(sx + 2 * LIS, EL, sz + 2 * LIS),
+					CFrame = base + Vector3.new(0, EL / 2, 0),
+					Color = sableBord,
+					Material = Enum.Material.SmoothPlastic,
+					CanCollide = false,
+					CanQuery = false,
+					CanTouch = false,
+					CastShadow = false,
+				})
+			end
 			return part(allees, {
 				Name = nom,
 				Size = Vector3.new(sx, EA, sz),
 				CFrame = cf,
-				Color = couleur or terre,
+				Color = couleur or sable,
+				Material = Enum.Material.SmoothPlastic,
 				CanCollide = true,
 				CanQuery = true,
 				CanTouch = true,
@@ -235,7 +265,7 @@ function M.construire(ctx)
 				local a = k * 2 * math.pi / n
 				local x = place.centre.X + r * math.cos(a)
 				local z = place.centre.Z + r * math.sin(a)
-				allee("Anneau", CFrame.new(x, EA / 2, z) * CFrame.Angles(0, -a, 0), la, longueur, terreClaire)
+				allee("Anneau", CFrame.new(x, EA / 2, z) * CFrame.Angles(0, -a, 0), la, longueur, sableClair)
 			end
 
 			-- liens Place -> Comptoir (ouest) et Place -> Autel (est)
@@ -348,7 +378,23 @@ function M.construire(ctx)
 		end
 
 		local couleursFleurs = { Charte.creme, Charte.dore, Charte.violet, Charte.alerte, Charte.gemme }
-		local teintesTouffe = { Charte.jungle, sombre(Charte.herbe, 0.7), douce(Charte.jungle, 0.3) }
+		if ctx.Style and ctx.Style.couleurs and ctx.Style.couleurs.revenu then
+			-- le jaune vif de la charte simulateur, pour des fleurs qui « pètent » sur l'herbe
+			couleursFleurs[2] = ctx.Style.couleurs.revenu
+		end
+		local teintesTouffe = { sombre(herbeVive, 0.35), douce(Charte.jungle, 0.25), sombre(herbeVive, 0.2) }
+
+		-- périphérie seulement : entre les Bases et les jungles, ou autour du Volcan
+		local xPeri = reglage(ctx, "xPeripherie")
+		local zPeriNord = reglage(ctx, "zPeripherieNord")
+		local function peripherie(x, z)
+			return math.abs(x) >= xPeri or z <= zPeriNord
+		end
+		local function libreDecor(x, z)
+			return peripherie(x, z) and libre(x, z)
+		end
+		local touffesMax = reglage(ctx, "touffesMax")
+		local nbTouffes = 0
 
 		local function touffe(x, z)
 			local couleur = teintesTouffe[alea:NextInteger(1, #teintesTouffe)]
@@ -361,30 +407,31 @@ function M.construire(ctx)
 		local function fleur(x, z)
 			local couleur = couleursFleurs[alea:NextInteger(1, #couleursFleurs)]
 			local coeur = Charte.dore
-			if couleur == Charte.dore then
+			if couleur == couleursFleurs[2] then
 				coeur = Charte.creme
 			end
 			petit("Petales", Vector3.new(0.9, 0.2, 0.9), x, z, 45, couleur)
 			petit("Coeur", Vector3.new(0.35, 0.3, 0.35), x, z, 0, coeur)
 		end
 
-		-- bosquets de 2 à 5 éléments autour d'un point libre
+		-- petits bosquets de 2 à 4 éléments autour d'un point libre de la périphérie
 		local maxEssais = reglage(ctx, "essaisDecor")
 		essais = 0
-		while essais < maxEssais and nbParts + 2 <= BUDGET do
+		while essais < maxEssais and nbTouffes < touffesMax and nbParts + 2 <= BUDGET do
 			essais = essais + 1
 			local cx = alea:NextNumber(-144, 144)
 			local cz = alea:NextNumber(zVolcan, zSable)
-			if libre(cx, cz) then
-				local n = alea:NextInteger(2, 5)
+			if libreDecor(cx, cz) then
+				local n = alea:NextInteger(2, 4)
 				local fleurs = alea:NextNumber() < 0.4
 				for _ = 1, n do
-					if nbParts + 2 > BUDGET then
+					if nbParts + 2 > BUDGET or nbTouffes >= touffesMax then
 						break
 					end
 					local x = cx + alea:NextNumber(-3, 3)
 					local z = cz + alea:NextNumber(-3, 3)
-					if libre(x, z) then
+					if libreDecor(x, z) then
+						nbTouffes = nbTouffes + 1
 						if fleurs and alea:NextNumber() < 0.7 then
 							fleur(x, z)
 						else

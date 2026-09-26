@@ -21,13 +21,13 @@ local E = {}
 --   Mythique 0,5 % -> un toutes les ~7 min, Divin 0,1 % -> un toutes les ~37 min,
 --   Secret 0,015 % -> un toutes les ~4 h de serveur (moment mémorable).
 E.raretes = {
-	Commun = { ordre = 1, poids = 64, nom = "Commun" },
-	Rare = { ordre = 2, poids = 25, nom = "Rare" },
-	Epique = { ordre = 3, poids = 8, nom = "Épique" },
-	Legendaire = { ordre = 4, poids = 2.4, nom = "Légendaire" },
-	Mythique = { ordre = 5, poids = 0.5, nom = "Mythique" },
-	Divin = { ordre = 6, poids = 0.1, nom = "Divin" },
-	Secret = { ordre = 7, poids = 0.015, nom = "Secret" },
+	Commun = { ordre = 1, poids = 64, nom = "COMMUN" },
+	Rare = { ordre = 2, poids = 25, nom = "RARE" },
+	Epique = { ordre = 3, poids = 8, nom = "ÉPIQUE" },
+	Legendaire = { ordre = 4, poids = 2.4, nom = "LÉGENDAIRE" },
+	Mythique = { ordre = 5, poids = 0.5, nom = "MYTHIQUE" },
+	Divin = { ordre = 6, poids = 0.1, nom = "DIVIN" },
+	Secret = { ordre = 7, poids = 0.015, nom = "SECRET" },
 }
 
 -- ===== les espèces =====
@@ -139,10 +139,10 @@ E.renaissanceMax = 10
 -- Bottes vers 5 min (~65 $/s), Batte dorée vers 10 min (~400 $/s),
 -- Aimant vers 15 min (~1 k $/s), Radar vers 20 min (~1,7 k $/s) pour chasser le premier Légendaire.
 E.boutique = {
-	Bottes = { prix = 3000, nom = "Bottes de course", description = "+4 de vitesse de marche", vitesse = 4 },
-	BatteOr = { prix = 20000, nom = "Batte dorée", description = "Recul x1,5 et recharge plus courte", recul = 1.5, recharge = 0.8 },
-	Aimant = { prix = 90000, nom = "Aimant à billets", description = "Collecte ta Base à distance toutes les 10 s", intervalle = 10 },
-	Radar = { prix = 250000, nom = "Radar à dinos", description = "Signale les dinos Légendaires et plus rares sur le Tapis", rareteMin = "Legendaire" },
+	Bottes = { prix = 3000, nom = "Bottes Turbo", description = "⚡ +4 de vitesse : file comme un raptor !", vitesse = 4 },
+	BatteOr = { prix = 20000, nom = "Batte dorée", description = "💥 Recul x1,5 et frappe plus vite !", recul = 1.5, recharge = 0.8 },
+	Aimant = { prix = 90000, nom = "Aimant à billets", description = "💸 Ramasse tes $ à distance toutes les 10 s !", intervalle = 10 },
+	Radar = { prix = 250000, nom = "Radar à dinos", description = "📡 Repère les LÉGENDAIRES et mieux sur le Tapis !", rareteMin = "Legendaire" },
 }
 
 -- ===== les événements =====
@@ -155,9 +155,9 @@ E.evenements = {
 	intervalle = 420, -- secondes entre deux débuts d'événement
 	duree = 90,
 	liste = {
-		PluieDeMeteores = { nom = "Pluie de météores", bonusMutation = { Meteore = 5 }, bonusRarete = 1.5 },
-		Eruption = { nom = "Éruption du volcan", bonusMutation = { Lave = 10 }, bonusRarete = 1.3 },
-		LuneDoree = { nom = "Lune dorée", bonusMutation = { Or = 25, Diamant = 5 }, bonusRarete = 1.2 },
+		PluieDeMeteores = { nom = "☄️ PLUIE DE MÉTÉORES", bonusMutation = { Meteore = 5 }, bonusRarete = 1.5 },
+		Eruption = { nom = "🌋 ÉRUPTION DU VOLCAN", bonusMutation = { Lave = 10 }, bonusRarete = 1.3 },
+		LuneDoree = { nom = "🌕 LUNE DORÉE", bonusMutation = { Or = 25, Diamant = 5 }, bonusRarete = 1.2 },
 	},
 }
 

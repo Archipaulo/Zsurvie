@@ -1,5 +1,5 @@
 -- Interface Musique : trois ambiances en boucle (Jungle, Evenement, Vol) avec fondu enchaîné,
--- et un petit bouton « 🎵 » en haut à droite pour couper la musique (attribut local MusiqueCoupee).
+-- et un bouton rond « 🎵 » (style simulateur) en haut à droite pour couper la musique (attribut local MusiqueCoupee).
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 
@@ -128,8 +128,10 @@ function M.demarrer(ctx)
 		end
 	end
 
-	-- bouton « 🎵 » en haut à droite (sous la barre Roblox)
+	-- bouton rond « 🎵 » bleu en haut à droite (sous la barre Roblox), « 🔇 » barré quand coupé
+	local Style = ctx.Style
 	local bouton
+	local libelle
 	local barre
 
 	local function majBouton()
@@ -137,49 +139,74 @@ function M.demarrer(ctx)
 			return
 		end
 		if coupee then
-			bouton.BackgroundColor3 = Charte.pierre
-			bouton.TextTransparency = 0.45
+			if Style then
+				Style.couleurBouton(bouton, "gris")
+			else
+				bouton.BackgroundColor3 = Charte.pierre
+			end
+			if libelle then libelle.Text = "🔇" end
 			if barre then barre.Visible = true end
 		else
-			bouton.BackgroundColor3 = Charte.jungle
-			bouton.TextTransparency = 0
+			if Style then
+				Style.couleurBouton(bouton, "bleu")
+			else
+				bouton.BackgroundColor3 = Charte.jungle
+			end
+			if libelle then libelle.Text = "🎵" end
 			if barre then barre.Visible = false end
 		end
 	end
 
+	local function basculer()
+		joueur:SetAttribute("MusiqueCoupee", not coupee)
+	end
+
 	local ok = pcall(function()
-		bouton = Outils.bouton(ctx.gui, {
-			Name = "BoutonMusique",
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -12, 0, 64),
-			Size = UDim2.new(0, 40, 0, 40),
-			Text = "🎵",
-			BackgroundColor3 = Charte.jungle,
-			TextColor3 = Charte.creme,
-			ZIndex = 5,
-		}, function()
-			joueur:SetAttribute("MusiqueCoupee", not coupee)
-		end)
-		local contour = Instance.new("UIStroke")
-		contour.Color = Charte.encre
-		contour.Thickness = 2
-		contour.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		contour.Parent = bouton
-		-- trait en diagonale quand la musique est coupée
+		if Style then
+			bouton, libelle = Style.bouton(ctx.gui, {
+				Name = "BoutonMusique",
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -12, 0, 64),
+				Size = UDim2.fromOffset(56, 56),
+				couleur = "bleu",
+				icone = "🎵",
+				rayon = 28,
+				tailleMax = 30,
+				ZIndex = 5,
+			}, basculer)
+		else
+			bouton = Outils.bouton(ctx.gui, {
+				Name = "BoutonMusique",
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -12, 0, 64),
+				Size = UDim2.new(0, 56, 0, 56),
+				Text = "🎵",
+				BackgroundColor3 = Charte.jungle,
+				TextColor3 = Charte.creme,
+				ZIndex = 5,
+			}, basculer)
+			libelle = bouton
+		end
+		-- trait rouge en diagonale, cerné de noir, quand la musique est coupée
 		barre = Instance.new("Frame")
 		barre.Name = "Barre"
 		barre.AnchorPoint = Vector2.new(0.5, 0.5)
 		barre.Position = UDim2.new(0.5, 0, 0.5, 0)
-		barre.Size = UDim2.new(0.9, 0, 0, 4)
+		barre.Size = UDim2.new(0.82, 0, 0, 6)
 		barre.Rotation = -45
 		barre.BorderSizePixel = 0
 		barre.BackgroundColor3 = Charte.alerte
-		barre.ZIndex = 6
+		barre.ZIndex = 7
 		barre.Visible = false
+		if Style then
+			Style.coins(barre, 3)
+			Style.bordure(barre, 2)
+		end
 		barre.Parent = bouton
 	end)
 	if not ok then
 		bouton = nil
+		libelle = nil
 		barre = nil
 	end
 	majBouton()

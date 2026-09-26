@@ -1,4 +1,6 @@
 -- Constructeur Place : la grande place du sud où tout le monde apparaît.
+-- Look « simulateur » (STYLE.md) : dallage clair et net, fontaine cartoon, titres flottants géants
+-- (« 🦖 DINO CHAPARDEURS » arc-en-ciel au-dessus de la fontaine, « 📖 DINODEX » bleu sur la borne).
 -- Au centre, l'unique SpawnLocation sur un socle ; dallage circulaire sable et crème ;
 -- au nord, une fontaine gardée par une statue de dino en blocs qui crache de l'eau ;
 -- au bord sud, la borne Dinodex (invite « Index », ouverte côté client) ; bancs et bacs à fleurs.
@@ -57,6 +59,24 @@ function M.construire(ctx)
 	local CX, CZ = CENTRE.X, CENTRE.Z
 	local RAYON = math.min(R.rayon, infoPlace.rayon or R.rayon)
 	local Y_DALLE = R.epaisseurDalle
+	local Style = ctx.Style
+	local hex = Charte.hex
+
+	-- palette « simulateur » : dallage clair et net, pierre presque blanche, eau turquoise vive
+	local TEINTES = {
+		bordure = hex("D9D2C3"),     -- liseré extérieur du dallage
+		clair = hex("FFF8EA"),       -- dalles claires
+		sable = Charte.sable,        -- dalles sable
+		pierre = hex("ECE8F2"),      -- pierre claire des socles et de la fontaine
+		pierreOmbre = hex("C7C0D6"), -- pierre en alternance
+		eau = hex("4FD8FF"),
+		bleu = hex("2F8BFF"),
+		bleuClair = hex("7FD6FF"),
+		dino = hex("3FD65A"),        -- statue vert vif
+		dinoOmbre = hex("22A844"),
+		ventre = hex("C9FF8A"),
+		bois = hex("B8743A"),
+	}
 
 	-- ===== compteur de parts : on s'arrête net au budget =====
 	local nbParts = 0
@@ -114,11 +134,11 @@ function M.construire(ctx)
 	etape("dallage", function()
 		local m = Outils.modele(dossier, "Dallage")
 		-- anneaux concentriques, chacun un souffle plus haut pour éviter le scintillement
-		disque(m, "Bord", CX, CZ, RAYON, Y_DALLE, 0, Charte.sable)
-		disque(m, "AnneauCreme", CX, CZ, RAYON * 0.75, 0.02, Y_DALLE, Charte.creme)
-		disque(m, "AnneauSable", CX, CZ, RAYON * 0.67, 0.02, Y_DALLE + 0.02, Charte.sable)
-		disque(m, "Coeur", CX, CZ, RAYON * 0.36, 0.02, Y_DALLE + 0.04, Charte.creme)
-		-- rayons de dalles crème entre le cœur et l'anneau, comme une rose des vents
+		disque(m, "Bord", CX, CZ, RAYON, Y_DALLE, 0, TEINTES.bordure)
+		disque(m, "AnneauCreme", CX, CZ, RAYON - 0.8, 0.02, Y_DALLE, TEINTES.clair)
+		disque(m, "AnneauSable", CX, CZ, RAYON * 0.67, 0.02, Y_DALLE + 0.02, TEINTES.sable)
+		disque(m, "Coeur", CX, CZ, RAYON * 0.36, 0.02, Y_DALLE + 0.04, TEINTES.clair)
+		-- rayons de dalles claires entre le cœur et l'anneau, comme une rose des vents
 		local rInt, rExt = RAYON * 0.36, RAYON * 0.67
 		local longueur = rExt - rInt
 		for k = 0, 7 do
@@ -126,9 +146,9 @@ function M.construire(ctx)
 			local p = autour((rInt + rExt) / 2, angle)
 			bloc(m, {
 				Name = "Rayon",
-				Size = Vector3.new(longueur, 0.02, 0.8),
+				Size = Vector3.new(longueur, 0.02, 1),
 				CFrame = CFrame.new(p.X, Y_DALLE + 0.05, p.Z) * CFrame.Angles(0, -math.rad(angle), 0),
-				Color = Charte.creme,
+				Color = TEINTES.clair,
 			})
 		end
 	end)
@@ -143,7 +163,7 @@ function M.construire(ctx)
 			Name = "Socle",
 			Size = Vector3.new(t + 1.6, h * 0.6, t + 1.6),
 			CFrame = CFrame.new(CX, Y_DALLE + h * 0.3, CZ),
-			Color = Charte.lumiere(Charte.pierre),
+			Color = TEINTES.pierre,
 		})
 		if reserver() then
 			local sp = Instance.new("SpawnLocation")
@@ -161,7 +181,14 @@ function M.construire(ctx)
 			sp.Enabled = true
 			sp.Parent = m
 			local ok = pcall(function()
-				Outils.texte(sp, "Top", "DINO CHAPARDEURS", { couleur = Charte.encre, pixelsParStud = 30 })
+				local inscription = Outils.texte(sp, "Top", "DINO CHAPARDEURS", {
+					couleur = Color3.new(1, 1, 1),
+					police = Style and Style.policeTitre or Charte.police,
+					pixelsParStud = 30,
+				})
+				if Style and inscription then
+					Style.contour(inscription, 4)
+				end
 			end)
 			if not ok then
 				sp:ClearAllChildren()
@@ -174,13 +201,13 @@ function M.construire(ctx)
 		local m = Outils.modele(dossier, "Fontaine")
 		local fx, fz = CX, CZ - R.reculFontaine
 		local rf = R.rayonFontaine
-		local pierreClaire = Charte.lumiere(Charte.pierre)
+		local pierreClaire = TEINTES.pierre
 
-		-- fond, eau et margelle en 16 segments
-		disque(m, "Fond", fx, fz, rf, 0.3, Y_DALLE, Charte.pierre)
-		local eau = disque(m, "Eau", fx, fz, rf - 0.4, 0.3, Y_DALLE + 0.6, Charte.gemme, {
-			Transparency = 0.35,
-			Reflectance = 0.15,
+		-- fond, eau et margelle en 16 segments (look cartoon : margelle blanche et bleue, eau turquoise)
+		disque(m, "Fond", fx, fz, rf, 0.3, Y_DALLE, TEINTES.bleu)
+		local eau = disque(m, "Eau", fx, fz, rf - 0.4, 0.3, Y_DALLE + 0.6, TEINTES.eau, {
+			Transparency = 0.15,
+			Reflectance = 0.1,
 			CanCollide = false,
 		})
 		local segments = 16
@@ -189,7 +216,7 @@ function M.construire(ctx)
 			local a = k * 2 * math.pi / segments
 			local x = fx + rf * math.cos(a)
 			local z = fz + rf * math.sin(a)
-			local couleur = Charte.pierre
+			local couleur = TEINTES.bleuClair
 			if k % 2 == 0 then
 				couleur = pierreClaire
 			end
@@ -204,15 +231,15 @@ function M.construire(ctx)
 		-- piédestal
 		local hPied = 2.2
 		local rPied = 1.8
-		disque(m, "Piedestal", fx, fz, rPied, hPied, Y_DALLE, Charte.pierre)
+		local piedestal = disque(m, "Piedestal", fx, fz, rPied, hPied, Y_DALLE, TEINTES.pierre)
 		disque(m, "Chapiteau", fx, fz, rPied + 0.3, 0.3, Y_DALLE + hPied - 0.3, Charte.dore)
 		local yStatue = Y_DALLE + hPied
 
 		-- statue : repère tourné vers le sud (le dino regarde l'apparition), reculé d'un stud
 		local S = R.echelleStatue
 		local repere = CFrame.new(fx, yStatue, fz) * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, 0, 1)
-		local vert = Charte.jungle
-		local ventre = Charte.lumiere(Charte.herbe)
+		local vert = TEINTES.dino
+		local ventre = TEINTES.ventre
 		-- (x, y, avant) en unités de statue ; l'avant est -Z local
 		local function morceau(nom, sx, sy, sz, x, y, f, couleur, rotX, forme)
 			local props = {
@@ -234,8 +261,8 @@ function M.construire(ctx)
 		morceau("Ventre", 2.2, 2.2, 0.3, 0, 2.6, 2.05, ventre)
 		morceau("CuisseG", 1.3, 2.6, 2, -1.3, 1.9, -0.3, vert)
 		morceau("CuisseD", 1.3, 2.6, 2, 1.3, 1.9, -0.3, vert)
-		morceau("PiedG", 1.4, 0.6, 2.2, -1.3, 0.3, 0.2, Charte.ombre(vert))
-		morceau("PiedD", 1.4, 0.6, 2.2, 1.3, 0.3, 0.2, Charte.ombre(vert))
+		morceau("PiedG", 1.4, 0.6, 2.2, -1.3, 0.3, 0.2, TEINTES.dinoOmbre)
+		morceau("PiedD", 1.4, 0.6, 2.2, 1.3, 0.3, 0.2, TEINTES.dinoOmbre)
 		morceau("BrasG", 0.5, 0.5, 1.3, -1.3, 3.4, 2.2, vert, -20)
 		morceau("BrasD", 0.5, 0.5, 1.3, 1.3, 3.4, 2.2, vert, -20)
 		morceau("Cou", 1.8, 2, 1.8, 0, 4.6, 1.4, vert)
@@ -249,7 +276,7 @@ function M.construire(ctx)
 		morceau("PupilleG", 0.35, 0.35, 0.35, -1.4, 6.3, 3.1, Charte.encre, 0, "boule")
 		morceau("PupilleD", 0.35, 0.35, 0.35, 1.4, 6.3, 3.1, Charte.encre, 0, "boule")
 		morceau("Queue", 2.2, 2.2, 2.4, 0, 3, -3.1, vert)
-		morceau("QueueBout", 1.4, 1.4, 2.2, 0, 3.3, -5.2, Charte.ombre(vert))
+		morceau("QueueBout", 1.4, 1.4, 2.2, 0, 3.3, -5.2, TEINTES.dinoOmbre)
 		morceau("Pic", 0.4, 1, 1.2, 0, 4.9, -1.5, Charte.dore, 0, "coin")
 		morceau("Pic", 0.4, 1, 1.2, 0, 4.9, -0.2, Charte.dore, 0, "coin")
 		morceau("Pic", 0.4, 0.8, 1, 0, 4.5, -3.1, Charte.dore, 0, "coin")
@@ -265,7 +292,7 @@ function M.construire(ctx)
 				local jet = Instance.new("ParticleEmitter")
 				jet.Name = "Eau"
 				jet.EmissionDirection = Enum.NormalId.Top
-				jet.Color = ColorSequence.new(Charte.gemme, Charte.creme)
+				jet.Color = ColorSequence.new(TEINTES.eau, Charte.creme)
 				jet.Size = NumberSequence.new({
 					NumberSequenceKeypoint.new(0, 0.3),
 					NumberSequenceKeypoint.new(1, 0.55),
@@ -313,6 +340,39 @@ function M.construire(ctx)
 				Outils.lumiere(eau, { Range = 10, Brightness = 0.6, Color = Charte.gemme })
 			end)
 		end
+
+		-- titre flottant géant au-dessus de la fontaine, arc-en-ciel animé, visible de loin
+		if Style then
+			local ancre = bloc(m, {
+				Name = "AncreTitre",
+				Size = Vector3.new(1, 1, 1),
+				CFrame = CFrame.new(fx, yStatue + 9 * S + 3, fz),
+				Transparency = 1,
+				CanCollide = false,
+				CanQuery = false,
+				CanTouch = false,
+			})
+			if not ancre then
+				ancre = piedestal
+			end
+			if ancre then
+				local decalage = Vector3.new(0, 0, 0)
+				if ancre == piedestal then
+					decalage = Vector3.new(0, 9 * S + 3, 0)
+				end
+				Style.etiquette(ancre, {
+					{ texte = "🦖 DINO CHAPARDEURS", titre = true, rarete = "Divin", taille = 1, contour = 4, nom = "Titre" },
+					{ texte = "Chaparde les dinos les plus rares !", couleur = Style.couleurs.revenu, taille = 0.45, contour = 3, nom = "Slogan" },
+				}, {
+					Name = "TitrePlace",
+					largeur = 34,
+					hauteurLigne = 5,
+					StudsOffset = decalage,
+					MaxDistance = 300,
+					AlwaysOnTop = false,
+				})
+			end
+		end
 	end)
 
 	-- ===== 4. borne Dinodex au bord sud =====
@@ -328,14 +388,14 @@ function M.construire(ctx)
 			Name = "Socle",
 			Size = Vector3.new(5.4, 0.6, 3.4),
 			CFrame = ici(0, Y_DALLE + 0.3, 0),
-			Color = Charte.pierre,
+			Color = TEINTES.pierre,
 		})
 		local yBas = Y_DALLE + 0.6
 		local borne = bloc(m, {
 			Name = "Borne",
 			Size = Vector3.new(4, 5.2, 2),
 			CFrame = ici(0, yBas + 2.6, 0.3),
-			Color = Charte.nuit,
+			Color = TEINTES.bleu,
 		})
 		local ecran = bloc(m, {
 			Name = "Ecran",
@@ -352,13 +412,13 @@ function M.construire(ctx)
 			Color = Charte.gemme,
 			Material = Enum.Material.Neon,
 		})
-		bloc(m, { Name = "Liseret", Size = Vector3.new(0.25, 5.2, 0.25), CFrame = ici(-2.05, yBas + 2.6, -0.65), Color = Charte.violet })
-		bloc(m, { Name = "Liseret", Size = Vector3.new(0.25, 5.2, 0.25), CFrame = ici(2.05, yBas + 2.6, -0.65), Color = Charte.violet })
+		bloc(m, { Name = "Liseret", Size = Vector3.new(0.25, 5.2, 0.25), CFrame = ici(-2.05, yBas + 2.6, -0.65), Color = TEINTES.clair })
+		bloc(m, { Name = "Liseret", Size = Vector3.new(0.25, 5.2, 0.25), CFrame = ici(2.05, yBas + 2.6, -0.65), Color = TEINTES.clair })
 		bloc(m, {
 			Name = "Toit",
 			Size = Vector3.new(4.6, 0.5, 2.6),
 			CFrame = ici(0, yBas + 5.45, 0.3),
-			Color = Charte.violet,
+			Color = TEINTES.bleuClair,
 		})
 		disque(m, "Nid", bx, bz + 0.3, 0.9, 0.4, yBas + 5.7, Charte.bois)
 		local oeuf = boule(m, {
@@ -382,6 +442,37 @@ function M.construire(ctx)
 			Outils.invite(borne, { nom = "Index", action = "Ouvrir", objet = "Dinodex", distance = R.distanceInvite })
 		end
 
+		local nbEspeces = 0
+		local especes = ctx.Equilibrage and ctx.Equilibrage.especes
+		if type(especes) == "table" then
+			for _ in pairs(especes) do
+				nbEspeces = nbEspeces + 1
+			end
+		end
+		local texteEspeces = "Toutes les espèces à découvrir"
+		if nbEspeces > 0 then
+			texteEspeces = nbEspeces .. " espèces à découvrir"
+		end
+
+		-- titre flottant « 📖 DINODEX » bleu cerné de noir au-dessus de la borne (et de l'œuf)
+		if Style and borne then
+			local bleu = Style.boutons.bleu
+			local _, lignes = Style.etiquette(borne, {
+				{ texte = "📖 DINODEX", titre = true, couleur = Color3.new(1, 1, 1), taille = 1, contour = 4, nom = "Titre" },
+				{ texte = texteEspeces, taille = 0.5, contour = 3, nom = "SousTitre" },
+			}, {
+				Name = "TitreDinodex",
+				largeur = 14,
+				hauteurLigne = 2.4,
+				StudsOffset = Vector3.new(0, 8.2, 0),
+				MaxDistance = 160,
+				AlwaysOnTop = false,
+			})
+			if lignes and lignes[1] then
+				Style.degrade(lignes[1], bleu[1], bleu[2])
+			end
+		end
+
 		-- écran : titre, bandeau des raretés, nombre d'espèces
 		if ecran then
 			local ok, err = pcall(function()
@@ -399,17 +490,33 @@ function M.construire(ctx)
 				fond.BackgroundColor3 = Charte.encre
 				fond.BorderSizePixel = 0
 				fond.Parent = gui
+				if Style then
+					fond.BackgroundColor3 = Style.couleurs.fond
+				end
 
-				local titre = Instance.new("TextLabel")
-				titre.Name = "Titre"
-				titre.BackgroundTransparency = 1
-				titre.Position = UDim2.fromScale(0.05, 0.06)
-				titre.Size = UDim2.fromScale(0.9, 0.4)
-				titre.Font = Charte.police
-				titre.Text = "DINODEX"
-				titre.TextScaled = true
-				titre.TextColor3 = Charte.dore
-				titre.Parent = fond
+				local titre
+				if Style then
+					titre = Style.texte(fond, {
+						Name = "Titre",
+						Position = UDim2.fromScale(0.05, 0.06),
+						Size = UDim2.fromScale(0.9, 0.4),
+						Text = "📖 DINODEX",
+						titre = true,
+						contour = 4,
+					})
+					Style.degrade(titre, Style.boutons.bleu[1], Style.boutons.bleu[2])
+				else
+					titre = Instance.new("TextLabel")
+					titre.Name = "Titre"
+					titre.BackgroundTransparency = 1
+					titre.Position = UDim2.fromScale(0.05, 0.06)
+					titre.Size = UDim2.fromScale(0.9, 0.4)
+					titre.Font = Charte.police
+					titre.Text = "DINODEX"
+					titre.TextScaled = true
+					titre.TextColor3 = Charte.dore
+					titre.Parent = fond
+				end
 
 				-- bandeau : une case par rareté, dans l'ordre
 				local cles = {}
@@ -432,32 +539,38 @@ function M.construire(ctx)
 					case.Name = "Rarete" .. e.cle
 					case.BorderSizePixel = 0
 					case.BackgroundColor3 = Charte.raretes[e.cle]
-					case.Position = UDim2.fromScale(0.08 + (i - 1) * (0.84 / n), 0.5)
-					case.Size = UDim2.fromScale(0.84 / n - 0.015, 0.1)
+					case.Position = UDim2.fromScale(0.08 + (i - 1) * (0.84 / n), 0.49)
+					case.Size = UDim2.fromScale(0.84 / n - 0.02, 0.13)
 					case.Parent = fond
-				end
-
-				local nbEspeces = 0
-				local especes = ctx.Equilibrage and ctx.Equilibrage.especes
-				if type(especes) == "table" then
-					for _ in pairs(especes) do
-						nbEspeces = nbEspeces + 1
+					if Style then
+						-- case blanche teintée par le dégradé de rareté, arrondie et cernée
+						case.BackgroundColor3 = Color3.new(1, 1, 1)
+						Style.degradeRarete(case, e.cle)
+						Style.coins(case, 6)
+						Style.bordure(case, 2)
 					end
 				end
-				local sous = Instance.new("TextLabel")
-				sous.Name = "SousTitre"
-				sous.BackgroundTransparency = 1
-				sous.Position = UDim2.fromScale(0.05, 0.66)
-				sous.Size = UDim2.fromScale(0.9, 0.26)
-				sous.Font = Charte.policeTexte
-				if nbEspeces > 0 then
-					sous.Text = nbEspeces .. " espèces à découvrir"
+
+				if Style then
+					Style.texte(fond, {
+						Name = "SousTitre",
+						Position = UDim2.fromScale(0.05, 0.68),
+						Size = UDim2.fromScale(0.9, 0.24),
+						Text = texteEspeces,
+						contour = 3,
+					})
 				else
-					sous.Text = "Toutes les espèces à découvrir"
+					local sous = Instance.new("TextLabel")
+					sous.Name = "SousTitre"
+					sous.BackgroundTransparency = 1
+					sous.Position = UDim2.fromScale(0.05, 0.66)
+					sous.Size = UDim2.fromScale(0.9, 0.26)
+					sous.Font = Charte.policeTexte
+					sous.Text = texteEspeces
+					sous.TextScaled = true
+					sous.TextColor3 = Charte.creme
+					sous.Parent = fond
 				end
-				sous.TextScaled = true
-				sous.TextColor3 = Charte.creme
-				sous.Parent = fond
 			end)
 			if not ok then
 				warn("[Dino] Place / écran Dinodex : " .. tostring(err))
@@ -471,10 +584,10 @@ function M.construire(ctx)
 		local fontaine = Vector3.new(CX, 0, CZ - R.reculFontaine)
 		local function banc(pos, cible)
 			local repere = CFrame.lookAt(Vector3.new(pos.X, Y_DALLE, pos.Z), Vector3.new(cible.X, Y_DALLE, cible.Z))
-			bloc(m, { Name = "Assise", Size = Vector3.new(5, 0.4, 1.6), CFrame = repere * CFrame.new(0, 1.3, 0), Color = Charte.bois })
-			bloc(m, { Name = "Dossier", Size = Vector3.new(5, 1.4, 0.3), CFrame = repere * CFrame.new(0, 2.2, 0.75), Color = Charte.bois })
-			bloc(m, { Name = "Pied", Size = Vector3.new(0.5, 1.1, 1.4), CFrame = repere * CFrame.new(-2, 0.55, 0), Color = Charte.pierre })
-			bloc(m, { Name = "Pied", Size = Vector3.new(0.5, 1.1, 1.4), CFrame = repere * CFrame.new(2, 0.55, 0), Color = Charte.pierre })
+			bloc(m, { Name = "Assise", Size = Vector3.new(5, 0.4, 1.6), CFrame = repere * CFrame.new(0, 1.3, 0), Color = TEINTES.bois })
+			bloc(m, { Name = "Dossier", Size = Vector3.new(5, 1.4, 0.3), CFrame = repere * CFrame.new(0, 2.2, 0.75), Color = TEINTES.bois })
+			bloc(m, { Name = "Pied", Size = Vector3.new(0.5, 1.1, 1.4), CFrame = repere * CFrame.new(-2, 0.55, 0), Color = TEINTES.pierreOmbre })
+			bloc(m, { Name = "Pied", Size = Vector3.new(0.5, 1.1, 1.4), CFrame = repere * CFrame.new(2, 0.55, 0), Color = TEINTES.pierreOmbre })
 		end
 		banc(autour(R.rayonBancs, 45), CENTRE)
 		banc(autour(R.rayonBancs, 135), CENTRE)
@@ -491,7 +604,7 @@ function M.construire(ctx)
 		local function bac(angle)
 			local p = autour(R.rayonFleurs, angle)
 			local repere = CFrame.new(p.X, Y_DALLE, p.Z) * CFrame.Angles(0, -math.rad(angle), 0)
-			bloc(m, { Name = "Bac", Size = Vector3.new(2.4, 1, 2.4), CFrame = repere * CFrame.new(0, 0.5, 0), Color = Charte.bois })
+			bloc(m, { Name = "Bac", Size = Vector3.new(2.4, 1, 2.4), CFrame = repere * CFrame.new(0, 0.5, 0), Color = TEINTES.bois })
 			bloc(m, { Name = "Terreau", Size = Vector3.new(2, 0.1, 2), CFrame = repere * CFrame.new(0, 1.02, 0), Color = Charte.terre })
 			local places = { { -0.55, -0.5 }, { 0.55, -0.4 }, { 0, 0.55 } }
 			for _, d in ipairs(places) do

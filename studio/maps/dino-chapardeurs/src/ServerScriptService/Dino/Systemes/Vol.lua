@@ -105,6 +105,90 @@ function M.demarrer(ctx)
 		return porte ~= nil and porte ~= ""
 	end
 
+	-- ===== habillage « style simulateur » (STYLE.md) =====
+	local Style = ctx.Style
+	local ROUGE = (Style and Style.boutons and Style.boutons.rouge)
+		or { Color3.fromRGB(255, 122, 122), Color3.fromRGB(209, 32, 58) }
+	local LIGNE_VOLE = 1.3 -- hauteur (studs) de la ligne « VOLÉ ! » ajoutée à l'étiquette du dino
+
+	-- étiquette géante rouge « 🦖 VOLEUR ! » au-dessus de la tête du voleur, visible de tous
+	local function poserMarqueVoleur(v)
+		if not Style then return end
+		local perso = v.personnage
+		local tete = perso and (perso:FindFirstChild("Head") or perso:FindFirstChild("HumanoidRootPart"))
+		if not tete then return end
+		local ancienne = tete:FindFirstChild("Voleur")
+		if ancienne and ancienne:IsA("BillboardGui") then ancienne:Destroy() end
+		local gui, textes = Style.etiquette(tete, {
+			{ nom = "Texte", texte = "🦖 VOLEUR !", titre = true, contour = 4, couleur = Style.couleurs.texte },
+		}, {
+			Name = "Voleur",
+			largeur = 8,
+			hauteurLigne = 1.8,
+			StudsOffset = Vector3.new(0, 2.5, 0),
+			MaxDistance = 150,
+			AlwaysOnTop = true,
+		})
+		if textes and textes[1] then
+			Style.degrade(textes[1], ROUGE[1], ROUGE[2])
+		end
+		v.marque = gui
+	end
+
+	-- ligne rouge « VOLÉ ! » en tête de l'étiquette du dino porté
+	local function marquerEtiquetteDino(v)
+		if not Style or not vivant(v.dino) then return end
+		local gui = v.dino:FindFirstChild("Etiquette", true)
+		if not gui or not gui:IsA("BillboardGui") or gui:FindFirstChild("Vole") then return end
+		local hauteur = gui.Size.Y.Scale
+		if hauteur <= 0 then return end
+		local nouvelle = hauteur + LIGNE_VOLE
+		local facteur = hauteur / nouvelle
+		local sauvegarde = { gui = gui, taille = gui.Size, decalage = gui.StudsOffset, tailles = {} }
+		for _, enfant in ipairs(gui:GetChildren()) do
+			if enfant:IsA("GuiObject") then
+				local s = enfant.Size
+				sauvegarde.tailles[enfant] = s
+				enfant.Size = UDim2.new(s.X.Scale, s.X.Offset, s.Y.Scale * facteur, s.Y.Offset)
+			end
+		end
+		gui.Size = UDim2.new(gui.Size.X.Scale, gui.Size.X.Offset, nouvelle, gui.Size.Y.Offset)
+		-- l'étiquette grandit vers le haut : le bas reste à sa place
+		gui.StudsOffset = gui.StudsOffset + Vector3.new(0, LIGNE_VOLE / 2, 0)
+		local ligne = Style.texte(gui, {
+			Name = "Vole",
+			LayoutOrder = 0,
+			Size = UDim2.new(1, 0, LIGNE_VOLE / nouvelle, 0),
+			Text = "VOLÉ !",
+			titre = true,
+			contour = 4,
+		})
+		Style.degrade(ligne, ROUGE[1], ROUGE[2])
+		v.etiquetteDino = sauvegarde
+	end
+
+	-- retire tout l'habillage du vol (toujours appelé à la fin d'un vol)
+	local function retirerHabillage(v)
+		if v.marque then
+			local marque = v.marque
+			v.marque = nil
+			pcall(function() marque:Destroy() end)
+		end
+		local s = v.etiquetteDino
+		if s then
+			v.etiquetteDino = nil
+			pcall(function()
+				local ligne = s.gui:FindFirstChild("Vole")
+				if ligne then ligne:Destroy() end
+				for enfant, taille in pairs(s.tailles) do
+					if enfant.Parent == s.gui then enfant.Size = taille end
+				end
+				s.gui.Size = s.taille
+				s.gui.StudsOffset = s.decalage
+			end)
+		end
+	end
+
 	-- rétablit la vitesse et l'attribut Porte du voleur (toujours appelé à la fin d'un vol)
 	local function retablirVoleur(v)
 		if v.humanoid and v.humanoid.Parent then
@@ -121,6 +205,7 @@ function M.demarrer(ctx)
 		v.fini = true
 		vols[v.dino] = nil
 		retablirVoleur(v)
+		pcall(retirerHabillage, v)
 		return true
 	end
 
@@ -299,6 +384,8 @@ function M.demarrer(ctx)
 		voleur:SetAttribute("Porte", tostring(dino:GetAttribute("Id") or ""))
 		humanoid.WalkSpeed = VITESSE_VOLEUR
 		retirerInvites(dino)
+		pcall(poserMarqueVoleur, v)
+		pcall(marquerEtiquetteDino, v)
 
 		Bus.emettre("VolDebut", dino, voleur, victime)
 		notifier(victime, nomJoueur(voleur) .. " vole ton " .. v.nom .. " !", "vol")

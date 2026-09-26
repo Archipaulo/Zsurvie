@@ -1,5 +1,6 @@
--- Interface Vol : guide du voleur (bandeau, faisceau vers sa base, vignette pulsante)
--- et alerte de la victime (écran rouge « ON TE VOLE ! », son, surbrillance du voleur).
+-- Interface Vol : guide du voleur (ruban rouge qui pulse, faisceau vers sa base, bords dorés)
+-- et alerte de la victime (texte géant « ON TE VOLE ! » qui tremble, bords rouges, son, surbrillance du voleur).
+-- Look « simulateur Roblox » : tout passe par ctx.Style (voir STYLE.md).
 -- Tout est local à ce client : aucune part, seulement des Attachments, un Beam et des Highlights.
 
 local Players = game:GetService("Players")
@@ -8,12 +9,13 @@ local RunService = game:GetService("RunService")
 local M = {}
 
 local PERIODE = 0.25      -- rafraîchissement du suivi (faisceau, voleurs)
-local DUREE_ALERTE = 2    -- durée de l'alerte plein écran
+local DUREE_ALERTE = 2    -- durée de l'alerte (le texte tremble pendant tout ce temps)
 local ANTI_DOUBLON = 1.5  -- deux signaux d'un même vol à moins de 1,5 s = une seule alerte
+local HAUT_RUBAN = 198    -- sous l'argent, le bandeau d'événement (10..84) et la barre de verrou (144..190)
+local HAUTEUR_RUBAN = 64  -- la pile de notifications du HUD commence à 270
 
 function M.demarrer(ctx)
-	local Charte = ctx.Charte
-	local Outils = ctx.Outils
+	local Style = ctx.Style
 	local Bus = ctx.Bus
 	local Reseau = ctx.Reseau
 	local joueur = ctx.joueur
@@ -24,10 +26,12 @@ function M.demarrer(ctx)
 	local reglesVol = (ctx.Equilibrage and ctx.Equilibrage.vol) or {}
 	local DELAI_MAX = tonumber(reglesVol.delaiMax) or 60
 
-	local DORE = Charte.dore or Color3.new(1, 0.8, 0.2)
-	local ROUGE = Charte.alerte or Color3.new(1, 0.2, 0.4)
-	local CREME = Charte.creme or Color3.new(1, 1, 1)
-	local ENCRE = Charte.encre or Color3.new(0.1, 0.1, 0.2)
+	local BLANC = Style.couleurs.texte
+	local JAUNE = Style.couleurs.revenu
+	local ROUGE_VIF = Style.boutons.rouge[2]
+	local ROUGE_CLAIR = Style.boutons.rouge[1]
+	local OR_HAUT = Style.boutons.jaune[1]
+	local OR_BAS = Style.boutons.jaune[2]
 
 	-- ===== écran : conteneur propre au module =====
 	local ecran = Instance.new("Frame")
@@ -38,113 +42,155 @@ function M.demarrer(ctx)
 	ecran.ZIndex = 20
 	ecran.Parent = gui
 
-	-- vignette : quatre bords en dégradé qui pulsent
-	local vignette = Instance.new("Frame")
-	vignette.Name = "Vignette"
-	vignette.Size = UDim2.fromScale(1, 1)
-	vignette.BackgroundTransparency = 1
-	vignette.Visible = false
-	vignette.ZIndex = 20
-	vignette.Parent = ecran
-
-	local bords = {}
-	local function bord(nom, taille, position, rotation)
-		local f = Instance.new("Frame")
-		f.Name = nom
-		f.AnchorPoint = Vector2.new(0.5, 0.5)
-		f.Size = taille
-		f.Position = position
-		f.BackgroundColor3 = DORE
-		f.BackgroundTransparency = 0
-		f.BorderSizePixel = 0
-		f.ZIndex = 20
-		local degrade = Instance.new("UIGradient")
-		degrade.Rotation = rotation
-		degrade.Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0.35),
-			NumberSequenceKeypoint.new(1, 1),
-		})
-		degrade.Parent = f
-		f.Parent = vignette
-		table.insert(bords, f)
-		return f
+	-- bords d'écran : quatre dégradés qui s'estompent vers le centre
+	local function creerBords(parent, nom, couleur, epaisseur)
+		local cadre = Instance.new("Frame")
+		cadre.Name = nom
+		cadre.Size = UDim2.fromScale(1, 1)
+		cadre.BackgroundTransparency = 1
+		cadre.Visible = false
+		cadre.ZIndex = 20
+		cadre.Parent = parent
+		local liste = {}
+		local function bord(n, taille, position, rotation)
+			local f = Instance.new("Frame")
+			f.Name = n
+			f.AnchorPoint = Vector2.new(0.5, 0.5)
+			f.Size = taille
+			f.Position = position
+			f.BackgroundColor3 = couleur
+			f.BackgroundTransparency = 0
+			f.BorderSizePixel = 0
+			f.ZIndex = 20
+			local degrade = Instance.new("UIGradient")
+			degrade.Rotation = rotation
+			degrade.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0),
+				NumberSequenceKeypoint.new(0.35, 0.45),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			degrade.Parent = f
+			f.Parent = cadre
+			table.insert(liste, f)
+		end
+		bord("Haut", UDim2.fromScale(1, epaisseur), UDim2.fromScale(0.5, epaisseur / 2), 90)
+		bord("Bas", UDim2.fromScale(1, epaisseur), UDim2.fromScale(0.5, 1 - epaisseur / 2), 270)
+		bord("Gauche", UDim2.fromScale(epaisseur * 0.75, 1), UDim2.fromScale(epaisseur * 0.375, 0.5), 0)
+		bord("Droite", UDim2.fromScale(epaisseur * 0.75, 1), UDim2.fromScale(1 - epaisseur * 0.375, 0.5), 180)
+		return cadre, liste
 	end
-	bord("Haut", UDim2.fromScale(1, 0.18), UDim2.fromScale(0.5, 0.09), 90)
-	bord("Bas", UDim2.fromScale(1, 0.18), UDim2.fromScale(0.5, 0.91), 270)
-	bord("Gauche", UDim2.fromScale(0.14, 1), UDim2.fromScale(0.07, 0.5), 0)
-	bord("Droite", UDim2.fromScale(0.14, 1), UDim2.fromScale(0.93, 0.5), 180)
 
-	-- bandeau « Rapporte-le dans ta base ! »
-	local bandeau = Outils.cadre(ecran, {
-		Name = "Bandeau",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 198), -- sous l'argent, le bandeau d'événement et la barre de verrou
-		Size = UDim2.new(0.5, 0, 0, 64),
-		BackgroundColor3 = ENCRE,
-		BackgroundTransparency = 0.1,
-		Visible = false,
-		ZIndex = 21,
-	})
+	-- bords dorés pendant qu'on porte un dino
+	local vignette, bords = creerBords(ecran, "Vignette", OR_HAUT, 0.14)
+
+	-- ===== ruban « 🦖 RAPPORTE-LE CHEZ TOI ! » en haut au centre =====
+	local bandeau = Instance.new("Frame")
+	bandeau.Name = "Bandeau"
+	bandeau.AnchorPoint = Vector2.new(0.5, 0)
+	bandeau.Position = UDim2.new(0.5, 0, 0, HAUT_RUBAN)
+	bandeau.Size = UDim2.new(0.5, 0, 0, HAUTEUR_RUBAN)
+	bandeau.BackgroundTransparency = 1
+	bandeau.BorderSizePixel = 0
+	bandeau.Visible = false
+	bandeau.ZIndex = 21
+	bandeau.Parent = ecran
 	local contrainte = Instance.new("UISizeConstraint")
-	contrainte.MinSize = Vector2.new(280, 56)
-	contrainte.MaxSize = Vector2.new(620, 80)
+	contrainte.MinSize = Vector2.new(290, HAUTEUR_RUBAN)
+	contrainte.MaxSize = Vector2.new(560, HAUTEUR_RUBAN)
 	contrainte.Parent = bandeau
-	local contour = Instance.new("UIStroke")
-	contour.Color = DORE
-	contour.Thickness = 3
-	contour.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	contour.Parent = bandeau
-	local titreBandeau = Outils.etiquette(bandeau, {
+
+	-- le ruban lui-même (le « pop » d'apparition est sur le conteneur, la pulsation sur le ruban)
+	local ruban = Instance.new("Frame")
+	ruban.Name = "Ruban"
+	ruban.Size = UDim2.fromScale(1, 1)
+	ruban.BackgroundColor3 = Color3.new(1, 1, 1)
+	ruban.BorderSizePixel = 0
+	ruban.ZIndex = 21
+	ruban.Parent = bandeau
+	Style.coins(ruban, 18)
+	local contour = Style.bordure(ruban, 4)
+	Style.degrade(ruban, ROUGE_CLAIR, ROUGE_VIF)
+	local pulsation = Instance.new("UIScale")
+	pulsation.Name = "Pulsation"
+	pulsation.Parent = ruban
+
+	local titreBandeau = Style.texte(ruban, {
 		Name = "Titre",
-		Position = UDim2.fromScale(0.04, 0.06),
-		Size = UDim2.fromScale(0.92, 0.58),
-		Text = "Rapporte-le dans ta base !",
-		TextColor3 = DORE,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 3),
+		Size = UDim2.new(1, -20, 0, 36),
+		Text = "🦖 RAPPORTE-LE CHEZ TOI !",
+		titre = true,
+		contour = 3.5,
+		tailleMax = 34,
 		ZIndex = 22,
 	})
-	local infoBandeau = Outils.etiquette(bandeau, {
+	local infoBandeau = Style.texte(ruban, {
 		Name = "Info",
-		Position = UDim2.fromScale(0.04, 0.64),
-		Size = UDim2.fromScale(0.92, 0.3),
-		Font = Charte.policeTexte or Enum.Font.GothamBold,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -3),
+		Size = UDim2.new(1, -20, 0, 22),
 		Text = "",
-		TextColor3 = CREME,
+		TextColor3 = JAUNE,
+		contour = 2.5,
+		tailleMax = 22,
 		ZIndex = 22,
 	})
 
-	-- alerte plein écran de la victime
+	-- ===== alerte de la victime =====
 	local alerte = Instance.new("Frame")
 	alerte.Name = "Alerte"
 	alerte.Size = UDim2.fromScale(1, 1)
-	alerte.BackgroundColor3 = ROUGE
-	alerte.BackgroundTransparency = 0.45
+	alerte.BackgroundColor3 = ROUGE_VIF
+	alerte.BackgroundTransparency = 1
 	alerte.BorderSizePixel = 0
 	alerte.Visible = false
 	alerte.ZIndex = 30
 	alerte.Parent = ecran
-	local texteAlerte = Outils.etiquette(alerte, {
+
+	-- bords rouges (dans l'alerte : ils disparaissent avec elle)
+	local bordsRouges, listeRouges = creerBords(alerte, "BordsRouges", ROUGE_VIF, 0.2)
+	bordsRouges.Visible = true
+
+	-- bloc central : texte géant qui tremble + nom du voleur
+	local blocAlerte = Instance.new("Frame")
+	blocAlerte.Name = "Bloc"
+	blocAlerte.AnchorPoint = Vector2.new(0.5, 0.5)
+	blocAlerte.Position = UDim2.fromScale(0.5, 0.6) -- sous les notifications du HUD (milieu-haut)
+	blocAlerte.Size = UDim2.fromScale(0.9, 0.3)
+	blocAlerte.BackgroundTransparency = 1
+	blocAlerte.ZIndex = 31
+	blocAlerte.Parent = alerte
+	local contrainteAlerte = Instance.new("UISizeConstraint")
+	contrainteAlerte.MinSize = Vector2.new(280, 110)
+	contrainteAlerte.MaxSize = Vector2.new(1000, 240)
+	contrainteAlerte.Parent = blocAlerte
+
+	local texteAlerte = Style.texte(blocAlerte, {
 		Name = "Texte",
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.42),
-		Size = UDim2.fromScale(0.8, 0.16),
+		Position = UDim2.fromScale(0.5, 0.36),
+		Size = UDim2.fromScale(1, 0.7),
 		Text = "ON TE VOLE !",
-		TextColor3 = CREME,
-		ZIndex = 31,
+		TextColor3 = ROUGE_VIF,
+		titre = true,
+		contour = 5,
+		tailleMax = 120,
+		ZIndex = 32,
 	})
-	local contourTexte = Instance.new("UIStroke")
-	contourTexte.Color = ENCRE
-	contourTexte.Thickness = 4
-	contourTexte.Parent = texteAlerte
-	local sousAlerte = Outils.etiquette(alerte, {
+	local contourTexte = texteAlerte:FindFirstChild("Contour")
+	local sousAlerte = Style.texte(blocAlerte, {
 		Name = "Voleur",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.54),
-		Size = UDim2.fromScale(0.6, 0.06),
-		Font = Charte.policeTexte or Enum.Font.GothamBold,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.fromScale(0.5, 1),
+		Size = UDim2.fromScale(0.8, 0.26),
 		Text = "",
-		TextColor3 = CREME,
-		ZIndex = 31,
+		TextColor3 = BLANC,
+		contour = 3,
+		tailleMax = 38,
+		ZIndex = 32,
 	})
+	local contourSous = sousAlerte:FindFirstChild("Contour")
 
 	-- ===== outils communs =====
 	local function horloge()
@@ -193,6 +239,7 @@ function M.demarrer(ctx)
 	local faisceau = nil
 	local debutPort = 0
 	local porte = false
+	local especePortee = nil
 
 	local function nettoyerGuide()
 		detruire(faisceau)
@@ -227,14 +274,14 @@ function M.demarrer(ctx)
 		if not valide(faisceau) then
 			faisceau = Instance.new("Beam")
 			faisceau.Name = "VolGuide"
-			faisceau.Color = ColorSequence.new(DORE, Charte.lumiere and Charte.lumiere(DORE) or DORE)
+			faisceau.Color = ColorSequence.new(OR_HAUT, OR_BAS)
 			faisceau.Transparency = NumberSequence.new({
-				NumberSequenceKeypoint.new(0, 0.1),
-				NumberSequenceKeypoint.new(0.8, 0.3),
-				NumberSequenceKeypoint.new(1, 0.7),
+				NumberSequenceKeypoint.new(0, 0.05),
+				NumberSequenceKeypoint.new(0.8, 0.25),
+				NumberSequenceKeypoint.new(1, 0.6),
 			})
-			faisceau.Width0 = 1.4
-			faisceau.Width1 = 0.6
+			faisceau.Width0 = 1.6
+			faisceau.Width1 = 0.7
 			faisceau.FaceCamera = true
 			faisceau.LightEmission = 1
 			faisceau.LightInfluence = 0
@@ -255,19 +302,18 @@ function M.demarrer(ctx)
 		if maintenant and not porte then
 			porte = true
 			debutPort = horloge()
-			local espece = nomEspece(valeur)
-			if espece then
-				titreBandeau.Text = "Rapporte le " .. espece .. " dans ta base !"
-			else
-				titreBandeau.Text = "Rapporte-le dans ta base !"
-			end
+			especePortee = nomEspece(valeur)
+			infoBandeau.Text = ""
 			bandeau.Visible = true
 			vignette.Visible = true
+			Style.pop(bandeau, 1.15)
 			assurerGuide()
 		elseif not maintenant and porte then
 			porte = false
+			especePortee = nil
 			bandeau.Visible = false
 			vignette.Visible = false
+			pulsation.Scale = 1
 			nettoyerGuide()
 		end
 	end
@@ -299,6 +345,7 @@ function M.demarrer(ctx)
 			sousAlerte.Text = "Défends ta base !"
 		end
 		alerte.Visible = true
+		Style.pop(blocAlerte, 1.25)
 		Bus.emettre("Son", "alerte")
 	end
 
@@ -317,9 +364,9 @@ function M.demarrer(ctx)
 		detruire(existant)
 		local h = Instance.new("Highlight")
 		h.Name = "VolVoleur"
-		h.FillColor = ROUGE
-		h.OutlineColor = CREME
-		h.FillTransparency = 0.45
+		h.FillColor = ROUGE_VIF
+		h.OutlineColor = BLANC
+		h.FillTransparency = 0.4
 		h.OutlineTransparency = 0
 		h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 		h.Adornee = perso
@@ -422,30 +469,42 @@ function M.demarrer(ctx)
 	end)
 	majPort()
 
-	-- ===== animations : pulsation de la vignette et fondu de l'alerte =====
+	-- ===== animations : pulsation du ruban, tremblement de l'alerte =====
 	RunService.Heartbeat:Connect(function()
 		local t = horloge()
 		if porte then
-			local pulse = 0.5 + 0.5 * math.sin(t * 5)
+			local pulse = 0.5 + 0.5 * math.sin(t * 6)
+			pulsation.Scale = 1 + 0.05 * pulse
 			for _, f in ipairs(bords) do
-				f.BackgroundTransparency = 0.15 + 0.45 * pulse
+				f.BackgroundTransparency = 0.35 + 0.4 * pulse
 			end
-			contour.Transparency = 0.5 * pulse
+			contour.Transparency = 0
 		end
 		if alerte.Visible then
 			local reste = finAlerte - t
 			if reste <= 0 then
 				alerte.Visible = false
+				texteAlerte.Position = UDim2.fromScale(0.5, 0.36)
+				texteAlerte.Rotation = 0
 			else
-				local clignote = 0.5 + 0.5 * math.sin(t * 14)
+				local clignote = 0.5 + 0.5 * math.sin(t * 16)
 				local fondu = 1
-				if reste < 0.5 then fondu = reste / 0.5 end
-				alerte.BackgroundTransparency = 1 - (0.25 + 0.2 * clignote) * fondu
+				if reste < 0.4 then fondu = reste / 0.4 end
+				-- voile rouge léger + bords rouges qui clignotent
+				alerte.BackgroundTransparency = 1 - (0.08 + 0.1 * clignote) * fondu
+				for _, f in ipairs(listeRouges) do
+					f.BackgroundTransparency = 1 - (0.55 + 0.45 * clignote) * fondu
+				end
+				-- tremblement du texte géant
+				local force = 7 * fondu
+				local dx = (math.random() * 2 - 1) * force
+				local dy = (math.random() * 2 - 1) * force
+				texteAlerte.Position = UDim2.new(0.5, dx, 0.36, dy)
+				texteAlerte.Rotation = (math.random() * 2 - 1) * 4 * fondu
 				texteAlerte.TextTransparency = 1 - fondu
 				sousAlerte.TextTransparency = 1 - fondu
-				contourTexte.Transparency = 1 - fondu
-				local echelle = 1 + 0.06 * clignote
-				texteAlerte.Size = UDim2.fromScale(0.8 * echelle, 0.16 * echelle)
+				if contourTexte then contourTexte.Transparency = 1 - fondu end
+				if contourSous then contourSous.Transparency = 1 - fondu end
 			end
 		end
 	end)
@@ -456,17 +515,19 @@ function M.demarrer(ctx)
 			if porte then
 				local hrp, cible = assurerGuide()
 				local reste = math.max(0, math.ceil(DELAI_MAX - (horloge() - debutPort)))
+				local prefixe = ""
+				if especePortee then prefixe = string.upper(especePortee) .. " · " end
 				if hrp and cible then
 					local d = (cible.Position - hrp.Position)
 					local distance = math.floor(Vector3.new(d.X, 0, d.Z).Magnitude + 0.5)
-					infoBandeau.Text = "Suis la lumière dorée : " .. distance .. " m - " .. reste .. " s"
+					infoBandeau.Text = prefixe .. "Suis la lumière : " .. distance .. " m · ⏱ " .. reste .. " s"
 				else
-					infoBandeau.Text = "Encore " .. reste .. " s avant qu'il ne s'échappe"
+					infoBandeau.Text = prefixe .. "⏱ " .. reste .. " s avant qu'il ne s'échappe !"
 				end
 				if reste <= 10 then
-					infoBandeau.TextColor3 = ROUGE
+					infoBandeau.TextColor3 = BLANC
 				else
-					infoBandeau.TextColor3 = CREME
+					infoBandeau.TextColor3 = JAUNE
 				end
 			end
 			majVoleurs()

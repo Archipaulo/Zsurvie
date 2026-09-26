@@ -27,6 +27,7 @@ function M.demarrer(ctx)
 	local Plan = ctx.Plan
 	local Charte = ctx.Charte
 	local Reseau = ctx.Reseau
+	local Style = ctx.Style
 
 	local MAX = 10
 	if estFini(E.renaissanceMax) and E.renaissanceMax >= 0 then
@@ -44,12 +45,19 @@ function M.demarrer(ctx)
 		return typeof(joueur) == "Instance" and joueur:IsA("Player") and joueur.Parent == Players
 	end
 
+	-- montant au format du jeu : « $450K » (Style.argent, sinon Charte.argent)
 	local function montant(n)
-		local ok, texte = pcall(Charte.argent, n)
-		if ok and type(texte) == "string" then
-			return texte
+		local formateur = Charte and Charte.argent
+		if Style and type(Style.argent) == "function" then
+			formateur = Style.argent
 		end
-		return tostring(math.floor(n))
+		if type(formateur) == "function" then
+			local ok, texte = pcall(formateur, n)
+			if ok and type(texte) == "string" then
+				return texte
+			end
+		end
+		return "$" .. tostring(math.floor(n))
 	end
 
 	local function notifier(joueur, texte, genre)
@@ -103,26 +111,26 @@ function M.demarrer(ctx)
 
 	local function effectuer(joueur)
 		if joueur:GetAttribute("DonneesChargees") ~= true then
-			notifier(joueur, "Tes données chargent encore, réessaie dans un instant.", "alerte")
+			notifier(joueur, "⏳ Chargement… réessaie !", "alerte")
 			return
 		end
 		local niveau = niveauDe(joueur)
 		if niveau >= MAX then
-			notifier(joueur, "Tu as atteint la renaissance maximale (" .. MAX .. ") !", "info")
+			notifier(joueur, "👑 RENAISSANCE MAX (" .. MAX .. ") !", "info")
 			return
 		end
 		if porteUnDino(joueur) then
-			notifier(joueur, "Pose d'abord le dino que tu portes !", "alerte")
+			notifier(joueur, "🦖 Pose d'abord ton dino !", "alerte")
 			return
 		end
 		local cout = coutDe(niveau)
 		if not cout then
-			notifier(joueur, "Renaissance indisponible pour le moment.", "alerte")
+			notifier(joueur, "❌ Renaissance indisponible !", "alerte")
 			return
 		end
 		local argent = argentDe(joueur)
 		if argent < cout then
-			notifier(joueur, "Il te manque " .. montant(cout - argent) .. " $ pour renaître.", "alerte")
+			notifier(joueur, "💸 Il te manque " .. montant(cout - argent) .. " !", "alerte")
 			return
 		end
 
@@ -133,13 +141,13 @@ function M.demarrer(ctx)
 			joueur:SetAttribute("Argent", ARGENT_DEPART)
 		end)
 		if not ok then
-			notifier(joueur, "La renaissance a échoué, réessaie.", "alerte")
+			notifier(joueur, "❌ Renaissance ratée, réessaie !", "alerte")
 			return
 		end
 
 		Bus.emettre("Renaissance", joueur, nouveau)
 
-		local texte = "Renaissance " .. nouveau .. " ! Revenus x" .. formaterMultiplicateur(multiplicateurDe(nouveau))
+		local texte = "♻️ RENAISSANCE " .. nouveau .. " ! Revenus x" .. formaterMultiplicateur(multiplicateurDe(nouveau)) .. " 🔥"
 		notifier(joueur, texte, "succes")
 
 		local position = Vector3.new(0, 0, 0)
@@ -174,7 +182,7 @@ function M.demarrer(ctx)
 		local ok = pcall(effectuer, joueur)
 		enCours[joueur] = nil
 		if not ok then
-			notifier(joueur, "La renaissance a échoué, réessaie.", "alerte")
+			notifier(joueur, "❌ Renaissance ratée, réessaie !", "alerte")
 		end
 	end)
 

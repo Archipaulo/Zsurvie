@@ -6,7 +6,18 @@ un contrat commun ([`CONTRAT.md`](CONTRAT.md)). Tout le monde est construit par
 script au lancement : aucun modèle à importer.
 
 ![Le Tapis et les bases](captures/tapis-et-bases.png)
-![Vue d'ensemble](captures/vue-ensemble.png)
+![Interface avant / après le restylage](captures/avant-apres-interface.png)
+
+## 🎨 Style « simulateur Roblox »
+
+Le jeu a le look des grands simulateurs Roblox du genre « Steal a … » (textes
+blancs cernés de noir, gros boutons cartoon en dégradé, étiquettes géantes
+au-dessus des dinos et des bases, argent vert, revenus jaunes, raretés en
+dégradé — arc-en-ciel animé pour les Divins). La direction artistique est dans
+[`STYLE.md`](STYLE.md) et la boîte à outils partagée dans
+`ReplicatedStorage/Dino/Style.lua`. Pour voir l'interface sans Roblox :
+**`Apercu-Interface.html`** (HUD, boutique, Dinodex, renaissance, alerte de vol,
+redessinés d'après ce que les scripts créent réellement).
 
 ## ▶️ Jouer dans Roblox Studio
 
@@ -67,7 +78,7 @@ boutique, vente, événement, panneaux, renaissance, départ et sauvegarde —
 cd outils/banc && npm install && node banc.js
 ```
 
-`node outils/rbxlx.js` régénère la place ; `node outils/apercu.js` régénère
+`node outils/rbxlx.js` régénère la place ; `node outils/apercu-interface.js` régénère l'aperçu de l'interface ; `node outils/apercu.js` régénère
 **`Apercu-3D.html`** (le monde tel que les scripts l'ont construit, visible
 dans un navigateur, hors ligne).
 

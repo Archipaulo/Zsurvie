@@ -1,6 +1,8 @@
 -- Constructeur DinosHerbivores : gabarits des espèces de la famille « Herbivore »,
 -- rangés dans ServerStorage.Dino.Dinos (clonés ensuite par Systemes/Tapis).
--- Style jouet en blocs, regard vers -Z local, pivot au sol sous le dino.
+-- Style « chibi » de simulateur Roblox : grosse tête ronde, très gros yeux brillants
+-- (blanc + pupille noire + reflet), couleurs saturées, formes arrondies, pattes courtes.
+-- Regard vers -Z local, pivot au sol sous le dino.
 local M = {}
 
 local BUDGET = 30 -- parts maximum par gabarit
@@ -10,7 +12,27 @@ local V = Vector3.new
 local function nouvelOutil(ctx, modele, s)
 	local Outils = ctx.Outils
 	local Charte = ctx.Charte
+	local Style = ctx.Style
+	local hex = Charte.hex
 	local g = { n = 0, s = s, modele = modele }
+
+	-- teintes communes du style chibi
+	g.blanc = hex("FFFFFF")
+	g.noir = (Style and Style.couleurs and Style.couleurs.contour) or Charte.encre
+	g.rose = hex("FF8FB1")
+	g.hex = hex
+
+	-- couleur d'accent d'une rareté, prise dans les dégradés de Style (bas du dégradé = plus saturé)
+	function g.accent(rarete, clair)
+		local def = Style and Style.raretes and Style.raretes[rarete]
+		if def and def[1] and def[2] then
+			if clair then
+				return def[1]
+			end
+			return def[2]
+		end
+		return Charte.raretes[rarete] or Charte.violet
+	end
 
 	-- forme : "bloc", "coin", "boule" ou "cyl" ; t et pos à l'échelle 1 ; rot en degrés
 	function g.p(forme, nom, t, pos, couleur, rot, neon)
@@ -49,17 +71,12 @@ local function nouvelOutil(ctx, modele, s)
 		return nil
 	end
 
-	-- une paire de gros yeux sur les côtés de la tête (x = demi-écart)
-	function g.yeux(x, y, z, r)
-		local cotes = { { "G", -1 }, { "D", 1 } }
-		for _, c in ipairs(cotes) do
-			local sens = c[2]
-			g.p("boule", "Oeil" .. c[1], V(r, r, r), V(sens * x, y, z), Charte.creme)
-			g.p("boule", "Pupille" .. c[1], V(r * 0.55, r * 0.55, r * 0.55), V(sens * (x + r * 0.28), y + r * 0.06, z - r * 0.22), Charte.encre)
-		end
+	-- boule de diamètre d
+	function g.boule(nom, d, pos, couleur, neon)
+		return g.p("boule", nom, V(d, d, d), pos, couleur, nil, neon)
 	end
 
-	-- une paire symétrique (G à -X, D à +X) ; rotZ inversée côté droit
+	-- une paire symétrique (G à -X, D à +X) ; rotY et rotZ inversées côté droit
 	function g.paire(forme, nom, t, pos, couleur, rot, neon)
 		local rotG, rotD = rot, rot
 		if rot then
@@ -68,6 +85,28 @@ local function nouvelOutil(ctx, modele, s)
 		end
 		g.p(forme, nom .. "G", t, V(-pos.X, pos.Y, pos.Z), couleur, rotG, neon)
 		g.p(forme, nom .. "D", t, V(pos.X, pos.Y, pos.Z), couleur, rotD, neon)
+	end
+
+	-- paire de pattes cylindriques verticales posées au sol (h = hauteur, d = épaisseur)
+	function g.pattes(nom, h, d, x, z, couleur)
+		g.paire("cyl", nom, V(h, d, d), V(x, h / 2, z), couleur, V(0, 0, 90))
+	end
+
+	-- très gros yeux chibi sur l'avant de la tête : blanc, grosse pupille noire, reflet brillant
+	-- (x = demi-écart, z = centre du blanc, d = diamètre du blanc)
+	function g.yeux(x, y, z, d)
+		local cotes = { { "G", -1 }, { "D", 1 } }
+		for _, c in ipairs(cotes) do
+			local sens = c[2]
+			g.boule("Oeil" .. c[1], d, V(sens * x, y, z), g.blanc)
+			g.boule("Pupille" .. c[1], d * 0.62, V(sens * (x + d * 0.04), y - d * 0.04, z - d * 0.28), g.noir)
+			g.boule("Reflet" .. c[1], d * 0.24, V(sens * (x - d * 0.08), y + d * 0.18, z - d * 0.5), g.blanc, true)
+		end
+	end
+
+	-- petites joues roses
+	function g.joues(x, y, z, d)
+		g.paire("boule", "Joue", V(d, d, d), V(x, y, z), g.rose)
 	end
 
 	-- lumière douce attachée au corps (raretés hautes)
@@ -85,242 +124,250 @@ end
 
 -- ===== les espèces =====
 -- chaque fonction construit le dino à l'échelle 1 (le sol est à Y = 0) et renvoie la part « Corps »
+-- les yeux sont posés juste après la tête pour ne jamais sortir du budget de parts
 local ESPECES = {}
 
--- Galli : petit coureur bipède, long cou, bec
+-- Galli : petit coureur bipède jaune-orangé, crête rouge, bec
 ESPECES.Galli = function(g, C)
-	local base = C.sable
-	local dos = C.terre
+	local base = g.hex("FFB23F")
 	local ombre = C.ombre(base)
-	local corps = g.p("bloc", "Corps", V(1.6, 1.4, 2.2), V(0, 2.6, 0.1), base)
-	g.p("bloc", "Dos", V(1.2, 0.3, 1.8), V(0, 3.4, 0.2), dos)
-	g.p("bloc", "Ventre", V(1.3, 0.3, 1.6), V(0, 1.85, 0.1), C.creme)
-	g.p("bloc", "Cou", V(0.6, 1.8, 0.6), V(0, 3.9, -1.0), C.lumiere(base), V(-25, 0, 0))
-	g.p("bloc", "Tete", V(0.9, 0.8, 1.1), V(0, 4.9, -1.55), base)
-	g.p("coin", "Bec", V(0.7, 0.4, 0.8), V(0, 4.7, -2.45), C.ombre(dos))
-	g.p("bloc", "Crete", V(0.2, 0.4, 0.8), V(0, 5.45, -1.5), C.herbe)
-	g.p("coin", "Queue", V(0.9, 1.0, 2.4), V(0, 2.8, 2.4), base, V(0, 180, 0))
-	g.p("coin", "QueueBout", V(0.5, 0.5, 1.2), V(0, 2.9, 4.1), dos, V(0, 180, 0))
-	g.paire("bloc", "PatteAr", V(0.45, 2.0, 0.5), V(0.5, 1.0, 0.4), ombre)
-	g.paire("bloc", "Pied", V(0.6, 0.25, 0.9), V(0.5, 0.125, 0.2), dos)
-	g.paire("bloc", "PatteAv", V(0.25, 0.7, 0.25), V(0.8, 2.3, -0.9), base, V(30, 0, 0))
-	g.yeux(0.45, 5.0, -1.7, 0.5)
+	local rouge = g.hex("FF4F5E")
+	local corps = g.boule("Corps", 2.0, V(0, 2.2, 0.2), base)
+	g.boule("Ventre", 1.5, V(0, 2.0, -0.35), C.creme)
+	g.p("cyl", "Cou", V(1.0, 0.7, 0.7), V(0, 3.2, -0.5), base, V(0, 0, 90))
+	g.boule("Tete", 2.2, V(0, 4.3, -0.8), base)
+	g.yeux(0.5, 4.5, -1.62, 0.85)
+	g.p("coin", "Bec", V(0.8, 0.45, 0.8), V(0, 4.0, -2.0), g.hex("FF8A1F"))
+	g.boule("Crete1", 0.6, V(0, 5.4, -1.0), rouge)
+	g.boule("Crete2", 0.5, V(0, 5.35, -0.45), rouge)
+	g.p("coin", "Queue", V(0.9, 0.9, 1.8), V(0, 2.3, 1.6), base, V(0, 180, 0))
+	g.boule("QueueBout", 0.55, V(0, 2.25, 2.4), rouge)
+	g.pattes("PatteAr", 1.4, 0.55, 0.5, 0.3, ombre)
+	g.paire("boule", "Pied", V(0.7, 0.7, 0.7), V(0.5, 0.25, -0.05), g.hex("FF8A1F"))
+	g.paire("boule", "PatteAv", V(0.45, 0.45, 0.45), V(0.85, 2.4, -0.7), base)
+	g.joues(0.8, 4.0, -1.5, 0.35)
 	return corps
 end
 
--- Pachy : bipède trapu au gros dôme
+-- Pachy : bipède trapu bleu ciel au gros dôme crème
 ESPECES.Pachy = function(g, C)
-	local base = C.terre
+	local base = g.hex("5BC0FF")
 	local ombre = C.ombre(base)
-	local corps = g.p("bloc", "Corps", V(2.0, 1.8, 2.4), V(0, 2.5, 0.2), base)
-	g.p("bloc", "Ventre", V(1.6, 0.4, 2.0), V(0, 1.65, 0.1), C.sable)
-	g.p("bloc", "Tete", V(1.4, 1.2, 1.4), V(0, 3.6, -1.4), base)
-	g.p("boule", "Dome", V(1.6, 1.6, 1.6), V(0, 4.35, -1.35), C.lumiere(C.sable))
-	g.paire("boule", "Bosse", V(0.45, 0.45, 0.45), V(0.75, 4.0, -0.8), C.violet)
-	g.p("boule", "BosseHaut", V(0.45, 0.45, 0.45), V(0, 4.3, -0.5), C.violet)
-	g.p("bloc", "Museau", V(1.0, 0.7, 0.6), V(0, 3.3, -2.2), C.lumiere(base))
-	g.p("bloc", "Rayure1", V(1.2, 0.2, 0.6), V(0, 3.45, 0.0), C.ombre(C.violet))
-	g.p("bloc", "Rayure2", V(1.2, 0.2, 0.6), V(0, 3.45, 1.0), C.ombre(C.violet))
-	g.p("coin", "Queue", V(1.2, 1.2, 2.6), V(0, 2.7, 2.6), base, V(0, 180, 0))
-	g.p("coin", "QueueBout", V(0.6, 0.6, 1.4), V(0, 2.8, 4.5), ombre, V(0, 180, 0))
-	g.paire("bloc", "PatteAr", V(0.7, 1.8, 0.8), V(0.6, 0.9, 0.5), ombre)
-	g.paire("bloc", "Pied", V(0.9, 0.3, 1.1), V(0.6, 0.15, 0.3), C.ombre(ombre))
-	g.paire("bloc", "PatteAv", V(0.3, 0.8, 0.3), V(1.0, 2.3, -0.9), base, V(30, 0, 0))
-	g.yeux(0.65, 3.75, -1.9, 0.55)
+	local bosse = g.hex("B15CFF")
+	local corps = g.boule("Corps", 2.6, V(0, 2.5, 0.3), base)
+	g.boule("Ventre", 2.0, V(0, 2.3, -0.25), C.creme)
+	g.boule("Tete", 2.4, V(0, 4.3, -0.6), base)
+	g.yeux(0.55, 4.55, -1.5, 0.85)
+	g.boule("Dome", 2.0, V(0, 5.15, -0.5), g.hex("FFD166"))
+	g.paire("boule", "Bosse", V(0.5, 0.5, 0.5), V(0.95, 5.0, -0.4), bosse)
+	g.boule("BosseHaut", 0.5, V(0, 5.95, 0.2), bosse)
+	g.boule("Museau", 1.2, V(0, 3.8, -1.65), C.lumiere(base))
+	g.p("coin", "Queue", V(1.0, 1.0, 1.8), V(0, 2.4, 1.8), base, V(0, 180, 0))
+	g.boule("QueueBout", 0.6, V(0, 2.3, 2.7), ombre)
+	g.pattes("PatteAr", 1.3, 0.8, 0.65, 0.4, ombre)
+	g.paire("boule", "Pied", V(0.9, 0.9, 0.9), V(0.65, 0.3, 0.0), ombre)
+	g.paire("boule", "PatteAv", V(0.55, 0.55, 0.55), V(1.15, 2.6, -0.7), base)
+	g.joues(0.85, 4.0, -1.35, 0.4)
 	return corps
 end
 
--- Tricera : collerette, trois cornes, bec
+-- Tricera : quadrupède vert vif, grande collerette orange, trois cornes
 ESPECES.Tricera = function(g, C)
-	local base = C.herbe
+	local base = g.hex("6BD64A")
 	local ombre = C.ombre(base)
-	local corps = g.p("bloc", "Corps", V(2.6, 2.0, 3.6), V(0, 2.4, 0.4), base)
-	g.p("bloc", "Ventre", V(2.2, 0.4, 3.0), V(0, 1.35, 0.4), C.sable)
-	g.p("bloc", "Dos", V(2.0, 0.4, 2.8), V(0, 3.55, 0.5), C.jungle)
-	g.p("bloc", "Tete", V(1.8, 1.5, 1.6), V(0, 2.6, -2.1), base)
-	g.p("coin", "Bec", V(1.2, 0.8, 0.8), V(0, 2.2, -3.3), C.ombre(C.sable))
-	g.p("bloc", "Collerette", V(3.4, 2.6, 0.4), V(0, 3.4, -1.3), C.jungle, V(20, 0, 0))
-	g.p("bloc", "Bordure", V(3.8, 3.0, 0.3), V(0, 3.45, -1.1), C.sable, V(20, 0, 0))
-	g.paire("bloc", "Corne", V(0.3, 0.3, 1.6), V(0.5, 3.4, -2.8), C.creme, V(35, 0, 0))
-	g.p("bloc", "CorneNez", V(0.3, 0.3, 0.7), V(0, 2.95, -3.05), C.creme, V(40, 0, 0))
-	g.paire("bloc", "PatteAv", V(0.8, 1.5, 0.8), V(0.8, 0.75, -0.8), ombre)
-	g.paire("bloc", "PatteAr", V(0.8, 1.5, 0.8), V(0.8, 0.75, 1.6), ombre)
-	g.p("coin", "Queue", V(1.2, 1.2, 2.4), V(0, 2.5, 3.4), base, V(0, 180, 0))
-	g.yeux(0.85, 3.0, -2.4, 0.55)
+	local corps = g.boule("Corps", 3.0, V(0, 2.4, 0.6), base)
+	g.boule("Arriere", 2.6, V(0, 2.3, 1.6), base)
+	g.boule("Tete", 2.8, V(0, 3.0, -1.3), base)
+	g.yeux(0.6, 3.35, -2.35, 0.95)
+	g.p("cyl", "Collerette", V(0.35, 4.2, 4.2), V(0, 3.6, -0.4), g.hex("FF8C42"), V(0, 90, 0))
+	g.p("cyl", "Bordure", V(0.3, 4.7, 4.7), V(0, 3.6, -0.25), g.hex("FFE14D"), V(0, 90, 0))
+	g.paire("bloc", "Corne", V(0.35, 0.35, 1.5), V(0.6, 4.0, -2.2), C.creme, V(35, 0, 0))
+	g.boule("Museau", 1.3, V(0, 2.5, -2.3), C.lumiere(base))
+	g.p("bloc", "CorneNez", V(0.35, 0.35, 0.7), V(0, 3.1, -2.75), C.creme, V(40, 0, 0))
+	g.p("coin", "Queue", V(0.9, 0.9, 1.6), V(0, 2.3, 3.2), base, V(0, 180, 0))
+	g.paire("boule", "Tache", V(0.8, 0.8, 0.8), V(0.9, 3.3, 1.0), C.jungle)
+	g.pattes("PatteAv", 1.2, 0.95, 0.9, -0.4, ombre)
+	g.pattes("PatteAr", 1.2, 0.95, 0.9, 1.9, ombre)
+	g.joues(0.85, 2.7, -2.4, 0.4)
 	return corps
 end
 
--- Stego : rangée de plaques et queue à piques
+-- Stego : quadrupède turquoise, rangée de plaques orange et jaunes, queue à piques
 ESPECES.Stego = function(g, C)
-	local base = C.jungle
+	local base = g.hex("2EC4B6")
 	local ombre = C.ombre(base)
-	local corps = g.p("bloc", "Corps", V(2.4, 2.2, 4.0), V(0, 2.8, 0.3), base)
-	g.p("bloc", "Ventre", V(2.0, 0.4, 3.4), V(0, 1.65, 0.3), C.sable)
-	g.p("bloc", "Cou", V(1.2, 1.1, 1.0), V(0, 2.3, -1.9), ombre)
-	g.p("bloc", "Tete", V(1.2, 1.0, 1.4), V(0, 2.0, -2.7), base)
-	local plaques = { { -1.2, 1.0 }, { -0.3, 1.5 }, { 0.6, 1.7 }, { 1.5, 1.4 }, { 2.4, 1.0 } }
+	local corps = g.boule("Corps", 3.2, V(0, 2.6, 0.6), base)
+	g.boule("Arriere", 2.8, V(0, 2.6, 1.8), base)
+	g.boule("Tete", 2.6, V(0, 2.8, -1.7), base)
+	g.yeux(0.6, 3.05, -2.7, 0.9)
+	local plaques = { { 0.0, 1.1, 4.3 }, { 0.8, 1.4, 4.5 }, { 1.6, 1.3, 4.4 }, { 2.4, 1.0, 4.1 }, { 3.1, 0.7, 3.6 } }
 	for i, pl in ipairs(plaques) do
-		local couleur = C.lave
+		local couleur = g.hex("FF8C42")
 		if i % 2 == 0 then
-			couleur = C.dore
+			couleur = g.hex("FFE14D")
 		end
-		g.p("bloc", "Plaque" .. i, V(0.25, pl[2], pl[2]), V(0, 3.9 + pl[2] * 0.25, pl[1]), couleur, V(45, 0, 0))
+		g.p("bloc", "Plaque" .. i, V(0.3, pl[2], pl[2]), V(0, pl[3], pl[1]), couleur, V(45, 0, 0))
 	end
-	g.p("coin", "Queue", V(1.2, 1.2, 3.0), V(0, 2.8, 3.8), base, V(0, 180, 0))
-	g.paire("bloc", "Pique", V(1.2, 0.2, 0.2), V(0.8, 3.0, 4.3), C.creme, V(0, 0, -25))
-	g.paire("bloc", "PiqueBout", V(1.0, 0.2, 0.2), V(0.6, 2.9, 5.0), C.creme, V(0, 0, -25))
-	g.paire("bloc", "PatteAv", V(0.8, 1.6, 0.8), V(0.8, 0.8, -0.9), ombre)
-	g.paire("bloc", "PatteAr", V(0.9, 2.0, 1.0), V(0.8, 1.0, 1.5), ombre)
-	g.yeux(0.55, 2.3, -2.9, 0.5)
+	g.p("coin", "Queue", V(1.0, 1.0, 2.0), V(0, 2.5, 3.6), base, V(0, 180, 0))
+	g.paire("bloc", "Pique", V(1.0, 0.25, 0.25), V(0.6, 2.7, 4.2), C.creme, V(0, 0, -25))
+	g.pattes("PatteAv", 1.3, 1.0, 0.95, -0.2, ombre)
+	g.pattes("PatteAr", 1.3, 1.0, 0.95, 2.0, ombre)
+	g.joues(0.85, 2.5, -2.55, 0.4)
 	return corps
 end
 
--- Parasaure : longue crête tubulaire vers l'arrière
+-- Parasaure : bipède bleu roi, bec de canard, longue crête tubulaire rose
 ESPECES.Parasaure = function(g, C)
-	local base = C.gemme:Lerp(C.jungle, 0.4)
+	local base = g.hex("4D96FF")
 	local ombre = C.ombre(base)
-	local corps = g.p("bloc", "Corps", V(2.2, 2.0, 3.2), V(0, 2.8, 0.3), base)
-	g.p("bloc", "Ventre", V(1.8, 0.4, 2.6), V(0, 1.75, 0.3), C.creme)
-	g.p("bloc", "Cou", V(0.9, 1.6, 0.9), V(0, 3.9, -1.3), base, V(-25, 0, 0))
-	g.p("bloc", "Tete", V(1.0, 1.0, 1.6), V(0, 4.7, -1.9), base)
-	g.p("coin", "Bec", V(0.9, 0.5, 0.8), V(0, 4.45, -3.0), C.sable)
-	g.p("bloc", "Crete", V(0.4, 0.45, 2.6), V(0, 5.6, -0.9), C.violet, V(-30, 0, 0))
-	g.p("boule", "CreteBout", V(0.55, 0.55, 0.55), V(0, 6.2, 0.2), C.lumiere(C.violet))
-	for i = 1, 3 do
-		g.p("bloc", "Rayure" .. i, V(2.25, 0.3, 0.4), V(0, 3.7, -0.4 + (i - 1) * 0.8), C.ombre(C.violet))
-	end
-	g.p("coin", "Queue", V(1.2, 1.4, 3.0), V(0, 2.9, 3.3), base, V(0, 180, 0))
-	g.paire("bloc", "PatteAr", V(0.8, 2.0, 0.9), V(0.7, 1.0, 0.8), ombre)
-	g.paire("bloc", "PatteAv", V(0.5, 1.4, 0.5), V(0.7, 0.7, -0.9), ombre)
-	g.yeux(0.5, 4.85, -2.2, 0.5)
+	local rose = g.hex("FF5CA8")
+	local corps = g.boule("Corps", 2.8, V(0, 2.6, 0.4), base)
+	g.boule("Ventre", 2.0, V(0, 2.4, -0.3), C.creme)
+	g.boule("Tete", 2.4, V(0, 4.4, -0.9), base)
+	g.yeux(0.55, 4.6, -1.8, 0.85)
+	g.boule("Bec", 1.1, V(0, 3.9, -1.9), g.hex("FFD166"))
+	g.p("bloc", "Crete", V(0.5, 0.5, 2.6), V(0, 5.8, 0.2), rose, V(-30, 0, 0))
+	g.boule("CreteBout", 0.7, V(0, 6.45, 1.33), C.lumiere(rose))
+	g.paire("boule", "Tache", V(0.7, 0.7, 0.7), V(1.1, 3.2, 0.8), ombre)
+	g.p("coin", "Queue", V(1.0, 1.1, 2.0), V(0, 2.5, 2.2), base, V(0, 180, 0))
+	g.boule("QueueBout", 0.6, V(0, 2.3, 3.1), rose)
+	g.pattes("PatteAr", 1.3, 0.8, 0.7, 0.6, ombre)
+	g.paire("boule", "Pied", V(0.9, 0.9, 0.9), V(0.7, 0.3, 0.25), ombre)
+	g.paire("boule", "PatteAv", V(0.55, 0.55, 0.55), V(1.2, 2.5, -0.6), base)
+	g.joues(0.85, 4.1, -1.65, 0.4)
 	return corps
 end
 
--- Ankylo : large carapace, piques latérales, queue massue
+-- Ankylo : quadrupède orange, carapace ronde à bosses violettes, piques, queue massue
 ESPECES.Ankylo = function(g, C)
-	local base = C.pierre
+	local base = g.hex("F4A259")
 	local ombre = C.ombre(base)
-	local epique = C.raretes.Epique or C.violet
-	local corps = g.p("bloc", "Corps", V(3.2, 1.6, 4.0), V(0, 2.0, 0.3), base)
-	g.p("bloc", "Carapace", V(3.6, 0.6, 3.6), V(0, 3.0, 0.3), C.terre)
-	g.p("bloc", "Ventre", V(2.8, 0.3, 3.4), V(0, 1.15, 0.3), C.sable)
-	g.p("bloc", "Tete", V(1.6, 1.1, 1.3), V(0, 1.9, -2.2), C.lumiere(base))
-	g.paire("bloc", "Corne", V(0.35, 0.35, 0.9), V(0.8, 2.35, -1.9), C.creme, V(0, 45, 0))
-	g.paire("bloc", "PiqueAv", V(1.0, 0.3, 0.3), V(2.0, 2.6, -0.6), C.lumiere(C.sable), V(0, 0, -20))
-	g.paire("bloc", "PiqueAr", V(1.0, 0.3, 0.3), V(2.0, 2.6, 1.2), C.lumiere(C.sable), V(0, 0, -20))
-	g.paire("boule", "Bosse", V(0.7, 0.7, 0.7), V(0.9, 3.35, 0.3), C.ombre(C.sable))
-	g.p("boule", "BosseAv", V(0.7, 0.7, 0.7), V(0, 3.35, -0.8), C.ombre(C.sable))
-	g.p("bloc", "Queue", V(0.9, 0.8, 3.0), V(0, 2.1, 3.6), base)
-	g.p("boule", "Massue", V(1.3, 1.3, 1.3), V(0, 2.1, 5.4), C.ombre(C.terre))
-	g.paire("boule", "MassueCote", V(0.9, 0.9, 0.9), V(0.7, 2.1, 5.4), epique)
-	g.paire("bloc", "PatteAv", V(0.9, 1.3, 0.9), V(1.1, 0.65, -0.9), ombre)
-	g.paire("bloc", "PatteAr", V(0.9, 1.3, 0.9), V(1.1, 0.65, 1.5), ombre)
-	g.yeux(0.8, 2.2, -2.6, 0.5)
+	local epique = g.accent("Epique")
+	local corps = g.boule("Corps", 3.4, V(0, 2.4, 0.6), base)
+	g.boule("Carapace", 3.6, V(0, 2.9, 0.7), g.hex("A0522D"))
+	g.boule("Tete", 2.6, V(0, 2.5, -1.6), C.lumiere(base))
+	g.yeux(0.6, 2.75, -2.6, 0.9)
+	g.boule("BosseHaut", 0.7, V(0, 4.6, 0.2), epique)
+	g.paire("boule", "Bosse", V(0.7, 0.7, 0.7), V(1.2, 4.2, 0.9), epique)
+	g.paire("bloc", "PiqueAv", V(0.9, 0.35, 0.35), V(1.9, 2.6, -0.1), C.creme, V(0, 0, -20))
+	g.paire("bloc", "PiqueAr", V(0.9, 0.35, 0.35), V(1.9, 2.6, 1.4), C.creme, V(0, 0, -20))
+	g.paire("bloc", "Corne", V(0.35, 0.35, 0.8), V(0.9, 3.4, -1.4), C.creme, V(0, 45, 0))
+	g.p("bloc", "Queue", V(0.8, 0.7, 2.2), V(0, 2.0, 3.2), base)
+	g.boule("Massue", 1.4, V(0, 2.0, 4.4), g.hex("A0522D"))
+	g.paire("boule", "MassueCote", V(0.8, 0.8, 0.8), V(0.6, 2.0, 4.4), epique)
+	g.pattes("PatteAv", 1.2, 1.0, 1.1, -0.4, ombre)
+	g.pattes("PatteAr", 1.2, 1.0, 1.1, 1.8, ombre)
+	g.joues(0.85, 2.3, -2.55, 0.4)
 	return corps
 end
 
--- Iguano : crête dorsale et pouces-piques dorés
+-- Iguano : bipède vert émeraude, crête violette, pouces dorés
 ESPECES.Iguano = function(g, C)
-	local base = C.gemme:Lerp(C.nuit, 0.35)
+	local base = g.hex("3CCB7F")
 	local ombre = C.ombre(base)
-	local epique = C.raretes.Epique or C.violet
-	local corps = g.p("bloc", "Corps", V(2.4, 2.4, 3.4), V(0, 3.2, 0.3), base)
-	g.p("bloc", "Ventre", V(2.0, 0.4, 2.8), V(0, 1.95, 0.2), C.sable)
-	g.p("bloc", "Cou", V(1.1, 1.4, 1.1), V(0, 4.3, -1.5), base, V(-30, 0, 0))
-	g.p("bloc", "Tete", V(1.2, 1.1, 1.9), V(0, 4.9, -2.3), base)
-	g.p("bloc", "Museau", V(1.0, 0.7, 0.6), V(0, 4.7, -3.45), C.lumiere(base))
-	g.p("coin", "Crete1", V(0.3, 0.6, 1.0), V(0, 4.7, -0.6), epique)
-	g.p("coin", "Crete2", V(0.3, 0.7, 1.0), V(0, 4.75, 0.5), epique)
-	g.p("coin", "Crete3", V(0.3, 0.6, 1.0), V(0, 4.7, 1.5), epique)
-	g.p("coin", "Queue", V(1.4, 1.6, 3.6), V(0, 3.2, 3.8), base, V(0, 180, 0))
-	g.paire("bloc", "PatteAr", V(1.0, 2.4, 1.2), V(0.8, 1.2, 1.0), ombre)
-	g.paire("bloc", "PatteAv", V(0.6, 1.8, 0.6), V(1.0, 0.9, -1.2), ombre)
-	g.paire("bloc", "Pouce", V(0.25, 0.9, 0.25), V(1.35, 2.0, -1.4), C.dore, V(-25, 0, 0))
-	g.yeux(0.6, 5.1, -2.7, 0.55)
+	local epique = g.accent("Epique")
+	local corps = g.boule("Corps", 3.0, V(0, 2.9, 0.4), base)
+	g.boule("Ventre", 2.2, V(0, 2.7, -0.3), C.creme)
+	g.boule("Tete", 2.6, V(0, 4.9, -0.7), base)
+	g.yeux(0.6, 5.15, -1.7, 0.95)
+	g.boule("Museau", 1.3, V(0, 4.4, -1.7), C.lumiere(base))
+	g.p("coin", "Crete1", V(0.3, 0.7, 0.9), V(0, 6.2, -0.5), epique)
+	g.p("coin", "Crete2", V(0.3, 0.7, 0.9), V(0, 4.5, 0.8), epique)
+	g.p("coin", "Crete3", V(0.3, 0.6, 0.9), V(0, 4.1, 1.6), epique)
+	g.p("coin", "Queue", V(1.2, 1.2, 2.2), V(0, 2.6, 2.4), base, V(0, 180, 0))
+	g.pattes("PatteAr", 1.5, 1.0, 0.8, 0.6, ombre)
+	g.paire("boule", "Pied", V(1.1, 1.1, 1.1), V(0.8, 0.35, 0.2), ombre)
+	g.paire("boule", "PatteAv", V(0.7, 0.7, 0.7), V(1.35, 3.1, -0.6), base)
+	g.paire("bloc", "Pouce", V(0.2, 0.7, 0.2), V(1.5, 3.4, -0.9), C.dore, V(-25, 0, 0))
+	g.joues(0.9, 4.6, -1.55, 0.45)
 	g.lueur(corps, epique, 8, 0.6)
 	return corps
 end
 
--- Brachio : pattes avant hautes, cou dressé, collier d'or
+-- Brachio : grand cou dressé, tête ronde à crête dorée, collier d'or, taches orange
 ESPECES.Brachio = function(g, C)
-	local base = C.sable:Lerp(C.dore, 0.5)
+	local base = g.hex("FFD23F")
 	local ombre = C.ombre(base)
-	local corps = g.p("bloc", "Corps", V(2.6, 2.4, 3.6), V(0, 3.6, 0.4), base)
-	g.p("bloc", "Ventre", V(2.2, 0.4, 3.0), V(0, 2.35, 0.4), C.creme)
-	g.paire("bloc", "PatteAv", V(0.9, 2.8, 0.9), V(0.9, 1.4, -0.8), ombre)
-	g.paire("bloc", "PatteAr", V(0.9, 2.4, 1.0), V(0.9, 1.2, 1.6), ombre)
-	g.p("bloc", "Cou", V(1.0, 4.6, 1.0), V(0, 6.6, -1.5), base, V(-12, 0, 0))
-	g.p("bloc", "Collier", V(1.25, 0.35, 1.25), V(0, 5.0, -1.3), C.dore, V(-12, 0, 0))
-	g.p("bloc", "TacheCou1", V(1.05, 0.4, 1.05), V(0, 6.2, -1.45), C.terre, V(-12, 0, 0))
-	g.p("bloc", "TacheCou2", V(1.05, 0.4, 1.05), V(0, 7.4, -1.7), C.terre, V(-12, 0, 0))
-	g.p("bloc", "Tete", V(1.2, 1.0, 1.6), V(0, 9.1, -2.3), base)
-	g.p("boule", "Crete", V(0.9, 0.9, 0.9), V(0, 9.6, -2.0), C.dore)
-	g.p("bloc", "Museau", V(1.0, 0.6, 0.6), V(0, 8.95, -3.3), C.lumiere(base))
-	g.p("coin", "Queue", V(1.3, 1.4, 3.6), V(0, 3.8, 4.0), base, V(0, 180, 0))
-	g.p("boule", "Tache1", V(0.8, 0.8, 0.8), V(-0.9, 4.6, 0.0), C.terre)
-	g.p("boule", "Tache2", V(0.8, 0.8, 0.8), V(0.8, 4.7, 0.9), C.terre)
-	g.p("boule", "Tache3", V(0.8, 0.8, 0.8), V(0, 4.8, 1.8), C.terre)
-	g.yeux(0.6, 9.3, -2.6, 0.5)
-	g.lueur(corps, C.raretes.Legendaire or C.dore, 10, 0.8)
+	local orange = g.hex("FF9F1C")
+	local legendaire = g.accent("Legendaire")
+	local corps = g.boule("Corps", 3.4, V(0, 3.2, 0.6), base)
+	g.boule("Ventre", 2.4, V(0, 2.9, 0.0), C.creme)
+	g.p("cyl", "Cou", V(2.6, 1.2, 1.2), V(0, 5.3, -0.6), base, V(0, 0, 90))
+	g.p("cyl", "Collier", V(0.35, 1.45, 1.45), V(0, 4.6, -0.6), C.dore, V(0, 0, 90))
+	g.boule("Tete", 2.6, V(0, 7.3, -0.9), base)
+	g.yeux(0.6, 7.55, -1.9, 0.95)
+	g.boule("Crete", 0.9, V(0, 8.55, -0.6), legendaire)
+	g.boule("Museau", 1.3, V(0, 6.9, -1.85), C.lumiere(base))
+	g.boule("Tache1", 0.9, V(-1.0, 4.2, 0.3), orange)
+	g.boule("Tache2", 0.9, V(1.0, 4.3, 1.2), orange)
+	g.boule("Tache3", 0.9, V(0, 4.8, 0.9), orange)
+	g.p("coin", "Queue", V(1.0, 1.1, 2.4), V(0, 3.0, 2.8), base, V(0, 180, 0))
+	g.pattes("PatteAv", 1.8, 1.0, 0.95, -0.2, ombre)
+	g.pattes("PatteAr", 1.8, 1.0, 0.95, 1.5, ombre)
+	g.joues(0.9, 7.0, -1.8, 0.45)
+	g.lueur(corps, legendaire, 10, 0.8)
 	return corps
 end
 
--- Diplodo : cou et queue immenses à l'horizontale, épines néon
+-- Diplodo : violet vif, cou en perles vers l'avant, longue queue, épines néon
 ESPECES.Diplodo = function(g, C)
-	local base = C.violet
+	local base = g.hex("B15CFF")
 	local ombre = C.ombre(base)
-	local mythique = C.raretes.Mythique or C.alerte
-	local corps = g.p("bloc", "Corps", V(2.6, 2.2, 3.6), V(0, 3.3, 0.6), base)
-	g.p("bloc", "Ventre", V(2.2, 0.4, 3.0), V(0, 2.15, 0.6), C.lumiere(C.lumiere(base)))
-	g.p("bloc", "Rayure1", V(2.65, 0.3, 0.4), V(0, 3.6, 0.0), ombre)
-	g.p("bloc", "Rayure2", V(2.65, 0.3, 0.4), V(0, 3.6, 1.2), ombre)
-	g.paire("bloc", "PatteAv", V(0.9, 2.2, 0.9), V(0.9, 1.1, -0.6), ombre)
-	g.paire("bloc", "PatteAr", V(0.9, 2.2, 0.9), V(0.9, 1.1, 1.8), ombre)
-	g.p("bloc", "Cou", V(1.1, 1.1, 2.4), V(0, 4.0, -1.9), base, V(20, 0, 0))
-	g.p("bloc", "CouHaut", V(0.9, 0.9, 2.2), V(0, 5.0, -3.6), base, V(30, 0, 0))
-	g.p("bloc", "Tete", V(1.0, 0.9, 1.4), V(0, 5.8, -4.9), C.lumiere(base))
-	g.p("bloc", "Queue", V(1.2, 1.2, 2.6), V(0, 3.3, 3.4), base, V(10, 0, 0))
-	g.p("bloc", "QueueMilieu", V(0.7, 0.7, 2.6), V(0, 2.8, 5.8), base, V(8, 0, 0))
-	g.p("coin", "QueueBout", V(0.4, 0.4, 2.4), V(0, 2.5, 8.0), mythique, V(0, 180, 0), true)
-	for i = 1, 4 do
-		g.p("coin", "Epine" .. i, V(0.25, 0.6, 0.7), V(0, 4.6, -0.6 + (i - 1) * 1.0), mythique, nil, true)
+	local mythique = g.accent("Mythique")
+	local corps = g.boule("Corps", 3.4, V(0, 3.0, 0.8), base)
+	g.boule("Ventre", 2.4, V(0, 2.7, 0.2), C.lumiere(C.lumiere(base)))
+	g.boule("Cou1", 1.3, V(0, 4.0, -1.0), base)
+	g.boule("Cou2", 1.1, V(0, 4.8, -1.8), base)
+	g.boule("Cou3", 1.0, V(0, 5.6, -2.4), base)
+	g.boule("Tete", 2.4, V(0, 6.6, -3.2), C.lumiere(base))
+	g.yeux(0.55, 6.85, -4.1, 0.9)
+	g.boule("Queue", 1.3, V(0, 3.2, 2.6), base)
+	g.boule("QueueMilieu", 1.0, V(0, 2.9, 3.5), base)
+	g.p("coin", "QueueBout", V(0.5, 0.5, 1.6), V(0, 2.7, 4.6), mythique, V(0, 180, 0), true)
+	local epines = { { -0.1, 4.6 }, { 0.6, 4.85 }, { 1.3, 4.75 }, { 2.0, 4.35 } }
+	for i, ep in ipairs(epines) do
+		g.p("coin", "Epine" .. i, V(0.25, 0.6, 0.7), V(0, ep[2], ep[1]), mythique, nil, true)
 	end
-	g.yeux(0.5, 6.0, -5.2, 0.5)
+	g.paire("boule", "Tache", V(0.8, 0.8, 0.8), V(1.2, 3.8, 1.2), ombre)
+	g.pattes("PatteAv", 1.6, 1.0, 0.95, -0.1, ombre)
+	g.pattes("PatteAr", 1.6, 1.0, 0.95, 1.8, ombre)
+	g.joues(0.85, 6.3, -4.0, 0.4)
 	g.lueur(corps, mythique, 12, 1.2)
 	return corps
 end
 
--- Therizino : ventre rond, griffes géantes néon, aura et auréole divines
+-- Therizino : ventre tout rond, griffes géantes néon, auréole et aura divines
 ESPECES.Therizino = function(g, C)
 	local divin = C.raretes.Divin or C.gemme
-	local base = C.creme:Lerp(C.gemme, 0.35)
+	local base = g.hex("5CE1E6")
 	local ombre = C.ombre(base)
-	local corps = g.p("bloc", "Corps", V(2.6, 3.0, 2.8), V(0, 3.6, 0.4), base)
-	g.p("boule", "Ventre", V(2.6, 2.6, 2.6), V(0, 3.0, 0.0), C.creme)
-	g.p("bloc", "Cou", V(0.9, 2.4, 0.9), V(0, 5.6, -0.9), base, V(-15, 0, 0))
-	g.p("bloc", "Tete", V(1.0, 1.0, 1.4), V(0, 6.9, -1.5), base)
-	g.p("coin", "Bec", V(0.8, 0.5, 0.7), V(0, 6.7, -2.5), C.dore)
-	g.p("coin", "Plumes", V(0.3, 0.9, 1.2), V(0, 7.6, -1.2), C.gemme)
-	g.paire("bloc", "PatteAr", V(1.0, 2.2, 1.1), V(0.8, 1.1, 0.8), ombre)
-	g.paire("bloc", "Pied", V(1.2, 0.3, 1.4), V(0.8, 0.15, 0.6), C.ombre(ombre))
-	g.paire("bloc", "PatteAv", V(0.5, 1.6, 0.5), V(1.5, 4.0, -0.9), C.gemme, V(30, 0, 0))
+	local corps = g.boule("Corps", 3.2, V(0, 3.4, 0.4), base)
+	g.boule("Ventre", 2.6, V(0, 3.1, -0.3), C.creme)
+	g.p("cyl", "Cou", V(1.2, 0.9, 0.9), V(0, 5.1, -0.4), base, V(0, 0, 90))
+	g.boule("Tete", 2.4, V(0, 6.3, -0.6), base)
+	g.yeux(0.55, 6.55, -1.5, 0.9)
+	g.p("coin", "Bec", V(0.7, 0.45, 0.7), V(0, 5.9, -1.9), C.dore)
+	g.p("coin", "Plumes", V(0.3, 0.9, 1.0), V(0, 7.5, -0.2), g.hex("FF5CE1"))
+	g.pattes("PatteAr", 1.6, 1.0, 0.8, 0.6, ombre)
+	g.paire("boule", "Pied", V(1.1, 1.1, 1.1), V(0.8, 0.35, 0.2), ombre)
+	g.paire("boule", "PatteAv", V(0.8, 0.8, 0.8), V(1.6, 4.0, -0.5), base)
 	for i = 1, 3 do
 		local dx = (i - 2) * 0.25
-		g.p("bloc", "GriffeG" .. i, V(0.2, 0.2, 1.8), V(-1.5 + dx, 3.2, -2.2), divin, V(-30, 0, 0), true)
-		g.p("bloc", "GriffeD" .. i, V(0.2, 0.2, 1.8), V(1.5 + dx, 3.2, -2.2), divin, V(-30, 0, 0), true)
+		g.p("bloc", "GriffeG" .. i, V(0.2, 0.2, 1.4), V(-1.6 + dx, 3.5, -1.3), divin, V(-30, 0, 0), true)
+		g.p("bloc", "GriffeD" .. i, V(0.2, 0.2, 1.4), V(1.6 + dx, 3.5, -1.3), divin, V(-30, 0, 0), true)
 	end
-	g.p("coin", "Queue", V(1.2, 1.4, 2.6), V(0, 3.6, 2.9), C.gemme, V(0, 180, 0))
-	local halo = g.p("cyl", "Aureole", V(0.15, 1.6, 1.6), V(0, 8.3, -1.5), C.dore, V(0, 0, 90), true)
+	g.p("coin", "Queue", V(1.1, 1.2, 2.0), V(0, 3.0, 2.2), base, V(0, 180, 0))
+	local halo = g.p("cyl", "Aureole", V(0.15, 1.6, 1.6), V(0, 8.2, -0.6), C.dore, V(0, 0, 90), true)
 	if halo then
 		halo.Transparency = 0.2
 		halo.CastShadow = false
 	end
-	local aura = g.p("boule", "Aura", V(5.5, 5.5, 5.5), V(0, 4.0, 0.2), divin, nil, true)
+	local aura = g.boule("Aura", 6.0, V(0, 4.0, 0.2), divin, true)
 	if aura then
 		aura.Transparency = 0.85
 		aura.CastShadow = false
 	end
-	g.yeux(0.5, 7.1, -1.8, 0.5)
+	g.joues(0.85, 6.0, -1.4, 0.4)
 	g.lueur(corps, divin, 16, 2)
 	return corps
 end

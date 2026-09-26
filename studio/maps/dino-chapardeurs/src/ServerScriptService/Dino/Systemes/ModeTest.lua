@@ -9,12 +9,13 @@ local ANTI_DOUBLON = 0.5         -- secondes : une même commande reçue deux fo
 local SUFFIXES = { k = 1e3, m = 1e6, b = 1e9, t = 1e12 }
 
 local AIDE = {
-	"/argent N : ajoute N $ (ex. /argent 5000, /argent 2m)",
-	"/dino Espece [Mutation] : pose un dino dans ta Base (ex. /dino Rex Or)",
-	"/evenement Nom : lance un événement (PluieDeMeteores, Eruption, LuneDoree)",
-	"/renaissance : met ton argent au coût de ta prochaine renaissance",
-	"/vider : retire tous tes dinos de ta Base (sans gain)",
-	"/aide : affiche cette liste",
+	"🛠️ MODE TEST",
+	"💰 /argent 2m : +$ (ex. 5000, 2m)",
+	"🦖 /dino Rex Or : pose un dino",
+	"☄️ /evenement Nom : lance un événement",
+	"♻️ /renaissance : prêt à renaître",
+	"🧹 /vider : vide ta Base",
+	"❓ /aide : cette liste",
 }
 
 function M.demarrer(ctx)
@@ -123,7 +124,7 @@ function M.demarrer(ctx)
 			notifier(joueur, "Économie indisponible.", "alerte")
 			return
 		end
-		notifier(joueur, "+" .. montant(n) .. " (total " .. montant(total) .. ")", "succes")
+		notifier(joueur, "💰 +" .. montant(n) .. " ! Total " .. montant(total), "succes")
 	end
 
 	commandes.dino = function(joueur, args)
@@ -177,7 +178,7 @@ function M.demarrer(ctx)
 		end
 		local texte = espece
 		if mutation ~= "Normal" then texte = texte .. " " .. mutation end
-		notifier(joueur, texte .. " posé sur l'emplacement " .. tostring(dino:GetAttribute("Emplacement") or numero), "succes")
+		notifier(joueur, "🦖 " .. texte .. " posé ! (emplacement " .. tostring(dino:GetAttribute("Emplacement") or numero) .. ")", "succes")
 	end
 
 	commandes.evenement = function(joueur, args)
@@ -189,7 +190,7 @@ function M.demarrer(ctx)
 		end
 		local ok = Bus.demander("LancerEvenement", nom)
 		if ok == true then
-			notifier(joueur, "Événement « " .. nom .. " » lancé.", "succes")
+			notifier(joueur, "☄️ " .. nom .. " lancé !", "succes")
 		else
 			notifier(joueur, "Impossible de lancer « " .. nom .. " » (un événement est peut-être en cours).", "alerte")
 		end
@@ -216,7 +217,7 @@ function M.demarrer(ctx)
 		elseif argent > cout then
 			Bus.demander("DepenserArgent", joueur, argent - cout)
 		end
-		notifier(joueur, "Argent réglé à " .. montant(cout) .. " : renaissance " .. tostring(niveau + 1) .. " possible.", "succes")
+		notifier(joueur, "♻️ " .. montant(cout) .. " : renaissance " .. tostring(niveau + 1) .. " prête !", "succes")
 	end
 
 	commandes.vider = function(joueur)
@@ -243,7 +244,7 @@ function M.demarrer(ctx)
 			end
 		end
 		pcall(function() joueur:SetAttribute("RevenuParSeconde", 0) end)
-		notifier(joueur, tostring(compte) .. " dino(s) retiré(s) de ta Base.", "info")
+		notifier(joueur, "🧹 " .. tostring(compte) .. " dino(s) retiré(s) !", "info")
 	end
 
 	-- ===== analyse d'un message =====

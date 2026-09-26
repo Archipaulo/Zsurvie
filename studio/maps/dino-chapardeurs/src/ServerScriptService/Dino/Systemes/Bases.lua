@@ -140,14 +140,109 @@ function M.demarrer(ctx)
 	end
 
 	-- ===== aspect =====
+	local Style = ctx.Style
+	local GRIS_LIBRE = Color3.fromRGB(201, 206, 216)
+	if Style and Style.boutons and Style.boutons.gris then GRIS_LIBRE = Style.boutons.gris[1] end
+	-- même ordre de teintes que Builders/Bases : une couleur dominante par base
+	local TEINTES = { Charte.lave, Charte.gemme, Charte.violet, Charte.herbe, Charte.dore, Charte.alerte, Charte.sable, Charte.jungle }
+	local etiquettes = {} -- index -> { nom = TextLabel, compteGui = BillboardGui, compte = TextLabel }
+
+	local function couleurBase(index)
+		local m = trouverModele(index)
+		local c = m and m:GetAttribute("Couleur")
+		if typeof(c) == "Color3" then return c end
+		c = TEINTES[((index - 1) % #TEINTES) + 1]
+		if typeof(c) == "Color3" then return c end
+		return Color3.new(1, 1, 1)
+	end
+
+	-- crée (une seule fois) le nom géant et le compte à rebours flottants au-dessus de l'Entree
+	local function etiquettesDe(index)
+		local e = etiquettes[index]
+		if e and e.nom.Parent and e.nom.Parent.Parent and e.compteGui.Parent then return e end
+		if not Style or not Style.etiquette then return nil end
+		local entree = partDe(index, "Entree")
+		if not entree then return nil end
+		local ancienNom = entree:FindFirstChild("NomGeant")
+		if ancienNom then ancienNom:Destroy() end
+		local ancienCompte = entree:FindFirstChild("CompteVerrou")
+		if ancienCompte then ancienCompte:Destroy() end
+		local haut = demiHauteur(entree)
+		-- le nom flotte au-dessus de l'enseigne si elle existe, sinon au-dessus du portique
+		local hauteurNom = haut + 7
+		local enseigne = partDe(index, "Enseigne")
+		if enseigne then
+			hauteurNom = math.max(hauteurNom, enseigne.Position.Y + demiHauteur(enseigne) - entree.Position.Y + 5)
+		end
+		local _, lignesNom = Style.etiquette(entree, {
+			{ texte = "BASE LIBRE", couleur = GRIS_LIBRE, titre = true, contour = 4, nom = "Nom" },
+		}, {
+			Name = "NomGeant",
+			largeur = 32,
+			hauteurLigne = 6,
+			StudsOffset = Vector3.new(0, hauteurNom, 0),
+			MaxDistance = 250,
+		})
+		local compteGui, lignesCompte = Style.etiquette(entree, {
+			{ texte = "", titre = true, contour = 4, nom = "Compte" },
+		}, {
+			Name = "CompteVerrou",
+			largeur = 12,
+			hauteurLigne = 4,
+			StudsOffset = Vector3.new(0, haut + 2.5, 0),
+			MaxDistance = 150,
+		})
+		compteGui.Enabled = false
+		e = { nom = lignesNom[1], compteGui = compteGui, compte = lignesCompte[1] }
+		etiquettes[index] = e
+		return e
+	end
+
 	local function titre(index, texte)
 		local enseigne = trouverModele(index) and trouverModele(index):FindFirstChild("Enseigne")
-		if not enseigne then return end
-		local affiche = enseigne:FindFirstChild("Affiche", true)
-		if not affiche then return end
-		local label = affiche:FindFirstChild("Titre", true)
-		if label and label:IsA("TextLabel") then
-			label.Text = texte
+		if enseigne then
+			local affiche = enseigne:FindFirstChild("Affiche", true)
+			local label = affiche and affiche:FindFirstChild("Titre", true)
+			if label and label:IsA("TextLabel") then
+				label.Text = texte
+			end
+		end
+		-- nom géant flottant : « Base de <Nom> » dans la couleur de la base, « BASE LIBRE » en gris
+		local e = etiquettesDe(index)
+		if e then
+			local gui = e.nom.Parent
+			if proprietaires[index] then
+				e.nom.Text = texte
+				e.nom.TextColor3 = couleurBase(index)
+				-- le nom du propriétaire est géant et visible de loin
+				if gui and gui:IsA("BillboardGui") then
+					gui.Size = UDim2.new(32, 0, 6, 0)
+					gui.MaxDistance = 250
+				end
+			else
+				e.nom.Text = "BASE LIBRE"
+				e.nom.TextColor3 = GRIS_LIBRE
+				-- une base libre reste discrète pour ne pas encombrer la vue
+				if gui and gui:IsA("BillboardGui") then
+					gui.Size = UDim2.new(12, 0, 2.2, 0)
+					gui.MaxDistance = 90
+				end
+			end
+		end
+	end
+
+	-- compte à rebours « 🔒 45 » au-dessus de l'Entree pendant le verrou
+	local function majCompte(index)
+		local e = etiquettesDe(index)
+		if not e then return end
+		local reste = (finVerrou[index] or 0) - maintenant()
+		if reste > 0 then
+			local texte = "🔒 " .. math.ceil(reste)
+			if e.compte.Text ~= texte then e.compte.Text = texte end
+			if not e.compteGui.Enabled then e.compteGui.Enabled = true end
+		elseif e.compteGui.Enabled then
+			e.compteGui.Enabled = false
+			e.compte.Text = ""
 		end
 	end
 
@@ -200,7 +295,7 @@ function M.demarrer(ctx)
 		if verrouillee then
 			entree.Material = Enum.Material.Neon
 			entree.Color = Charte.alerte
-			entree.Transparency = 0.35
+			entree.Transparency = 0.3
 		else
 			entree.Material = o.Material
 			entree.Color = o.Color
@@ -242,6 +337,7 @@ function M.demarrer(ctx)
 			if invite.ActionText ~= texte then invite.ActionText = texte end
 			if invite.ObjectText ~= objet then invite.ObjectText = objet end
 		end
+		majCompte(index)
 	end
 
 	local function estVerrouillee(index)

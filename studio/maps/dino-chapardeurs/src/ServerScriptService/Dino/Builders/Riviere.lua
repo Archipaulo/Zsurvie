@@ -1,6 +1,7 @@
 -- Constructeur Riviere : rivière d'ouest en est au sud de la Place.
--- Lit sombre, eau Glass translucide teinte gemme, berges de sable et de galets, rochers,
--- nénuphars qui flottent, deux petits ponts de bois décoratifs et une cascade qui sort des falaises de l'est.
+-- Style « simulateur » (STYLE.md §3) : eau turquoise vive et lisse sur un lit turquoise clair,
+-- berges de sable nettes bordées d'un liseré d'écume blanche, rochers clairs, nénuphars vert vif,
+-- deux petits ponts de bois décoratifs et une cascade blanche qui sort des falaises de l'est.
 -- Emprise (CONTRAT §10) : bande z 131..145 sur x -166..166 (cascade comprise, x 160..166).
 local M = {}
 
@@ -64,18 +65,23 @@ function M.construire(ctx)
 	local rng = Outils.aleatoire(reglage("graine", 1138))
 
 	-- ===== couleurs =====
-	local LIT = Charte.ombre(Charte.nuit)
-	local EAU = Charte.gemme:Lerp(Charte.nuit, 0.3)
-	local EAU_CLAIRE = Charte.lumiere(Charte.gemme)
-	local SABLE_MOUILLE = Charte.ombre(Charte.sable)
-	local GALETS = Charte.lumiere(Charte.pierre)
-	local PIERRE = Charte.pierre
-	local PIERRE_OMBRE = Charte.ombre(Charte.pierre)
-	local BOIS = Charte.bois
-	local BOIS_OMBRE = Charte.ombre(Charte.bois)
-	local FEUILLE = Charte.herbe
-	local FEUILLE_OMBRE = Charte.jungle
-	local FLEURS = { Charte.raretes.Mythique, Charte.creme, Charte.violet, Charte.dore }
+	-- palette vive et saturée, sans teinte sombre : on lit la rivière de loin, même sur mobile
+	local hex = Charte.hex
+	local LIT = hex("1FB8C9")          -- fond turquoise profond mais lumineux
+	local EAU = hex("2EE6E0")          -- turquoise vive
+	local EAU_CLAIRE = hex("A8FFF7")   -- reflets et bords clairs
+	local ECUME = hex("FFFFFF")        -- cascade, écume, liseré
+	local SABLE = Charte.sable         -- allées sable #F2D49B, comme la Place
+	local SABLE_CLAIR = hex("FBE7BC")
+	local GALETS = hex("D9D4E3")
+	local PIERRE = hex("B7B1C6")       -- pierre claire (socles et rochers)
+	local PIERRE_OMBRE = hex("938CA6")
+	local BOIS = hex("B9763A")
+	local BOIS_OMBRE = hex("8B5A2B")
+	local FEUILLE = hex("6BD64A")      -- herbe vert vif du monde
+	local FEUILLE_OMBRE = hex("3FB43A")
+	local FLEURS = { hex("FF6FB5"), ECUME, hex("C38BFF"), hex("FFE14D") }
+	local LISSE = Enum.Material.SmoothPlastic
 
 	-- ===== création sous budget =====
 	local compte = 0
@@ -156,17 +162,18 @@ function M.construire(ctx)
 				Size = Vector3.new(longueurSeg, HAUT_LIT, largeurLit),
 				CFrame = CFrame.new(xc, HAUT_LIT / 2, zCentre),
 				Color = LIT,
+				Material = LISSE,
 				CanTouch = false,
 			})
-			-- l'eau : translucide, on la traverse
+			-- l'eau : turquoise vive, lisse et légèrement translucide, on la traverse
 			local eau = bloc(dEau, decor({
 				Name = "Eau" .. i,
 				Size = Vector3.new(longueurSeg, HAUT_EAU - HAUT_LIT, largeurLit),
 				CFrame = CFrame.new(xc, (HAUT_LIT + HAUT_EAU) / 2, zCentre),
 				Color = EAU,
-				Material = Enum.Material.Glass,
-				Transparency = 0.35,
-				Reflectance = 0.12,
+				Material = LISSE,
+				Transparency = 0.2,
+				Reflectance = 0.08,
 				CastShadow = false,
 			}))
 			if eau then
@@ -175,7 +182,7 @@ function M.construire(ctx)
 		end
 	end
 
-	-- ===== 2. berges : sable mouillé et bancs de galets en alternance =====
+	-- ===== 2. berges : sable uni et net, bordé d'un liseré d'écume blanche côté eau =====
 	local function construireBerges()
 		for i = 1, SEGMENTS do
 			local x0 = X_MIN + (i - 1) * longueurSeg
@@ -185,21 +192,37 @@ function M.construire(ctx)
 				if cote == 2 then
 					zc = Z_MAX - LARGEUR_BERGE / 2
 				end
-				local galets = ((i + cote) % 2) == 0
-				local couleur = SABLE_MOUILLE
-				local nom = "Sable"
-				if galets then
-					couleur = GALETS
-					nom = "Galets"
+				-- une teinte à peine plus claire un segment sur deux : on devine le relief sans casser l'aplat
+				local couleur = SABLE
+				if ((i + cote) % 2) == 0 then
+					couleur = SABLE_CLAIR
 				end
 				bloc(dBerges, {
-					Name = nom .. i .. "_" .. cote,
+					Name = "Sable" .. i .. "_" .. cote,
 					Size = Vector3.new(longueurSeg, HAUT_BERGE, LARGEUR_BERGE),
 					CFrame = CFrame.new(xc, HAUT_BERGE / 2, zc),
 					Color = couleur,
+					Material = LISSE,
 					CanTouch = false,
 				})
 			end
+		end
+		-- liseré d'écume : une ligne blanche continue au bord de l'eau, de chaque côté
+		local longueurEau = X_MUR_CASCADE - X_MIN
+		for cote = 1, 2 do
+			local zl = zLitMin + 0.2
+			if cote == 2 then
+				zl = zLitMax - 0.2
+			end
+			bloc(dEau, decor({
+				Name = "Lisere" .. cote,
+				Size = Vector3.new(longueurEau, 0.08, 0.4),
+				CFrame = CFrame.new(X_MIN + longueurEau / 2, HAUT_EAU + 0.02, zl),
+				Color = ECUME,
+				Material = LISSE,
+				Transparency = 0.15,
+				CastShadow = false,
+			}))
 		end
 	end
 
@@ -217,7 +240,7 @@ function M.construire(ctx)
 				if cote == 2 then
 					z = rng:NextNumber(Z_MAX - LARGEUR_BERGE + d / 2, Z_MAX - d / 2 - 0.1)
 				end
-				local teintes = { PIERRE, GALETS, PIERRE_OMBRE, Charte.creme }
+				local teintes = { PIERRE, GALETS, SABLE_CLAIR }
 				boule(dBerges, decor({
 					Name = "Galet",
 					Size = Vector3.new(d, d, d),
@@ -323,7 +346,7 @@ function M.construire(ctx)
 			Name = "Mousse",
 			Size = Vector3.new(epaisseur, 0.4, Z_MAX - Z_MIN),
 			CFrame = CFrame.new(X_MUR_CASCADE + epaisseur / 2, HAUT_CASCADE + 2.2, zCentre),
-			Color = FEUILLE_OMBRE,
+			Color = FEUILLE,
 		}))
 		-- blocs de roche qui encadrent la chute
 		for _, sz in ipairs({ -1, 1 }) do
@@ -342,14 +365,14 @@ function M.construire(ctx)
 				Color = PIERRE,
 			})
 		end
-		-- l'eau qui coule sur le rebord puis tombe
+		-- l'eau qui coule sur le rebord (turquoise) puis tombe en rideau blanc
 		bloc(m, decor({
 			Name = "EauRebord",
 			Size = Vector3.new(X_MUR_CASCADE - xLevre0, 0.3, largeurChute),
 			CFrame = CFrame.new((xLevre0 + X_MUR_CASCADE) / 2, HAUT_CASCADE + 0.15, zCentre),
-			Color = EAU_CLAIRE,
-			Material = Enum.Material.Glass,
-			Transparency = 0.3,
+			Color = EAU,
+			Material = LISSE,
+			Transparency = 0.1,
 			CastShadow = false,
 		}))
 		local hChute = HAUT_CASCADE - HAUT_EAU + 0.3
@@ -358,19 +381,19 @@ function M.construire(ctx)
 			Name = "Chute",
 			Size = Vector3.new(0.8, hChute, largeurChute),
 			CFrame = CFrame.new(xChute, HAUT_EAU + hChute / 2 - 0.1, zCentre),
-			Color = EAU,
-			Material = Enum.Material.Glass,
-			Transparency = 0.3,
-			Reflectance = 0.1,
+			Color = ECUME,
+			Material = LISSE,
+			Transparency = 0.05,
 			CastShadow = false,
 		}))
+		-- filet turquoise clair qui brille au milieu du rideau blanc
 		local reflet = bloc(m, decor({
 			Name = "RefletChute",
-			Size = Vector3.new(0.3, hChute, largeurChute * 0.6),
+			Size = Vector3.new(0.3, hChute, largeurChute * 0.4),
 			CFrame = CFrame.new(xChute - 0.5, HAUT_EAU + hChute / 2 - 0.1, zCentre),
 			Color = EAU_CLAIRE,
 			Material = Enum.Material.Neon,
-			Transparency = 0.55,
+			Transparency = 0.4,
 			CastShadow = false,
 		}))
 		if reflet then
@@ -379,10 +402,11 @@ function M.construire(ctx)
 		-- écume au pied de la chute
 		local ecume = bloc(m, decor({
 			Name = "Ecume",
-			Size = Vector3.new(3, 0.2, largeurChute + 1),
-			CFrame = CFrame.new(xChute - 1.2, HAUT_EAU + 0.05, zCentre),
-			Color = Charte.creme,
-			Transparency = 0.25,
+			Size = Vector3.new(3.4, 0.2, largeurChute + 1.4),
+			CFrame = CFrame.new(xChute - 1.4, HAUT_EAU + 0.05, zCentre),
+			Color = ECUME,
+			Material = LISSE,
+			Transparency = 0.1,
 			CastShadow = false,
 		}))
 		if ecume then
@@ -391,7 +415,7 @@ function M.construire(ctx)
 				local p = Instance.new("ParticleEmitter")
 				p.Name = "Ecume"
 				p.Texture = "rbxasset://textures/particles/smoke_main.dds"
-				p.Color = ColorSequence.new(Charte.creme)
+				p.Color = ColorSequence.new(ECUME)
 				p.LightEmission = 0.3
 				p.Size = NumberSequence.new({
 					NumberSequenceKeypoint.new(0, 1.2),
@@ -575,11 +599,11 @@ function M.construire(ctx)
 			if not surPont(x, long / 2) then
 				local r = bloc(dEau, decor({
 					Name = "Reflet",
-					Size = Vector3.new(long, 0.05, 0.25),
+					Size = Vector3.new(long, 0.05, 0.3),
 					CFrame = CFrame.new(x, HAUT_EAU + 0.03, z),
-					Color = EAU_CLAIRE,
+					Color = ECUME,
 					Material = Enum.Material.Neon,
-					Transparency = 0.45,
+					Transparency = 0.35,
 					CastShadow = false,
 				}))
 				if r then
@@ -598,7 +622,7 @@ function M.construire(ctx)
 		{ "rochers", construireRochers },
 		{ "nenuphars", construireNenuphars },
 		{ "reflets", function() construireReflets(math.min(14, math.max(0, reste() - 40))) end },
-		{ "galets", function() semerGalets(math.min(70, math.max(0, reste() - 2))) end },
+		{ "galets", function() semerGalets(math.min(30,math.max(0, reste() - 2))) end },
 	}
 	for _, etape in ipairs(etapes) do
 		local ok, err = pcall(etape[2])

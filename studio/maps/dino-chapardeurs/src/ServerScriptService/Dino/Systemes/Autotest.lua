@@ -194,6 +194,90 @@ function M.demarrer(ctx)
 		end
 	end)
 
+	-- 8. style « simulateur » (STYLE.md) : étiquettes flottantes cernées de noir
+	-- chemin court d'un objet sous Workspace.Dino, pour des messages lisibles
+	local function chemin(objet)
+		local morceaux = {}
+		local courant = objet
+		while courant and courant ~= racine and courant ~= game do
+			table.insert(morceaux, 1, courant.Name)
+			courant = courant.Parent
+		end
+		return table.concat(morceaux, ".")
+	end
+
+	-- vrai si un TextLabel sous le gui porte un UIStroke (contour posé par Style.contour / Style.texte)
+	local function aTexteCerne(gui)
+		for _, objet in ipairs(gui:GetDescendants()) do
+			if objet:IsA("TextLabel") and objet:FindFirstChildOfClass("UIStroke") then
+				return true
+			end
+		end
+		return false
+	end
+
+	local MAX_LISTE = 6
+	local function resume(liste)
+		local premiers = {}
+		for i = 1, math.min(#liste, MAX_LISTE) do
+			premiers[i] = liste[i]
+		end
+		local texte = table.concat(premiers, ", ")
+		if #liste > MAX_LISTE then
+			texte = texte .. string.format(" (+%d)", #liste - MAX_LISTE)
+		end
+		return texte
+	end
+
+	protege("style etiquettes", function()
+		local sansContour = {}
+		for _, objet in ipairs(racine:GetDescendants()) do
+			if objet:IsA("BillboardGui") and not aTexteCerne(objet) then
+				table.insert(sansContour, chemin(objet))
+			end
+		end
+		controle(#sansContour == 0, string.format(
+			"%d BillboardGui sans TextLabel cerné (UIStroke, utiliser ctx.Style.etiquette) : %s",
+			#sansContour, resume(sansContour)))
+	end)
+
+	protege("style dinos", function()
+		if not ctx.dinos then
+			controle(false, "dossier des dinos vivants absent : étiquettes non vérifiées")
+			return
+		end
+		local sansEtiquette = {}
+		for _, modele in ipairs(ctx.dinos:GetChildren()) do
+			if modele:IsA("Model") then
+				local corps = modele:FindFirstChild("Corps") or modele.PrimaryPart
+				local etiquette = corps and corps:FindFirstChild("Etiquette")
+				if not etiquette then
+					etiquette = modele:FindFirstChild("Etiquette", true)
+				end
+				if not (etiquette and etiquette:IsA("BillboardGui")) then
+					table.insert(sansEtiquette, tostring(modele:GetAttribute("Espece") or modele.Name))
+				end
+			end
+		end
+		controle(#sansEtiquette == 0, string.format(
+			"%d dino(s) sans BillboardGui « Etiquette » : %s", #sansEtiquette, resume(sansEtiquette)))
+	end)
+
+	protege("style enseignes", function()
+		local bases = racine:FindFirstChild("Bases")
+		if not bases then
+			return -- déjà signalé au contrôle 3
+		end
+		local sansEnseigne = {}
+		for i = 1, #ctx.Plan.bases do
+			local base = bases:FindFirstChild("Base" .. i)
+			if base and not base:FindFirstChild("Enseigne") then
+				table.insert(sansEnseigne, "Base" .. i)
+			end
+		end
+		controle(#sansEnseigne == 0, "Enseigne absente : " .. resume(sansEnseigne))
+	end)
+
 	local ok = total > 0 and reussis == total
 	print(string.format("[Dino] Autotest : %d/%d contrôles OK", reussis, total))
 	pcall(function()

@@ -78,9 +78,65 @@ function M.demarrer(ctx)
 		return Vector3.new(b.centre.X, ySol, b.centre.Z + sens * profondeur / 2)
 	end
 
+	-- ===== ligne « ➜ Joueur » sur l'étiquette pendant la marche (STYLE.md §3) =====
+	local LIGNE_ACHETEUR = 1.1 -- hauteur de la ligne, en studs
+
+	-- ajoute la ligne verte en tête de l'étiquette ; l'étiquette grandit vers le haut
+	local function marquerAcheteur(dino, joueur)
+		local Style = ctx.Style
+		if not Style or not vivant(dino) then return end
+		local gui = dino:FindFirstChild("Etiquette", true)
+		if not gui or not gui:IsA("BillboardGui") or gui:FindFirstChild("Acheteur") then return end
+		local hauteur = gui.Size.Y.Scale
+		if hauteur <= 0 then return end
+		local nouvelle = hauteur + LIGNE_ACHETEUR
+		local facteur = hauteur / nouvelle
+		for _, enfant in ipairs(gui:GetChildren()) do
+			if enfant:IsA("GuiObject") then
+				local s = enfant.Size
+				enfant.Size = UDim2.new(s.X.Scale, s.X.Offset, s.Y.Scale * facteur, s.Y.Offset)
+			end
+		end
+		gui.Size = UDim2.new(gui.Size.X.Scale, gui.Size.X.Offset, nouvelle, gui.Size.Y.Offset)
+		gui.StudsOffset = gui.StudsOffset + Vector3.new(0, LIGNE_ACHETEUR / 2, 0)
+		local ligne = Style.texte(gui, {
+			Name = "Acheteur",
+			LayoutOrder = -1,
+			Size = UDim2.new(1, 0, LIGNE_ACHETEUR / nouvelle, 0),
+			Text = "➜ " .. joueur.Name,
+			TextColor3 = Style.couleurs.argent,
+			contour = 3,
+		})
+		ligne:SetAttribute("Hauteur", LIGNE_ACHETEUR)
+	end
+
+	-- retire la ligne et rend à l'étiquette sa taille d'origine
+	local function demarquerAcheteur(dino)
+		if not dino then return end
+		local gui = dino:FindFirstChild("Etiquette", true)
+		if not gui or not gui:IsA("BillboardGui") then return end
+		local ligne = gui:FindFirstChild("Acheteur")
+		if not ligne then return end
+		local retrait = ligne:GetAttribute("Hauteur") or LIGNE_ACHETEUR
+		ligne:Destroy()
+		local hauteur = gui.Size.Y.Scale
+		local ancienne = hauteur - retrait
+		if ancienne <= 0 then return end
+		local facteur = hauteur / ancienne
+		for _, enfant in ipairs(gui:GetChildren()) do
+			if enfant:IsA("GuiObject") then
+				local s = enfant.Size
+				enfant.Size = UDim2.new(s.X.Scale, s.X.Offset, s.Y.Scale * facteur, s.Y.Offset)
+			end
+		end
+		gui.Size = UDim2.new(gui.Size.X.Scale, gui.Size.X.Offset, ancienne, gui.Size.Y.Offset)
+		gui.StudsOffset = gui.StudsOffset - Vector3.new(0, retrait / 2, 0)
+	end
+
 	-- ===== la marche vers la Base =====
 	local function arreterMarche(m)
 		m.fini = true
+		pcall(demarquerAcheteur, m.dino)
 	end
 
 	-- abandon en route : libère l'emplacement ; détruit le dino s'il reste orphelin
@@ -135,6 +191,7 @@ function M.demarrer(ctx)
 			fini = false,
 		}
 		table.insert(marcheurs, m)
+		pcall(marquerAcheteur, dino, joueur)
 		return true
 	end
 

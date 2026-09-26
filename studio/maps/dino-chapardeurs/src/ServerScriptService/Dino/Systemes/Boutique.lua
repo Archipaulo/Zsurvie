@@ -43,10 +43,27 @@ function M.demarrer(ctx)
 		end)
 	end
 
+	-- montant au format du jeu (« $2K ») : la boîte à outils Style d'abord, la Charte en secours
+	local Style = ctx.Style
 	local function montantTexte(n)
-		local ok, texte = pcall(Charte.argent, n)
+		local formater = (Style and Style.argent) or Charte.argent
+		local ok, texte = pcall(formater, n)
 		if ok and type(texte) == "string" then return texte end
 		return "$" .. tostring(math.floor(n))
+	end
+
+	-- accord du participe selon l'objet (« Bottes de course achetées ! », « Batte dorée achetée ! »)
+	local ACCORDS = { Bottes = "achetées", BatteOr = "achetée" }
+	local function participe(nom)
+		local objet = CATALOGUE[nom]
+		if type(objet) == "table" and type(objet.accord) == "string" then return objet.accord end
+		return ACCORDS[nom] or "acheté"
+	end
+
+	-- ce qu'il manque au joueur pour s'offrir un prix (au moins 1)
+	local function manque(joueur, prix)
+		local argent = nombre(joueur:GetAttribute("Argent"), 0)
+		return math.max(1, math.ceil(prix - argent))
 	end
 
 	local function possede(joueur, nom)
@@ -168,11 +185,11 @@ function M.demarrer(ctx)
 
 		local libelle = tostring(objet.nom or nom)
 		if possede(joueur, nom) then
-			notifier(joueur, "Tu possèdes déjà : " .. libelle, "info")
+			notifier(joueur, "⭐ Tu as déjà : " .. libelle .. " !", "info")
 			return
 		end
 		if joueur:GetAttribute("DonneesChargees") ~= true then
-			notifier(joueur, "Tes données se chargent encore, réessaie dans un instant.", "alerte")
+			notifier(joueur, "⏳ Chargement… réessaie vite !", "alerte")
 			return
 		end
 
@@ -184,7 +201,7 @@ function M.demarrer(ctx)
 		end
 		if not paye then
 			enCours[joueur] = nil
-			notifier(joueur, "Pas assez d'argent : " .. libelle .. " coûte " .. montantTexte(prix) .. ".", "alerte")
+			notifier(joueur, "❌ Il te manque " .. montantTexte(manque(joueur, prix)) .. " !", "alerte")
 			return
 		end
 		if not joueur.Parent then
@@ -195,7 +212,7 @@ function M.demarrer(ctx)
 		pcall(function() joueur:SetAttribute("Objet_" .. nom, true) end)
 		enCours[joueur] = nil
 		Bus.emettre("ObjetAchete", joueur, nom)
-		notifier(joueur, libelle .. " acheté !", "succes")
+		notifier(joueur, "✅ " .. libelle .. " " .. participe(nom) .. " !", "succes")
 
 		if nom == "Bottes" then
 			appliquerVitesse(joueur)

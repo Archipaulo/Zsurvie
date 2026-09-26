@@ -2,6 +2,8 @@
 -- Palmiers (troncs en segments inclinés, palmes en coins), bananiers, fougères géantes, lianes,
 -- gros champignons, buissons à fleurs tropicales et rochers moussus. Des chemins restent libres.
 -- Rien ne déborde des zones, ni dans le Volcan (rayon + 6), ni vers le sentier des Falaises (coffre).
+-- Look « simulateur Roblox » (STYLE.md) : verts saturés, fleurs vives, feuillages ronds et gros,
+-- et une lisière plus clairsemée du côté du centre de jeu pour garder la vue dégagée.
 local M = {}
 
 -- réglages par défaut (surchargés par Equilibrage.jungle s'il existe)
@@ -22,6 +24,8 @@ local DEFAUTS = {
 	largeurChemin = 8,    -- largeur des chemins libres
 	animes = 14,          -- feuillages animés au plus
 	vitesseAnime = 0.3,
+	lisiere = 9,          -- bande côté centre de jeu où la végétation se fait rare
+	densiteLisiere = 0.3, -- chance de garder un élément dans cette bande
 }
 
 local function reglage(ctx, cle)
@@ -74,18 +78,34 @@ function M.construire(ctx)
 		return liste[rng:NextInteger(1, #liste)]
 	end
 
-	-- ===== couleurs (toutes issues de la charte) =====
-	local VERT = Charte.jungle
-	local VERT_CLAIR = Charte.herbe
-	local VERT_SOMBRE = Charte.ombre(Charte.jungle)
-	local VERTS = { VERT, VERT_CLAIR, VERT_SOMBRE, Charte.lumiere(Charte.jungle) }
-	local BOIS = Charte.bois
-	local BOIS_CLAIR = Charte.terre
+	-- ===== couleurs : palette cartoon saturée (boîte à outils Style, repli sur la charte) =====
+	local Style = ctx.Style
+	local hex = Charte.hex
+	-- couleur vive tirée des dégradés de boutons du Style (haut = clair, bas = soutenu)
+	local function vif(nom, rang, repli)
+		local b = Style and Style.boutons and Style.boutons[nom]
+		if b and b[rang] then
+			return b[rang]
+		end
+		return repli
+	end
+	local VERT = hex("3CCB3F")          -- vert franc des feuillages
+	local VERT_CLAIR = vif("vert", 1, hex("7CFF6B"))
+	local VERT_SOMBRE = vif("vert", 2, hex("1FAF3A"))
+	local VERT_ACIDE = hex("A6F04A")    -- touches jaune-vert qui éclairent
+	local VERTS = { VERT, VERT_CLAIR, VERT_SOMBRE, VERT_ACIDE }
+	local BOIS = hex("A8642A")
+	local BOIS_CLAIR = hex("D9934A")
 	local FLEURS = {
-		Charte.alerte, Charte.dore, Charte.violet, Charte.lave, Charte.gemme,
-		(Charte.raretes and Charte.raretes.Mythique) or Charte.alerte,
+		vif("rose", 1, Charte.alerte), vif("jaune", 1, Charte.dore), vif("violet", 1, Charte.violet),
+		vif("orange", 1, Charte.lave), vif("rouge", 1, Charte.alerte), vif("bleu", 1, Charte.gemme),
+		(Style and Style.couleurs and Style.couleurs.revenu) or Charte.dore,
 	}
-	local CHAPEAUX = { Charte.alerte, Charte.lave, Charte.violet }
+	local CHAPEAU_ROUGE = vif("rouge", 2, Charte.alerte)
+	local CHAPEAU_VIOLET = vif("violet", 2, Charte.violet)
+	local CHAPEAUX = { CHAPEAU_ROUGE, vif("orange", 2, Charte.lave), CHAPEAU_VIOLET, vif("rose", 2, Charte.alerte) }
+	local PIERRE = hex("A39DB3")        -- pierre claire, lisible
+	local LIANE = hex("2B8F2E")
 
 	-- ===== emprise =====
 	local limiteX = reglage(ctx, "limiteX")
@@ -98,7 +118,13 @@ function M.construire(ctx)
 			local z0 = math.min(z.min.Z, z.max.Z)
 			local z1 = math.max(z.min.Z, z.max.Z)
 			if x1 > x0 and z1 > z0 then
-				table.insert(zones, { nom = nom, x0 = x0, x1 = x1, z0 = z0, z1 = z1, aire = (x1 - x0) * (z1 - z0) })
+				-- bords tournés vers le centre de jeu (l'origine) : la lisière s'éclaircit de ce côté
+				local bords = {}
+				if x1 <= 0 then table.insert(bords, { axe = "X", v = x1 }) end
+				if x0 >= 0 then table.insert(bords, { axe = "X", v = x0 }) end
+				if z1 <= 0 then table.insert(bords, { axe = "Z", v = z1 }) end
+				if z0 >= 0 then table.insert(bords, { axe = "Z", v = z0 }) end
+				table.insert(zones, { nom = nom, x0 = x0, x1 = x1, z0 = z0, z1 = z1, aire = (x1 - x0) * (z1 - z0), bords = bords })
 			end
 		end
 	end
@@ -225,12 +251,37 @@ function M.construire(ctx)
 		return hasard(zone.x0, zone.x1), hasard(zone.z0, zone.z1)
 	end
 
+	-- lisière : près du centre de jeu, on ne garde qu'une partie des éléments
+	local LISIERE = reglage(ctx, "lisiere")
+	local DENSITE_LISIERE = reglage(ctx, "densiteLisiere")
+	local function distanceCentre(x, z)
+		local d = 1e9
+		for _, q in ipairs(zones) do
+			if x >= q.x0 and x <= q.x1 and z >= q.z0 and z <= q.z1 then
+				for _, b in ipairs(q.bords) do
+					local c = x
+					if b.axe == "Z" then
+						c = z
+					end
+					d = math.min(d, math.abs(c - b.v))
+				end
+			end
+		end
+		return d
+	end
+	local function densiteOk(x, z)
+		if distanceCentre(x, z) >= LISIERE then
+			return true
+		end
+		return rng:NextNumber() < DENSITE_LISIERE
+	end
+
 	-- cherche un emplacement : pied libre (rayon rSol) hors chemins, feuillage (rayon rEmprise) dans l'emprise
 	local ESSAIS = reglage(ctx, "essais")
 	local function trouverPlace(rSol, rEmprise)
 		for _ = 1, ESSAIS do
 			local x, z = pointAuHasard()
-			if dansEmprise(x, z, rEmprise) and not surChemin(x, z, rSol) and libre(x, z, rSol) then
+			if dansEmprise(x, z, rEmprise) and not surChemin(x, z, rSol) and libre(x, z, rSol) and densiteOk(x, z) then
 				return x, z
 			end
 		end
@@ -305,16 +356,16 @@ function M.construire(ctx)
 		local n = 5
 		local lean = hasard(6, 22)
 		local psi = hasard(0, math.pi * 2)
-		local longPalme = hasard(5.5, 7.5)
-		local rCouronne = longPalme * 0.95 + 1
+		local longPalme = hasard(6.5, 8.5)
+		local rCouronne = longPalme * 0.95 + 1.5
 		-- le sommet dépend de l'inclinaison : on vérifie la couronne à sa vraie place
 		local x, z = nil, nil
 		local segs, sommet = nil, nil
 		for _ = 1, ESSAIS do
 			local px, pz = pointAuHasard()
-			if dansEmprise(px, pz, 2) and not surChemin(px, pz, 2.2) and libre(px, pz, 2.5) then
+			if dansEmprise(px, pz, 2) and not surChemin(px, pz, 2.2) and libre(px, pz, 2.5) and densiteOk(px, pz) then
 				local s, top = tronc(px, pz, hauteur, n, lean, psi)
-				if dansEmprise(top.X, top.Z, rCouronne) then
+				if dansEmprise(top.X, top.Z, rCouronne) and distanceCentre(top.X, top.Z) >= LISIERE * 0.5 then
 					x, z, segs, sommet = px, pz, s, top
 					break
 				end
@@ -340,13 +391,14 @@ function M.construire(ctx)
 				Color = couleur,
 			})
 		end
-		boule(m, { Name = "Coeur", Size = Vector3.new(2.4, 2.4, 2.4), CFrame = CFrame.new(sommet), Color = VERT_SOMBRE, CanCollide = false })
+		-- coeur rond et dodu, noix de coco bien visibles
+		boule(m, { Name = "Coeur", Size = Vector3.new(3.6, 3.6, 3.6), CFrame = CFrame.new(sommet), Color = VERT, CanCollide = false })
 		for k = 1, 2 do
 			local a = hasard(0, math.pi * 2)
 			boule(m, {
 				Name = "Noix" .. k,
-				Size = Vector3.new(1, 1, 1),
-				CFrame = CFrame.new(sommet + Vector3.new(math.cos(a) * 0.9, -1.1, math.sin(a) * 0.9)),
+				Size = Vector3.new(1.4, 1.4, 1.4),
+				CFrame = CFrame.new(sommet + Vector3.new(math.cos(a) * 1.3, -1.6, math.sin(a) * 1.3)),
 				Color = Charte.ombre(BOIS),
 				CanCollide = false,
 			})
@@ -365,7 +417,7 @@ function M.construire(ctx)
 			end
 			coin(palmes, {
 				Name = "Palme" .. k,
-				Size = Vector3.new(hasard(2, 2.6), 0.7, long),
+				Size = Vector3.new(hasard(2.8, 3.4), 0.9, long),
 				CFrame = CFrame.new(sommet) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(pitch, 0, 0) * CFrame.new(0, 0.1, -long / 2),
 				Color = couleur,
 				CanCollide = false,
@@ -391,7 +443,7 @@ function M.construire(ctx)
 	end
 
 	-- ===== lianes tendues entre deux couronnes voisines =====
-	local COULEUR_LIANE = Charte.ombre(VERT_SOMBRE)
+	local COULEUR_LIANE = LIANE
 	local lies = {}
 	local nbArcs = 0
 	local ARCS_MAX = reglage(ctx, "lianesArc")
@@ -422,7 +474,7 @@ function M.construire(ctx)
 			if cheminValide(points) then
 				local m = Outils.modele(dLianes, "LianeArc" .. (nbArcs + 1))
 				for k = 1, n do
-					segment(m, points[k], points[k + 1], 0.35, COULEUR_LIANE, "Liane" .. k)
+					segment(m, points[k], points[k + 1], 0.5, COULEUR_LIANE, "Liane" .. k)
 				end
 				lies[i] = true
 				lies[meilleur] = true
@@ -447,9 +499,9 @@ function M.construire(ctx)
 			local bas = Vector3.new(haut.X + hasard(-0.4, 0.4), basY, haut.Z + hasard(-0.4, 0.4))
 			if haut.Y - basY > 3 and cheminValide({ haut, milieu, bas }) then
 				local m = Outils.modele(dLianes, "LianePendante" .. (nbPendantes + 1))
-				segment(m, haut, milieu, 0.3, COULEUR_LIANE, "Liane1")
-				segment(m, milieu, bas, 0.3, COULEUR_LIANE, "Liane2")
-				boule(m, { Name = "Feuille", Size = Vector3.new(0.9, 0.9, 0.9), CFrame = CFrame.new(bas), Color = VERT_CLAIR, CanCollide = false })
+				segment(m, haut, milieu, 0.45, COULEUR_LIANE, "Liane1")
+				segment(m, milieu, bas, 0.45, COULEUR_LIANE, "Liane2")
+				boule(m, { Name = "Feuille", Size = Vector3.new(1.4, 1.4, 1.4), CFrame = CFrame.new(bas), Color = VERT_CLAIR, CanCollide = false })
 				nbPendantes = nbPendantes + 1
 			end
 		end
@@ -484,7 +536,7 @@ function M.construire(ctx)
 			local pitch = math.rad(hasard(-8, 28))
 			bloc(feuilles, {
 				Name = "Feuille" .. k,
-				Size = Vector3.new(hasard(2.2, 2.8), 0.25, longFeuille),
+				Size = Vector3.new(hasard(2.8, 3.4), 0.4, longFeuille),
 				CFrame = CFrame.new(sommet) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(pitch, 0, 0) * CFrame.new(0, 0, -longFeuille / 2),
 				Color = choisir(VERTS),
 				CanCollide = false,
@@ -498,14 +550,14 @@ function M.construire(ctx)
 			Name = "Bananes",
 			Size = Vector3.new(1.1, 1.8, 1.1),
 			CFrame = CFrame.new(regime) * CFrame.Angles(0, a, 0),
-			Color = Charte.dore,
+			Color = vif("jaune", 1, Charte.dore),
 			CanCollide = false,
 		})
 		boule(m, {
 			Name = "Fleur",
-			Size = Vector3.new(0.9, 0.9, 0.9),
-			CFrame = CFrame.new(regime - Vector3.new(0, 1.3, 0)),
-			Color = Charte.violet,
+			Size = Vector3.new(1.3, 1.3, 1.3),
+			CFrame = CFrame.new(regime - Vector3.new(0, 1.5, 0)),
+			Color = vif("rose", 1, Charte.violet),
 			CanCollide = false,
 		})
 		return true
@@ -531,7 +583,7 @@ function M.construire(ctx)
 		local m = Outils.modele(dRochers, "Rocher" .. numero)
 		local angle = hasard(0, 360)
 		local taille = Vector3.new(sx, sy, sz)
-		bloc(m, { Name = "Pierre", Size = taille, CFrame = Outils.surSol(taille, x, z, angle), Color = Charte.pierre })
+		bloc(m, { Name = "Pierre", Size = taille, CFrame = Outils.surSol(taille, x, z, angle), Color = PIERRE })
 		local mousse = Vector3.new(sx * 0.85, 0.35, sz * 0.85)
 		bloc(m, {
 			Name = "Mousse",
@@ -547,7 +599,7 @@ function M.construire(ctx)
 			Name = "Caillou",
 			Size = petit,
 			CFrame = Outils.surSol(petit, x + math.cos(a) * sx * 0.6, z - math.sin(a) * sx * 0.6, angle + 25),
-			Color = Charte.ombre(Charte.pierre),
+			Color = Charte.ombre(PIERRE),
 		})
 		return true
 	end
@@ -564,7 +616,7 @@ function M.construire(ctx)
 		end
 		local hs = hasard(2, 5)
 		local ds = hasard(0.9, 1.5)
-		local dc = hasard(3.5, 6)
+		local dc = hasard(4.5, 7)
 		local x, z = trouverPlace(dc * 0.4, dc / 2 + 0.2)
 		if not x then
 			return false
@@ -572,7 +624,7 @@ function M.construire(ctx)
 		occuper(x, z, dc * 0.4)
 		local m = Outils.modele(dChampignons, "Champignon" .. numero)
 		local couleur = choisir(CHAPEAUX)
-		local lumineux = couleur == Charte.violet
+		local lumineux = couleur == CHAPEAU_VIOLET
 		cylindre(m, {
 			Name = "Pied",
 			Size = Vector3.new(hs, ds, ds),
@@ -604,7 +656,7 @@ function M.construire(ctx)
 			local r = dc * hasard(0.12, 0.28)
 			boule(m, {
 				Name = "Pois" .. k,
-				Size = Vector3.new(0.8, 0.8, 0.8),
+				Size = Vector3.new(1.2, 1.2, 1.2),
 				CFrame = CFrame.new(x + math.cos(a) * r, yTop, z + math.sin(a) * r),
 				Color = couleurPois,
 				Material = matiere,
@@ -622,12 +674,12 @@ function M.construire(ctx)
 	end
 
 	-- ===== fougères géantes =====
-	local COUT_FOUGERE = 7
+	local COUT_FOUGERE = 8
 	local function fougere(numero)
 		if reste() < COUT_FOUGERE then
 			return false
 		end
-		local long = hasard(4.5, 6.5)
+		local long = hasard(5.5, 7.5)
 		local x, z = trouverPlace(2.5, long * 0.75 + 0.5)
 		if not x then
 			return false
@@ -647,12 +699,20 @@ function M.construire(ctx)
 			end
 			coin(feuilles, {
 				Name = "Fronde" .. k,
-				Size = Vector3.new(hasard(1.2, 1.6), 0.45, l),
+				Size = Vector3.new(hasard(1.8, 2.3), 0.6, l),
 				CFrame = CFrame.new(base) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(pitch, 0, 0) * CFrame.new(0, 0, -l / 2),
 				Color = couleur,
 				CanCollide = false,
 			})
 		end
+		-- touffe ronde au centre : silhouette plus douce, plus cartoon
+		boule(m, {
+			Name = "Touffe",
+			Size = Vector3.new(2.6, 2.2, 2.6),
+			CFrame = CFrame.new(x, 0.9, z),
+			Color = VERT_ACIDE,
+			CanCollide = false,
+		})
 		peutEtreAnime(feuilles, 0.25)
 		return true
 	end
@@ -667,7 +727,7 @@ function M.construire(ctx)
 		if reste() < COUT_BUISSON then
 			return false
 		end
-		local x, z = trouverPlace(2.2, 3.8)
+		local x, z = trouverPlace(2.8, 5)
 		if not x then
 			return false
 		end
@@ -676,7 +736,7 @@ function M.construire(ctx)
 		local boules = {}
 		local nb = rng:NextInteger(2, 3)
 		for k = 1, nb do
-			local s = hasard(2.8, 4.2)
+			local s = hasard(3.8, 5.4)
 			local a = hasard(0, math.pi * 2)
 			local r = 0
 			if k > 1 then
@@ -700,7 +760,7 @@ function M.construire(ctx)
 			local dir = Vector3.new(math.cos(a) * math.cos(el), math.sin(el), math.sin(a) * math.cos(el))
 			boule(m, {
 				Name = "Fleur" .. k,
-				Size = Vector3.new(0.9, 0.9, 0.9),
+				Size = Vector3.new(1.4, 1.4, 1.4),
 				CFrame = CFrame.new(b.centre + dir * (b.s / 2)),
 				Color = choisir(FLEURS),
 				CanCollide = false,

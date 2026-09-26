@@ -13,6 +13,15 @@ local DISTANCE_PLEINE = 40 -- en deçà, un effet du monde s'entend à plein vol
 local DISTANCE_MAX = 220 -- au-delà, il ne s'entend plus
 local VOLUME_LOINTAIN = 0.15 -- volume relatif juste avant la limite
 
+-- série d'encaissements : la tonalité monte à chaque gain rapproché (style « juicy »)
+local SERIE_DELAI = 1.5 -- sans gain pendant ce délai, la tonalité revient à la normale
+local SERIE_PAS = 0.07 -- hausse de PlaybackSpeed par gain de la série
+local SERIE_MAX = 0.7 -- hausse maximale (vitesse x1,7)
+
+-- raretés qui déclenchent le son « rare » renforcé (ordre d'Equilibrage.raretes)
+local ORDRE_FORT = 5 -- Mythique et au-delà
+local RARETES_FORTES = { Mythique = true, Divin = true, Secret = true } -- repli sans Equilibrage
+
 local S = "rbxasset://sounds/"
 
 -- banque : nom -> liste de couches { fichier, vitesse, volume, retard }
@@ -61,6 +70,14 @@ local BANQUE = {
 		{ S .. "electronicpingshort.wav", 1.2, 0.55, 0 },
 		{ S .. "electronicpingshort.wav", 1.5, 0.55, 0.09 },
 		{ S .. "electronicpingshort.wav", 1.8, 0.6, 0.18 },
+	},
+	-- Mythique, Divin, Secret : plus fort, plus aigu, avec une cloche finale
+	rareFort = {
+		{ S .. "electronicpingshort.wav", 1.6, 0.9, 0 },
+		{ S .. "electronicpingshort.wav", 2.0, 0.9, 0.08 },
+		{ S .. "electronicpingshort.wav", 2.4, 0.95, 0.16 },
+		{ S .. "electronicpingshort.wav", 3.0, 1.0, 0.26 },
+		{ S .. "impact_water.mp3", 1.3, 0.5, 0.26 },
 	},
 	renaissance = {
 		{ S .. "electronicpingshort.wav", 0.8, 0.6, 0 },
@@ -144,12 +161,28 @@ function M.demarrer(ctx)
 
 	local dernier = {} -- [nom] = os.clock() de la dernière lecture
 
-	local function lireCouche(entree, facteur)
+	-- série d'encaissements en cours
+	local serie = 0
+	local dernierGain = 0
+
+	-- hausse de tonalité pour ce gain, puis prolonge la série
+	local function tonaliteGain(maintenant)
+		if maintenant - dernierGain > SERIE_DELAI then
+			serie = 0
+		end
+		dernierGain = maintenant
+		local hausse = math.min(serie * SERIE_PAS, SERIE_MAX)
+		serie = serie + 1
+		return 1 + hausse
+	end
+
+	local function lireCouche(entree, facteur, vitesse)
 		local son = entree.sons[entree.prochain]
 		entree.prochain = entree.prochain % #entree.sons + 1
 		if not son or not son.Parent then return end
 		pcall(function()
 			son.Volume = entree.couche[3] * facteur
+			son.PlaybackSpeed = entree.couche[2] * vitesse
 			son.TimePosition = 0
 			son:Play()
 		end)
@@ -166,12 +199,38 @@ function M.demarrer(ctx)
 		local precedent = dernier[nom]
 		if precedent and maintenant - precedent < INTERVALLE_MIN then return end
 		dernier[nom] = maintenant
+		local vitesse = 1
+		if nom == "argent" then
+			vitesse = tonaliteGain(maintenant)
+		end
 		for _, entree in ipairs(liste) do
 			local retard = entree.couche[4] or 0
 			if retard > 0 then
-				task.delay(retard, lireCouche, entree, facteur)
+				task.delay(retard, lireCouche, entree, facteur, vitesse)
 			else
-				lireCouche(entree, facteur)
+				lireCouche(entree, facteur, vitesse)
+			end
+		end
+	end
+
+	-- vrai si la rareté vaut Mythique ou mieux
+	local function rareteForte(rarete)
+		if type(rarete) ~= "string" then return false end
+		if RARETES_FORTES[rarete] then return true end
+		local raretes = ctx.Equilibrage and ctx.Equilibrage.raretes
+		local def = raretes and raretes[rarete]
+		if type(def) == "table" and type(def.ordre) == "number" then
+			return def.ordre >= ORDRE_FORT
+		end
+		return false
+	end
+
+	-- raretés animées de la charte visuelle (Divin, Secret) : toujours du côté fort
+	local Style = ctx.Style
+	if Style and type(Style.raretes) == "table" then
+		for nomRarete, def in pairs(Style.raretes) do
+			if type(def) == "table" and def.anime then
+				RARETES_FORTES[nomRarete] = true
 			end
 		end
 	end
@@ -215,9 +274,20 @@ function M.demarrer(ctx)
 				end
 			end
 			if not nom then return end
+			local fort = type(donnees) == "table" and rareteForte(donnees.rarete)
+			if genre == "Apparition" and fort then
+				nom = "rareFort"
+			end
 			local facteur = 1
 			if not GLOBAUX[genre] then
 				facteur = attenuation(position)
+			end
+			-- un dino Mythique+ s'entend de loin, et son achat sonne comme un événement
+			if fort and (genre == "Apparition" or genre == "Achat") then
+				facteur = math.max(facteur, 0.6)
+				if genre == "Achat" then
+					jouer("rareFort", facteur)
+				end
 			end
 			-- un vol qui nous concerne s'entend toujours à plein volume
 			if genre == "VolDebut" and type(donnees) == "table" then
@@ -242,6 +312,25 @@ function M.demarrer(ctx)
 				jouer(nom, 1)
 			end
 		end)
+	end
+
+	-- « clic » sur chaque bouton de l'interface (anti-cacophonie : un seul par pression)
+	local gui = ctx.gui
+	if gui then
+		local branches = {}
+		setmetatable(branches, { __mode = "k" })
+		local function brancher(objet)
+			if branches[objet] then return end
+			if not objet:IsA("TextButton") then return end
+			branches[objet] = true
+			objet.Activated:Connect(function()
+				jouer("clic", 1)
+			end)
+		end
+		for _, objet in ipairs(gui:GetDescendants()) do
+			brancher(objet)
+		end
+		gui.DescendantAdded:Connect(brancher)
 	end
 end
 

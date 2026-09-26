@@ -69,8 +69,14 @@ function M.demarrer(ctx)
 		return 1
 	end
 
+	-- montant au format du jeu (« $1,2K »), via la boîte à outils Style quand elle est là
+	local formatArgent = Charte.argent
+	if ctx.Style and type(ctx.Style.argent) == "function" then
+		formatArgent = ctx.Style.argent
+	end
+
 	local function montant(n)
-		local ok, texte = pcall(Charte.argent, n)
+		local ok, texte = pcall(formatArgent, n)
 		if ok and type(texte) == "string" then
 			return texte
 		end
@@ -161,7 +167,12 @@ function M.demarrer(ctx)
 			Bus.demander("AjouterArgent", joueur, gain, "Index")
 		end
 		Bus.emettre("EspeceDecouverte", joueur, espece)
-		notifier(joueur, "Dinodex : " .. nomEspece(espece) .. " découvert ! +" .. montant(gain) .. " $", "succes")
+		-- notification courte et percutante (lisible sur mobile) : « 📖 NOUVELLE ESPÈCE : Rex ! +$1K »
+		local message = "📖 NOUVELLE ESPÈCE : " .. nomEspece(espece) .. " !"
+		if gain > 0 then
+			message = message .. " +" .. montant(gain)
+		end
+		notifier(joueur, message, "succes")
 		pcall(function()
 			Reseau.Effet:FireClient(joueur, "Decouverte", position, { espece = espece })
 		end)
@@ -170,7 +181,7 @@ function M.demarrer(ctx)
 		local apres = recalculerBonus(joueur)
 		if rareteComplete(joueur, rarete) and (not estFini(avant) or apres > avant) then
 			local pourcent = math.floor(BONUS_RARETE * 100 + 0.5)
-			notifier(joueur, "Dinodex : rareté " .. nomRarete(rarete) .. " complète ! Revenus +" .. pourcent .. " % pour toujours", "succes")
+			notifier(joueur, "🌈 Rareté complète : " .. nomRarete(rarete) .. " ! Revenus +" .. pourcent .. " %", "succes")
 		end
 	end
 

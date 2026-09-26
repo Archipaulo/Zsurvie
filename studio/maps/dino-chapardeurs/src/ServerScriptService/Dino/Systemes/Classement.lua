@@ -126,6 +126,7 @@ end
 local function construireTableau(ctx)
 	local C = ctx.Charte
 	local O = ctx.Outils
+	local S = ctx.Style
 	local ancien = ctx.racine:FindFirstChild("Classement")
 	if ancien then ancien:Destroy() end
 	local dossier = O.dossier(ctx.racine, "Classement")
@@ -170,13 +171,13 @@ local function construireTableau(ctx)
 		Name = "Cadre",
 		Size = Vector3.new(LARGEUR + 0.6, HAUTEUR + 0.6, 0.3),
 		CFrame = local_(0, yCentre, 0.55),
-		Color = C.terre,
+		Color = S.couleurs.contour,
 	})
 	local panneau = O.bloc(modele, {
 		Name = "Panneau",
 		Size = Vector3.new(LARGEUR, HAUTEUR, EPAISSEUR),
 		CFrame = local_(0, yCentre, 0.1),
-		Color = C.nuit,
+		Color = S.couleurs.fond,
 	})
 	-- fronton doré lumineux
 	local fronton = O.bloc(modele, {
@@ -203,84 +204,108 @@ local function construireTableau(ctx)
 	gui.LightInfluence = 0
 	gui.Parent = panneau
 
-	local titre = Instance.new("TextLabel")
-	titre.Name = "Titre"
-	titre.BackgroundTransparency = 1
-	titre.Position = UDim2.fromScale(0.04, 0.03)
-	titre.Size = UDim2.fromScale(0.92, 0.17)
-	titre.Font = C.police
-	titre.TextScaled = true
-	titre.TextColor3 = C.dore
-	titre.TextStrokeColor3 = C.encre
-	titre.TextStrokeTransparency = 0.4
-	titre.Text = "Tableau d'honneur"
-	titre.Parent = gui
+	-- fond sombre du panneau, cerné de noir épais (style panneau de simulateur)
+	local fondGui = Instance.new("Frame")
+	fondGui.Name = "Fond"
+	fondGui.BorderSizePixel = 0
+	fondGui.BackgroundColor3 = S.couleurs.fond
+	fondGui.Size = UDim2.fromScale(1, 1)
+	S.coins(fondGui, 24)
+	S.bordure(fondGui, 8)
+	fondGui.Parent = gui
 
-	local sousTitre = Instance.new("TextLabel")
-	sousTitre.Name = "SousTitre"
-	sousTitre.BackgroundTransparency = 1
-	sousTitre.Position = UDim2.fromScale(0.04, 0.2)
-	sousTitre.Size = UDim2.fromScale(0.92, 0.07)
-	sousTitre.Font = C.policeTexte
-	sousTitre.TextScaled = true
-	sousTitre.TextColor3 = C.creme
-	sousTitre.TextTransparency = 0.25
-	sousTitre.Text = "Les meilleurs revenus par seconde"
-	sousTitre.Parent = gui
+	-- bandeau de titre en dégradé jaune-orangé
+	local bandeau = Instance.new("Frame")
+	bandeau.Name = "Bandeau"
+	bandeau.BorderSizePixel = 0
+	bandeau.BackgroundColor3 = Color3.new(1, 1, 1)
+	bandeau.Position = UDim2.fromScale(0.03, 0.03)
+	bandeau.Size = UDim2.fromScale(0.94, 0.17)
+	S.coins(bandeau, 18)
+	S.bordure(bandeau, 5)
+	S.degrade(bandeau, S.boutons.jaune[1], S.boutons.jaune[2])
+	bandeau.Parent = gui
 
-	local couleursRang = { C.dore, C.gemme, C.lave }
+	S.texte(gui, {
+		Name = "Titre",
+		Position = UDim2.fromScale(0.05, 0.035),
+		Size = UDim2.fromScale(0.9, 0.16),
+		Text = "🏆 TOP REVENUS",
+		titre = true,
+		contour = 6,
+		ZIndex = 2,
+	})
+
+	S.texte(gui, {
+		Name = "SousTitre",
+		Position = UDim2.fromScale(0.05, 0.21),
+		Size = UDim2.fromScale(0.9, 0.07),
+		Text = "Les meilleurs revenus par seconde",
+		TextColor3 = S.couleurs.revenu,
+		contour = 3,
+	})
+
+	local icones = { "🥇", "🥈", "🥉" }
+	local couleursRang = { S.boutons.jaune, S.boutons.gris, S.boutons.orange }
 	local lignes = {}
-	local hautLigne = 0.7 / NB_LIGNES
+	local hautLigne = 0.69 / NB_LIGNES
 	for i = 1, NB_LIGNES do
-		local fond = Instance.new("Frame")
-		fond.Name = "Ligne" .. i
-		fond.BorderSizePixel = 0
-		fond.BackgroundColor3 = C.encre
-		fond.BackgroundTransparency = 0.35
-		fond.Position = UDim2.fromScale(0.04, 0.28 + (i - 1) * hautLigne)
-		fond.Size = UDim2.new(0.92, 0, hautLigne, -6)
-		fond.Parent = gui
-		local coin = Instance.new("UICorner")
-		coin.CornerRadius = UDim.new(0, 10)
-		coin.Parent = fond
+		local carteFond = S.couleurs.carte
+		if i <= 3 then carteFond = S.couleurs.carteClaire end
+		local fond = S.carte(gui, {
+			Name = "Ligne" .. i,
+			Position = UDim2.fromScale(0.03, 0.29 + (i - 1) * hautLigne),
+			Size = UDim2.new(0.94, 0, hautLigne, -8),
+			BackgroundColor3 = carteFond,
+		})
 
-		local couleur = couleursRang[i] or C.creme
+		-- pastille de rang : médaille pour le podium, numéro cerné sinon
+		local pastille = Instance.new("Frame")
+		pastille.Name = "Pastille"
+		pastille.BorderSizePixel = 0
+		pastille.BackgroundColor3 = Color3.new(1, 1, 1)
+		pastille.AnchorPoint = Vector2.new(0, 0.5)
+		pastille.Position = UDim2.new(0, 8, 0.5, 0)
+		pastille.Size = UDim2.new(0.1, 0, 0.8, 0)
+		S.coins(pastille, 12)
+		S.bordure(pastille, 3)
+		local palette = couleursRang[i] or S.boutons.bleu
+		S.degrade(pastille, palette[1], palette[2])
+		pastille.Parent = fond
 
-		local rang = Instance.new("TextLabel")
-		rang.Name = "Rang"
-		rang.BackgroundTransparency = 1
-		rang.Position = UDim2.fromScale(0.02, 0.1)
-		rang.Size = UDim2.fromScale(0.1, 0.8)
-		rang.Font = C.police
-		rang.TextScaled = true
-		rang.TextColor3 = couleur
-		rang.Text = tostring(i)
-		rang.Parent = fond
+		local texteRang = tostring(i)
+		if icones[i] then texteRang = icones[i] end
+		S.texte(fond, {
+			Name = "Rang",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 8, 0.5, 0),
+			Size = UDim2.new(0.1, 0, 0.8, 0),
+			Text = texteRang,
+			titre = true,
+			contour = 3,
+			ZIndex = 2,
+		})
 
-		local nom = Instance.new("TextLabel")
-		nom.Name = "Nom"
-		nom.BackgroundTransparency = 1
-		nom.Position = UDim2.fromScale(0.14, 0.1)
-		nom.Size = UDim2.fromScale(0.5, 0.8)
-		nom.Font = C.policeTexte
-		nom.TextScaled = true
-		nom.TextXAlignment = Enum.TextXAlignment.Left
-		nom.TextTruncate = Enum.TextTruncate.AtEnd
-		nom.TextColor3 = C.creme
-		nom.Text = ""
-		nom.Parent = fond
+		local nom = S.texte(fond, {
+			Name = "Nom",
+			Position = UDim2.fromScale(0.15, 0.12),
+			Size = UDim2.fromScale(0.5, 0.76),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			Text = "",
+			contour = 3,
+		})
 
-		local revenu = Instance.new("TextLabel")
-		revenu.Name = "Revenu"
-		revenu.BackgroundTransparency = 1
-		revenu.Position = UDim2.fromScale(0.64, 0.1)
-		revenu.Size = UDim2.fromScale(0.34, 0.8)
-		revenu.Font = C.police
-		revenu.TextScaled = true
-		revenu.TextXAlignment = Enum.TextXAlignment.Right
-		revenu.TextColor3 = couleur
-		revenu.Text = ""
-		revenu.Parent = fond
+		local revenu = S.texte(fond, {
+			Name = "Revenu",
+			Position = UDim2.fromScale(0.64, 0.12),
+			Size = UDim2.fromScale(0.34, 0.76),
+			TextXAlignment = Enum.TextXAlignment.Right,
+			TextColor3 = S.couleurs.revenu,
+			Text = "",
+			titre = true,
+			contour = 3,
+		})
 
 		lignes[i] = { nom = nom, revenu = revenu }
 	end
@@ -297,11 +322,11 @@ local function majTableau(ctx, lignes)
 			local nom = entree.joueur.DisplayName
 			if type(nom) ~= "string" or nom == "" then nom = entree.joueur.Name end
 			ligne.nom.Text = nom
-			ligne.nom.TextColor3 = ctx.Charte.creme
-			ligne.revenu.Text = ctx.Charte.argent(entree.revenu) .. "/s"
+			ligne.nom.TextColor3 = ctx.Style.couleurs.texte
+			ligne.revenu.Text = ctx.Style.revenu(entree.revenu)
 		else
 			ligne.nom.Text = "---"
-			ligne.nom.TextColor3 = ctx.Charte.pierre
+			ligne.nom.TextColor3 = ctx.Style.boutons.gris[2]
 			ligne.revenu.Text = ""
 		end
 	end

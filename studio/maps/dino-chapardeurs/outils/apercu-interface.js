@@ -46,7 +46,10 @@ nav button.actif { background: linear-gradient(#7cff6b, #1faf3a); }
 const D = ${JSON.stringify(donnees)};
 const ETATS = ${JSON.stringify(ETATS)};
 const POLICES = { FredokaOne: "'Fredoka', sans-serif", LuckiestGuy: "'Luckiest Guy', 'Fredoka', sans-serif", GothamBold: "'Montserrat', sans-serif", GothamBlack: "'Montserrat', sans-serif", Gotham: "'Montserrat', sans-serif", GothamMedium: "'Montserrat', sans-serif", GothamSemibold: "'Montserrat', sans-serif" };
-const deg = g => { const pts = g.points.map(([t, c]) => c + " " + (t * 100).toFixed(0) + "%").join(", "); return "linear-gradient(" + (g.rotation + 90) + "deg, " + pts + ")"; };
+const alphaA = (g, t) => { const tr = g.transp || []; if (!tr.length) return 1; if (t <= tr[0][0]) return 1 - tr[0][1]; for (let i = 1; i < tr.length; i++) if (t <= tr[i][0]) { const [t0, v0] = tr[i-1], [t1, v1] = tr[i]; return 1 - (v0 + (v1 - v0) * (t - t0) / Math.max(t1 - t0, 1e-6)); } return 1 - tr[tr.length-1][1]; };
+const rgba = (c, a) => "rgba(" + parseInt(c.slice(1,3),16) + "," + parseInt(c.slice(3,5),16) + "," + parseInt(c.slice(5,7),16) + "," + a.toFixed(2) + ")";
+const couleurA = (g, t) => { const p = g.points; if (t <= p[0][0]) return p[0][1]; for (let i = 1; i < p.length; i++) if (t <= p[i][0]) return p[i][1]; return p[p.length-1][1]; };
+const deg = (g, base) => { const ts = new Set([0, 1]); g.points.forEach(p => ts.add(p[0])); (g.transp || []).forEach(p => ts.add(p[0])); const stops = [...ts].sort((a, b) => a - b).map(t => { let c = couleurA(g, t); if (base) { const m = (x, y) => Math.round(parseInt(x, 16) * parseInt(y, 16) / 255).toString(16).padStart(2, "0"); c = "#" + m(c.slice(1,3), base.slice(1,3)) + m(c.slice(3,5), base.slice(3,5)) + m(c.slice(5,7), base.slice(5,7)); } return rgba(c, alphaA(g, t) * (base && base.a !== undefined ? base.a : 1)) + " " + (t * 100).toFixed(1) + "%"; }); return "linear-gradient(" + (g.rotation + 90) + "deg, " + stops.join(", ") + ")"; };
 const ombreTexte = (c, e) => { e = Math.max(1, Math.round(e)); const l = []; for (let a = 0; a < 16; a++) { const r = a * Math.PI / 8; l.push((Math.cos(r) * e).toFixed(1) + "px " + (Math.sin(r) * e).toFixed(1) + "px 0 " + c); } return l.join(","); };
 function dessiner(d, parent, ox, oy) {
   const el = document.createElement("div");
@@ -55,7 +58,10 @@ function dessiner(d, parent, ox, oy) {
   el.style.width = Math.max(0, d.w) + "px"; el.style.height = Math.max(0, d.h) + "px";
   el.style.zIndex = d.z || 1;
   const texteSeul = d.texte !== undefined && (d.bgT === undefined || d.bgT >= 1);
-  if (d.bg && d.bgT < 1) {
+  if (d.bg && d.bgT < 1 && d.grad && !texteSeul) {
+    const base = d.bg; const b = Object.assign(new String(base), {}); 
+    el.style.background = deg(d.grad, null).replace(/rgba\\((\\d+),(\\d+),(\\d+),([\\d.]+)\\)/g, (m, r, g2, bl, a) => "rgba(" + Math.round(r * parseInt(base.slice(1,3),16) / 255) + "," + Math.round(g2 * parseInt(base.slice(3,5),16) / 255) + "," + Math.round(bl * parseInt(base.slice(5,7),16) / 255) + "," + (a * (1 - d.bgT)).toFixed(2) + ")");
+  } else if (d.bg && d.bgT < 1) {
     el.style.background = d.grad && !texteSeul ? deg(d.grad) : d.bg;
     if (d.grad && !texteSeul) el.style.backgroundColor = d.bg;
     el.style.opacity = "";

@@ -1,5 +1,5 @@
 -- Interface Base : invites locales (Vendre / Voler / Verrouiller), repère « Ta base »,
--- minuteur au-dessus du bouton de verrou et barre de verrou dans l'écran.
+-- minuteur au-dessus du bouton de verrou et ruban de verrou dans l'écran (look STYLE.md, via ctx.Style).
 -- Tout est local : ProximityPrompt.Enabled n'est modifié que sur ce client, le serveur vérifie toujours.
 
 local M = {}
@@ -11,6 +11,10 @@ local PERIODE_SURETE = 2   -- recalcul complet des invites, au cas où un change
 function M.demarrer(ctx)
 	local Charte = ctx.Charte
 	local Outils = ctx.Outils
+	local Style = ctx.Style
+	local ROUGE = Charte.hex("FF4B4B")
+	local VERT = Style.couleurs.argent
+	local JAUNE = Style.couleurs.revenu
 	local Equilibrage = ctx.Equilibrage
 	local joueur = ctx.joueur
 	local racine = ctx.racine
@@ -157,102 +161,71 @@ function M.demarrer(ctx)
 	-- ===== repère « Ta base » et minuteur du verrou (BillboardGui locaux) =====
 	local conteneur = ctx.gui.Parent -- PlayerGui : un BillboardGui n'est pas rendu à l'intérieur d'un ScreenGui
 
-	local repere = Instance.new("BillboardGui")
-	repere.Name = "RepereBase"
-	repere.AlwaysOnTop = true
+	-- repère géant « 🏠 TA BASE » : taille en pixels pour rester lisible de très loin, toujours devant
+	local repere, lignesRepere = Style.etiquette(nil, {
+		{ texte = "🏠 TA BASE", couleur = VERT, taille = 1.4, titre = true, nom = "Titre", contour = 4 },
+		{ texte = "", couleur = Style.couleurs.texte, taille = 0.8, nom = "Distance", contour = 3 },
+	}, { Name = "RepereBase", AlwaysOnTop = true, MaxDistance = 100000, StudsOffset = Vector3.new(0, 7, 0) })
+	repere.Size = UDim2.fromOffset(280, 100)
 	repere.ResetOnSpawn = false
-	repere.LightInfluence = 0
-	repere.Size = UDim2.fromOffset(170, 58)
-	repere.StudsOffset = Vector3.new(0, 5, 0)
-	repere.MaxDistance = 100000
 	repere.Enabled = false
 	repere.Parent = conteneur
-	local fondRepere = Outils.cadre(repere, {
-		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Charte.encre,
-		BackgroundTransparency = 0.25,
-	})
-	local traitRepere = Instance.new("UIStroke")
-	traitRepere.Color = Charte.dore
-	traitRepere.Thickness = 2
-	traitRepere.Parent = fondRepere
-	Outils.etiquette(fondRepere, {
-		Name = "Titre",
-		Size = UDim2.new(1, -12, 0.6, -4),
-		Position = UDim2.fromOffset(6, 4),
-		Text = "🏠 Ta base",
-		TextColor3 = Charte.dore,
-	})
-	local distanceRepere = Outils.etiquette(fondRepere, {
-		Name = "Distance",
-		Size = UDim2.new(1, -12, 0.4, -4),
-		Position = UDim2.new(0, 6, 0.6, 0),
-		Text = "",
-		Font = Charte.policeTexte,
-		TextColor3 = Charte.creme,
-	})
+	local distanceRepere = lignesRepere[2]
 
-	local minuteur = Instance.new("BillboardGui")
-	minuteur.Name = "MinuteurVerrou"
-	minuteur.AlwaysOnTop = false
+	-- minuteur du verrou : gros texte cerné flottant au-dessus du bouton (taille en studs, comme le monde)
+	local minuteur, lignesMinuteur = Style.etiquette(nil, {
+		{ texte = "🔓 PRÊT", couleur = VERT, titre = true, nom = "Texte", contour = 4 },
+	}, { Name = "MinuteurVerrou", AlwaysOnTop = false, MaxDistance = 90, largeur = 9, hauteurLigne = 2.6, StudsOffset = Vector3.new(0, 4, 0) })
 	minuteur.ResetOnSpawn = false
-	minuteur.LightInfluence = 0
-	minuteur.Size = UDim2.fromOffset(120, 44)
-	minuteur.StudsOffset = Vector3.new(0, 3.2, 0)
-	minuteur.MaxDistance = 90
 	minuteur.Enabled = false
 	minuteur.Parent = conteneur
-	local fondMinuteur = Outils.cadre(minuteur, {
-		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Charte.encre,
-		BackgroundTransparency = 0.2,
-	})
-	local traitMinuteur = Instance.new("UIStroke")
-	traitMinuteur.Color = Charte.herbe
-	traitMinuteur.Thickness = 2
-	traitMinuteur.Parent = fondMinuteur
-	local texteMinuteur = Outils.etiquette(fondMinuteur, {
-		Name = "Texte",
-		Size = UDim2.new(1, -10, 1, -8),
-		Position = UDim2.fromOffset(5, 4),
-		Text = "Prêt",
-		TextColor3 = Charte.herbe,
-	})
+	local texteMinuteur = lignesMinuteur[1]
+	local etatMinuteur = ""
 
-	-- ===== barre de verrou dans l'écran =====
-	local barre = Outils.cadre(ctx.gui, {
-		Name = "BarreVerrou",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 144), -- sous l'argent (10..88) et le bandeau d'événement du HUD (96..136)
-		Size = UDim2.fromOffset(300, 46),
-		BackgroundColor3 = Charte.encre,
-		BackgroundTransparency = 0.15,
-		Visible = false,
-	})
-	local traitBarre = Instance.new("UIStroke")
-	traitBarre.Color = Charte.alerte
-	traitBarre.Thickness = 2
-	traitBarre.Parent = barre
-	local texteBarre = Outils.etiquette(barre, {
+	-- ===== ruban de verrou dans l'écran =====
+	-- sous le bandeau d'événement du HUD (10..84) : zone 144..196, au-dessus du bandeau de vol (198..)
+	local barre = Instance.new("Frame")
+	barre.Name = "BarreVerrou"
+	barre.AnchorPoint = Vector2.new(0.5, 0)
+	barre.Position = UDim2.new(0.5, 0, 0, 144)
+	barre.Size = UDim2.new(0.9, 0, 0, 52)
+	barre.BackgroundColor3 = Color3.new(1, 1, 1)
+	barre.BorderSizePixel = 0
+	barre.Visible = false
+	Style.coins(barre, 16)
+	Style.bordure(barre, 4)
+	Style.degrade(barre, Style.boutons.rouge[1], Style.boutons.rouge[2])
+	local limiteBarre = Instance.new("UISizeConstraint")
+	limiteBarre.MaxSize = Vector2.new(440, 52)
+	limiteBarre.Parent = barre
+	barre.Parent = ctx.gui
+	local texteBarre = Style.texte(barre, {
 		Name = "Texte",
-		Size = UDim2.new(1, -16, 0, 22),
-		Position = UDim2.fromOffset(8, 4),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 3),
+		Size = UDim2.new(1, -20, 0, 32),
 		Text = "",
-		TextColor3 = Charte.creme,
+		titre = true,
+		contour = 3,
+		tailleMax = 30,
 	})
-	local rail = Outils.cadre(barre, {
-		Name = "Rail",
-		Position = UDim2.new(0, 10, 0, 30),
-		Size = UDim2.new(1, -20, 0, 9),
-		BackgroundColor3 = Charte.nuit,
-		BackgroundTransparency = 0,
-	})
-	local remplissage = Outils.cadre(rail, {
-		Name = "Remplissage",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Charte.alerte,
-		BackgroundTransparency = 0,
-	})
+	local rail = Instance.new("Frame")
+	rail.Name = "Rail"
+	rail.Position = UDim2.new(0, 12, 1, -13)
+	rail.Size = UDim2.new(1, -24, 0, 8)
+	rail.BackgroundColor3 = Style.couleurs.contour
+	rail.BorderSizePixel = 0
+	Style.coins(rail, 4)
+	rail.Parent = barre
+	local remplissage = Instance.new("Frame")
+	remplissage.Name = "Remplissage"
+	remplissage.Size = UDim2.fromScale(1, 1)
+	remplissage.BackgroundColor3 = Color3.new(1, 1, 1)
+	remplissage.BorderSizePixel = 0
+	Style.coins(remplissage, 4)
+	local degradeRemplissage = Style.degrade(remplissage, Style.boutons.jaune[1], Style.boutons.jaune[2])
+	remplissage.Parent = rail
+	local barreAffichee = false
 
 	-- ===== suivi des bases =====
 	local function suivreBase(m)
@@ -331,6 +304,7 @@ function M.demarrer(ctx)
 			repere.Enabled = false
 			minuteur.Enabled = false
 			barre.Visible = false
+			barreAffichee = false
 			return
 		end
 		local t = maintenant()
@@ -344,7 +318,10 @@ function M.demarrer(ctx)
 			local d = Outils.distanceXZ(pos, cible.Position)
 			if d > DISTANCE_REPERE then
 				distanceRepere.Text = math.floor(d + 0.5) .. " studs"
-				repere.Enabled = true
+				if not repere.Enabled then
+					repere.Enabled = true
+					Style.pop(lignesRepere[1])
+				end
 			else
 				repere.Enabled = false
 			end
@@ -362,38 +339,54 @@ function M.demarrer(ctx)
 		end
 		if bouton and bouton:IsA("BasePart") then
 			if minuteur.Adornee ~= bouton then minuteur.Adornee = bouton end
+			local etat = "pret"
 			if verrouillee then
-				texteMinuteur.Text = "🔒 " .. math.ceil(reste) .. " s"
-				texteMinuteur.TextColor3 = Charte.alerte
-				traitMinuteur.Color = Charte.alerte
+				etat = "verrou"
+				texteMinuteur.Text = "🔒 " .. math.ceil(reste) .. "s"
+				texteMinuteur.TextColor3 = ROUGE
 			elseif (finRecharge[index] or 0) > t then
-				texteMinuteur.Text = "⏳ " .. math.ceil(finRecharge[index] - t) .. " s"
-				texteMinuteur.TextColor3 = Charte.dore
-				traitMinuteur.Color = Charte.dore
+				etat = "recharge"
+				texteMinuteur.Text = "⏳ " .. math.ceil(finRecharge[index] - t) .. "s"
+				texteMinuteur.TextColor3 = JAUNE
 			else
-				texteMinuteur.Text = "Prêt"
-				texteMinuteur.TextColor3 = Charte.herbe
-				traitMinuteur.Color = Charte.herbe
+				texteMinuteur.Text = "🔓 PRÊT"
+				texteMinuteur.TextColor3 = VERT
 			end
 			minuteur.Enabled = true
+			if etat ~= etatMinuteur then
+				etatMinuteur = etat
+				Style.pop(texteMinuteur)
+			end
 		else
 			minuteur.Enabled = false
 		end
 
 		-- barre de verrou
 		if verrouillee then
-			texteBarre.Text = "🔒 Base verrouillée · " .. math.ceil(reste) .. " s"
+			texteBarre.Text = "🔒 BASE VERROUILLÉE " .. math.ceil(reste) .. "s"
 			local part = 1
 			if DUREE_VERROU > 0 then part = math.clamp(reste / DUREE_VERROU, 0, 1) end
 			remplissage.Size = UDim2.fromScale(part, 1)
 			if reste <= 10 then
-				remplissage.BackgroundColor3 = Charte.dore
+				-- fin proche : la jauge passe au blanc et le texte clignote en jaune
+				degradeRemplissage.Color = ColorSequence.new(Color3.new(1, 1, 1), Style.boutons.gris[1])
+				if math.floor(t * 2) % 2 == 0 then
+					texteBarre.TextColor3 = JAUNE
+				else
+					texteBarre.TextColor3 = Style.couleurs.texte
+				end
 			else
-				remplissage.BackgroundColor3 = Charte.alerte
+				degradeRemplissage.Color = ColorSequence.new(Style.boutons.jaune[1], Style.boutons.jaune[2])
+				texteBarre.TextColor3 = Style.couleurs.texte
 			end
 			barre.Visible = true
+			if not barreAffichee then
+				barreAffichee = true
+				Style.pop(barre)
+			end
 		else
 			barre.Visible = false
+			barreAffichee = false
 		end
 	end
 

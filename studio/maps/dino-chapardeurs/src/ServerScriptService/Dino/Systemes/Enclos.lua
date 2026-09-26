@@ -1,6 +1,7 @@
 -- Système Enclos : les dinos posés dans les Bases (emplacements, revenu, collecte, vente, restauration).
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
+local TweenService = game:GetService("TweenService")
 
 local M = {}
 
@@ -11,6 +12,7 @@ function M.demarrer(ctx)
 	local Outils = ctx.Outils
 	local E = ctx.Equilibrage
 	local Reseau = ctx.Reseau
+	local Style = ctx.Style
 
 	local PART_VENTE = (E.vente and E.vente.part) or 0.5
 	local DUREE_VOL = (E.vol and E.vol.dureeAppui) or 1.2
@@ -350,6 +352,57 @@ function M.demarrer(ctx)
 		end
 	end)
 
+	-- ===== étiquettes flottantes (style simulateur) =====
+	local tailles = {}  -- [BillboardGui] = taille de repos (pour la pulsation)
+	local PULSATION = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+	-- petit gonflement puis retour à la taille de repos (répliqué aux clients)
+	local function pulser(gui, force)
+		local base = tailles[gui]
+		if not base then return end
+		local f = force or 1.18
+		pcall(function()
+			gui.Size = UDim2.new(base.X.Scale * f, base.X.Offset, base.Y.Scale * f, base.Y.Offset)
+			TweenService:Create(gui, PULSATION, { Size = base }):Play()
+		end)
+	end
+
+	-- au-dessus de la dalle Collecte : « 💰 COLLECTER » + total à encaisser
+	local etiquettesCollecte = {} -- [index de Base] = { gui = BillboardGui, total = TextLabel, valeur = n }
+
+	local function etiquetterCollecte(index, dalle)
+		local ancienne = dalle:FindFirstChild("EtiquetteCollecte")
+		if ancienne then pcall(function() ancienne:Destroy() end) end
+		local gui, textes = Style.etiquette(dalle, {
+			{ texte = "💰 COLLECTER", couleur = Style.couleurs.argent, titre = true, taille = 1.2, nom = "Titre", contour = 4 },
+			{ texte = Charte.argent(0), couleur = Style.couleurs.argent, taille = 1, nom = "Total", contour = 3.5 },
+		}, {
+			Name = "EtiquetteCollecte",
+			largeur = 9,
+			hauteurLigne = 1.6,
+			StudsOffset = Vector3.new(0, 4.5, 0),
+			MaxDistance = 110,
+		})
+		tailles[gui] = gui.Size
+		etiquettesCollecte[index] = { gui = gui, total = textes[2], valeur = 0 }
+	end
+
+	local function afficherTotaux(totaux)
+		for index, e in pairs(etiquettesCollecte) do
+			if not e.gui.Parent then
+				etiquettesCollecte[index] = nil
+			else
+				local entier = math.floor(totaux[index] or 0)
+				if entier ~= e.valeur then
+					local precedent = e.valeur
+					e.valeur = entier
+					e.total.Text = Charte.argent(entier)
+					if entier > precedent then pulser(e.gui, 1.1) end
+				end
+			end
+		end
+	end
+
 	-- ===== collecte =====
 	local function collecter(joueur, position)
 		if not estJoueur(joueur) or not joueur.Parent then return end
@@ -405,6 +458,7 @@ function M.demarrer(ctx)
 	local function brancherCollecte(index, modele)
 		local dalle = modele:FindFirstChild("Collecte")
 		if not dalle or not dalle:IsA("BasePart") then return false end
+		pcall(etiquetterCollecte, index, dalle)
 		dalle.Touched:Connect(function(partie)
 			local joueur = joueurDuContact(partie)
 			if not joueur then return end
@@ -503,38 +557,23 @@ function M.demarrer(ctx)
 		enVente[dino] = nil
 	end)
 
-	-- ===== affichage du stock au-dessus des podiums =====
+	-- ===== affichage du stock au-dessus des podiums (style simulateur : gros « $1,2K » vert cerné) =====
 	local function panneauDe(podium)
 		local gui = panneaux[podium]
 		if gui and gui.Parent == podium then return gui end
-		gui = Instance.new("BillboardGui")
-		gui.Name = "Stock"
-		gui.Size = UDim2.fromOffset(110, 30)
-		gui.MaxDistance = 45
-		gui.LightInfluence = 0
-		gui.AlwaysOnTop = true
-		gui.Adornee = podium
-		local etiquette = Instance.new("TextLabel")
-		etiquette.Name = "Texte"
-		etiquette.Size = UDim2.fromScale(1, 1)
-		etiquette.BackgroundColor3 = Charte.encre
-		etiquette.BackgroundTransparency = 0.35
-		etiquette.BorderSizePixel = 0
-		etiquette.Font = Charte.police
-		etiquette.TextColor3 = Charte.dore
-		etiquette.TextScaled = true
-		etiquette.Text = ""
-		etiquette.Parent = gui
-		local coins = Instance.new("UICorner")
-		coins.CornerRadius = UDim.new(0.5, 0)
-		coins.Parent = etiquette
-		local marge = Instance.new("UIPadding")
-		marge.PaddingLeft = UDim.new(0, 6)
-		marge.PaddingRight = UDim.new(0, 6)
-		marge.PaddingTop = UDim.new(0, 3)
-		marge.PaddingBottom = UDim.new(0, 3)
-		marge.Parent = etiquette
-		gui.Parent = podium
+		local textes
+		gui, textes = Style.etiquette(podium, {
+			{ texte = "", couleur = Style.couleurs.argent, nom = "Texte", contour = 4 },
+		}, {
+			Name = "Stock",
+			largeur = 6,
+			hauteurLigne = 1.7,
+			StudsOffset = Vector3.new(0, 0, 0),
+			MaxDistance = 60,
+			AlwaysOnTop = true,
+		})
+		textes[1]:SetAttribute("Valeur", 0)
+		tailles[gui] = gui.Size
 		panneaux[podium] = gui
 		return gui
 	end
@@ -566,8 +605,14 @@ function M.demarrer(ctx)
 		gui.Enabled = true
 		local texte = gui:FindFirstChild("Texte")
 		if texte then
-			local valeur = Charte.argent(math.floor(stock))
-			if texte.Text ~= valeur then texte.Text = valeur end
+			local entier = math.floor(stock)
+			local valeur = Charte.argent(entier)
+			if texte.Text ~= valeur then
+				local precedent = nombre(texte:GetAttribute("Valeur"), 0)
+				texte.Text = valeur
+				texte:SetAttribute("Valeur", entier)
+				if entier > precedent then pulser(gui, 1.15) end
+			end
 		end
 		return podium
 	end
@@ -578,6 +623,7 @@ function M.demarrer(ctx)
 		local revenus = {}
 		local modeles = {}
 		local actifs = {}
+		local totaux = {} -- [index de Base] = stock total à encaisser
 		for _, dino in ipairs(ctx.dinos:GetChildren()) do
 			if dino:IsA("Model") and dino:GetAttribute("Etat") == "Enclos" then
 				local uid = nombre(dino:GetAttribute("Proprietaire"), 0)
@@ -593,6 +639,8 @@ function M.demarrer(ctx)
 					local stock = nombre(dino:GetAttribute("Stock"), 0) + revenu * dt
 					dino:SetAttribute("Stock", stock)
 					revenus[uid] = (revenus[uid] or 0) + revenu
+					local base = dino:GetAttribute("Base")
+					if type(base) == "number" then totaux[base] = (totaux[base] or 0) + stock end
 					local ok, podium = pcall(afficherStock, dino, stock, modeles)
 					if ok and podium then actifs[podium] = true end
 				end
@@ -604,10 +652,12 @@ function M.demarrer(ctx)
 				joueur:SetAttribute("RevenuParSeconde", valeur)
 			end
 		end
+		pcall(afficherTotaux, totaux)
 		-- podiums vides : on cache leur panneau
 		for podium, gui in pairs(panneaux) do
 			if not podium.Parent or gui.Parent ~= podium then
 				panneaux[podium] = nil
+				tailles[gui] = nil
 			elseif not actifs[podium] and gui.Enabled then
 				gui.Enabled = false
 			end

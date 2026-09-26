@@ -17,7 +17,8 @@ local HAUTEUR_DOME = 18
 function M.demarrer(ctx)
 	local Charte = ctx.Charte
 	local Plan = ctx.Plan
-	local Outils = ctx.Outils
+	local Style = ctx.Style
+	local SC = Style.couleurs
 	local E = ctx.Equilibrage
 	local joueur = ctx.joueur
 	local alea = Random.new()
@@ -210,31 +211,55 @@ function M.demarrer(ctx)
 	end
 
 	-- ===== textes flottants dans le monde =====
-	local function texteFlottant(position, texte, couleur, hauteur, duree)
+	-- efface un texte cerné (le texte et son contour noir)
+	local function fondre(t, duree)
+		if not t or t.Parent == nil then return end
+		tween(t, duree, { TextTransparency = 1 })
+		local s = t:FindFirstChild("Contour")
+		if s then tween(s, duree, { Transparency = 1 }) end
+	end
+
+	-- texte cerné de noir qui jaillit, monte et grossit (style simulateur : « +$1,2K » vert)
+	-- options : degrade = { haut, bas } ou rarete = clé (le texte est alors blanc sous le dégradé), contour
+	local function texteFlottant(position, texte, couleur, hauteur, duree, options)
 		duree = duree or 1.8
+		options = options or {}
 		local p = nouvellePart({ Name = "Texte", Size = Vector3.new(0.2, 0.2, 0.2), Transparency = 1 }, duree + 0.5)
 		if not p then return end
+		local largeur = hauteur * 4.5
 		local bb = Instance.new("BillboardGui")
 		bb.Name = "Texte"
 		bb.Adornee = p
 		bb.AlwaysOnTop = true
 		bb.LightInfluence = 0
 		bb.MaxDistance = 220
-		bb.Size = UDim2.new(0, 0, 0, 0)
+		bb.Size = UDim2.new(largeur * 0.3, 0, hauteur * 0.3, 0)
 		bb.Parent = p
-		local etiquette = Outils.etiquette(bb, {
+		local etiquette = Style.texte(bb, {
+			Name = "Texte",
 			Size = UDim2.fromScale(1, 1),
 			Text = texte,
-			TextColor3 = couleur or Charte.dore,
-			TextStrokeColor3 = Charte.encre,
-			TextStrokeTransparency = 0,
+			TextColor3 = couleur or SC.argent,
+			titre = true,
+			contour = options.contour or 4,
 		})
-		animer(p, { pos = position, vel = Vector3.new(0, 4, 0), frein = 1.2, vie = duree, fondu = false })
-		tween(bb, 0.3, { Size = UDim2.new(hauteur * 4, 0, hauteur, 0) }, Enum.EasingStyle.Back)
-		task.delay(duree * 0.6, function()
-			if etiquette.Parent then
-				tween(etiquette, duree * 0.4, { TextTransparency = 1, TextStrokeTransparency = 1 })
+		if options.rarete then
+			etiquette.TextColor3 = SC.texte
+			Style.degradeRarete(etiquette, options.rarete)
+		elseif options.degrade then
+			etiquette.TextColor3 = SC.texte
+			Style.degrade(etiquette, options.degrade[1], options.degrade[2])
+		end
+		animer(p, { pos = position, vel = Vector3.new(0, 7, 0), frein = 1, vie = duree, fondu = false })
+		-- pop d'apparition puis lente croissance pendant la montée
+		tween(bb, 0.22, { Size = UDim2.new(largeur * 1.1, 0, hauteur * 1.1, 0) }, Enum.EasingStyle.Back)
+		task.delay(0.22, function()
+			if bb.Parent then
+				tween(bb, math.max(duree - 0.22, 0.1), { Size = UDim2.new(largeur * 1.4, 0, hauteur * 1.4, 0) }, Enum.EasingStyle.Sine)
 			end
+		end)
+		task.delay(duree * 0.6, function()
+			fondre(etiquette, duree * 0.4)
 		end)
 	end
 
@@ -291,20 +316,20 @@ function M.demarrer(ctx)
 		couche.Parent = ctx.gui
 	end
 
-	local function contour(inst, couleur, epaisseur)
-		local s = Instance.new("UIStroke")
-		s.Color = couleur
-		s.Thickness = epaisseur
-		s.Parent = inst
-		return s
-	end
+	-- ===== couleurs utiles (tirées de ctx.Style) =====
+	local B = Style.boutons
+	local OR = { B.jaune[1], B.jaune[2] }      -- dégradé « BONK ! » / titres dorés
+	local VIOLET = { B.violet[1], B.violet[2] }
 
-	-- ===== couleurs utiles =====
+	-- couleur franche d'une rareté (pour la lumière dans le monde)
 	local function couleurRarete(rarete)
-		if type(rarete) == "string" and Charte.raretes[rarete] then
-			return Charte.raretes[rarete]
+		local def = type(rarete) == "string" and Style.raretes[rarete]
+		if def and def[1] and def[2] then
+			return def[1]:Lerp(def[2], 0.6)
 		end
-		return Charte.dore
+		if rarete == "Divin" then return B.rose[1] end
+		if rarete == "Secret" then return SC.texte end
+		return SC.revenu
 	end
 
 	local function ordreRarete(rarete)
@@ -313,15 +338,53 @@ function M.demarrer(ctx)
 		return 1
 	end
 
+	-- nom de rareté en capitales (string.upper ne gère pas les accents)
+	local RARETES_MAJ = {
+		Commun = "COMMUN", Rare = "RARE", Epique = "ÉPIQUE", Legendaire = "LÉGENDAIRE",
+		Mythique = "MYTHIQUE", Divin = "DIVIN", Secret = "SECRET",
+	}
+	local function rareteMaj(rarete)
+		if type(rarete) ~= "string" then return "" end
+		if RARETES_MAJ[rarete] then return RARETES_MAJ[rarete] end
+		local infos = E.raretes[rarete]
+		return string.upper((infos and infos.nom) or rarete)
+	end
+
 	local CONFETTIS = {
-		Charte.dore, Charte.gemme, Charte.violet, Charte.alerte, Charte.herbe, Charte.lave, Charte.creme,
+		SC.argent, SC.revenu, B.bleu[1], B.violet[1], B.rouge[1], B.rose[1], B.orange[1], SC.texte,
 	}
 
 	local COULEURS_EVENEMENT = {
-		PluieDeMeteores = Charte.violet,
-		Eruption = Charte.lave,
-		LuneDoree = Charte.dore,
+		PluieDeMeteores = B.violet[2],
+		Eruption = B.orange[2],
+		LuneDoree = B.jaune[1],
 	}
+
+	-- confettis d'écran : petits rectangles vifs qui tombent en tournoyant
+	local function confettisEcran(n)
+		for i = 1, n do
+			local c = Instance.new("Frame")
+			c.Name = "Confetti"
+			c.BorderSizePixel = 0
+			c.AnchorPoint = Vector2.new(0.5, 0.5)
+			c.BackgroundColor3 = CONFETTIS[(i % #CONFETTIS) + 1]
+			c.Size = UDim2.fromOffset(math.floor(r(10, 18)), math.floor(r(6, 10)))
+			local x = r(0.05, 0.95)
+			c.Position = UDim2.new(x, 0, r(-0.12, -0.02), 0)
+			c.Rotation = r(0, 360)
+			c.ZIndex = 47
+			c.Parent = couche
+			local duree = r(1.8, 2.8)
+			tween(c, duree, {
+				Position = UDim2.new(x + r(-0.12, 0.12), 0, r(0.75, 1.05), 0),
+				Rotation = c.Rotation + r(-540, 540),
+			}, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+			task.delay(duree * 0.7, function()
+				if c.Parent then tween(c, duree * 0.3, { BackgroundTransparency = 1 }) end
+			end)
+			Debris:AddItem(c, duree + 0.1)
+		end
+	end
 
 	-- ===== les effets =====
 	local effets = {}
@@ -368,11 +431,67 @@ function M.demarrer(ctx)
 				debutFondu = 0.6,
 			})
 		end
+		-- cœur blanc lumineux au centre de la colonne
+		local coeur = nouvellePart({
+			Name = "ColonneCoeur",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(hauteur, 1.4, 1.4),
+			Color = couleur:Lerp(SC.texte, 0.6),
+			Transparency = 0.2,
+		}, duree + 1)
+		if coeur then
+			animer(coeur, {
+				pos = position + Vector3.new(0, hauteur / 2, 0),
+				cible = cible,
+				decalage = Vector3.new(0, hauteur / 2, 0),
+				vie = duree,
+				base = VERTICAL,
+				debutFondu = 0.6,
+			})
+		end
+		-- Divin : la colonne défile en arc-en-ciel ; Secret : clignote noir et blanc
+		if colonne and (d.rarete == "Divin" or d.rarete == "Secret") then
+			task.spawn(function()
+				local debut = os.clock()
+				while colonne.Parent do
+					local t = os.clock() - debut
+					if d.rarete == "Divin" then
+						colonne.Color = Color3.fromHSV((t * 0.6) % 1, 0.75, 1)
+					elseif math.floor(t * 4) % 2 == 0 then
+						colonne.Color = SC.texte
+					else
+						colonne.Color = Color3.fromRGB(40, 40, 40)
+					end
+					task.wait(0.08)
+				end
+			end)
+		end
+		-- petite étiquette « ✨ LÉGENDAIRE ! » en dégradé de rareté au-dessus du dino
+		local support = nouvellePart({ Name = "EtiquetteRarete", Size = Vector3.new(0.2, 0.2, 0.2), Transparency = 1 }, duree + 1)
+		if support then
+			local _, lignes = Style.etiquette(support, {
+				{ texte = "✨ " .. rareteMaj(d.rarete) .. " ! ✨", rarete = d.rarete, titre = true, contour = 4 },
+			}, { Name = "Rarete", largeur = 14, hauteurLigne = 2.4, StudsOffset = Vector3.new(0, 0, 0), MaxDistance = 260, AlwaysOnTop = true })
+			animer(support, {
+				pos = position + Vector3.new(0, 9, 0),
+				cible = cible,
+				decalage = Vector3.new(0, 9, 0),
+				vie = duree,
+				fondu = false,
+			})
+			local texte = lignes and lignes[1]
+			if texte then
+				Style.pop(texte, 1.25)
+				task.delay(duree * 0.75, function()
+					fondre(texte, duree * 0.25)
+				end)
+			end
+		end
 		local anneau = nouvellePart({
 			Name = "Anneau",
 			Shape = Enum.PartType.Cylinder,
 			Size = Vector3.new(0.3, 3, 3),
-			Color = Charte.lumiere(couleur),
+			Color = couleur:Lerp(SC.texte, 0.4),
 			Transparency = 0.2,
 		}, 2)
 		if anneau then
@@ -380,7 +499,7 @@ function M.demarrer(ctx)
 		end
 		gerbe(position, 8 + ordre * 3, function(i, pos)
 			local taille = r(0.4, 0.9)
-			particule({ Name = "Etoile", Shape = Enum.PartType.Ball, Size = Vector3.new(taille, taille, taille), Color = (i % 3 == 0) and Charte.creme or couleur }, {
+			particule({ Name = "Etoile", Shape = Enum.PartType.Ball, Size = Vector3.new(taille, taille, taille), Color = (i % 3 == 0) and SC.texte or couleur }, {
 				pos = pos + Vector3.new(0, 2, 0),
 				orbite = {
 					centre = pos + Vector3.new(0, 1, 0),
@@ -400,10 +519,10 @@ function M.demarrer(ctx)
 	function effets.Achat(position, d)
 		if not visible(position) then return end
 		local couleur = couleurRarete(d.rarete)
-		gerbe(position, 26, function(i, pos)
+		gerbe(position, 32, function(i, pos)
 			local teinte = CONFETTIS[(i % #CONFETTIS) + 1]
 			if i % 4 == 0 then teinte = couleur end
-			particule({ Name = "Confetti", Size = Vector3.new(0.5, 0.08, 0.3), Color = teinte, Material = Enum.Material.SmoothPlastic }, {
+			particule({ Name = "Confetti", Size = Vector3.new(0.7, 0.08, 0.4), Color = teinte, Material = Enum.Material.Neon }, {
 				pos = pos + Vector3.new(0, 3, 0),
 				vel = Vector3.new(r(-9, 9), r(14, 24), r(-9, 9)),
 				gravite = 30,
@@ -426,7 +545,7 @@ function M.demarrer(ctx)
 		end
 		if d.aimant then n = math.floor(n / 2) end
 		gerbe(position, n, function(i, pos)
-			particule({ Name = "Billet", Size = Vector3.new(1.2, 0.06, 0.6), Color = (i % 2 == 0) and Charte.herbe or Charte.jungle, Material = Enum.Material.SmoothPlastic }, {
+			particule({ Name = "Billet", Size = Vector3.new(1.2, 0.06, 0.6), Color = (i % 2 == 0) and SC.argent or B.vert[2], Material = Enum.Material.SmoothPlastic }, {
 				pos = pos + Vector3.new(0, 1.5, 0),
 				vel = Vector3.new(r(-6, 6), r(16, 26), r(-6, 6)),
 				gravite = 38,
@@ -438,7 +557,7 @@ function M.demarrer(ctx)
 			})
 		end)
 		if montant > 0 then
-			texteFlottant(position + Vector3.new(0, 5, 0), "+" .. Charte.argent(montant), Charte.herbe, 2.2, 1.8)
+			texteFlottant(position + Vector3.new(0, 5, 0), "+" .. Style.argent(montant), SC.argent, 2.4, 1.8)
 		end
 	end
 
@@ -446,7 +565,7 @@ function M.demarrer(ctx)
 	function effets.Vente(position, d)
 		if not visible(position) then return end
 		gerbe(position, 14, function(i, pos)
-			particule({ Name = "Piece", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.18, 1, 1), Color = Charte.dore }, {
+			particule({ Name = "Piece", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.18, 1, 1), Color = (i % 3 == 0) and B.jaune[2] or SC.revenu }, {
 				pos = pos + Vector3.new(0, 2, 0),
 				vel = Vector3.new(r(-7, 7), r(14, 22), r(-7, 7)),
 				gravite = 36,
@@ -458,7 +577,7 @@ function M.demarrer(ctx)
 		end)
 		local montant = tonumber(d.montant) or 0
 		if montant > 0 then
-			texteFlottant(position + Vector3.new(0, 5, 0), "+" .. Charte.argent(montant), Charte.dore, 2.2, 1.8)
+			texteFlottant(position + Vector3.new(0, 5, 0), "+" .. Style.argent(montant), SC.argent, 2.6, 1.9)
 		end
 	end
 
@@ -509,7 +628,7 @@ function M.demarrer(ctx)
 	-- vol réussi : feu d'artifice au-dessus de la base du voleur
 	function effets.VolReussi(position, d)
 		if not visible(position) then return end
-		local couleurs = { Charte.dore, Charte.gemme, Charte.violet, Charte.alerte, Charte.herbe }
+		local couleurs = { SC.revenu, SC.argent, B.bleu[1], B.violet[1], B.rose[1], B.orange[1] }
 		for salve = 1, 3 do
 			local decalage = Vector3.new(r(-6, 6), 0, r(-6, 6))
 			local teinte = couleurs[alea:NextInteger(1, #couleurs)]
@@ -578,12 +697,12 @@ function M.demarrer(ctx)
 		if onde then
 			animer(onde, { pos = position + Vector3.new(0, 0.5, 0), base = VERTICAL, croissance = 18, vie = 0.5 })
 		end
-		local boule = nouvellePart({ Name = "Impact", Shape = Enum.PartType.Ball, Size = Vector3.new(1.5, 1.5, 1.5), Color = Charte.dore, Transparency = 0.3 }, 1)
+		local boule = nouvellePart({ Name = "Impact", Shape = Enum.PartType.Ball, Size = Vector3.new(1.5, 1.5, 1.5), Color = SC.revenu, Transparency = 0.3 }, 1)
 		if boule then
 			animer(boule, { pos = position + Vector3.new(0, 2, 0), croissance = 5, vie = 0.35 })
 		end
 		gerbe(position, 5, function(i, pos)
-			particule({ Name = "Etoile", Shape = Enum.PartType.Ball, Size = Vector3.new(0.5, 0.5, 0.5), Color = Charte.dore }, {
+			particule({ Name = "Etoile", Shape = Enum.PartType.Ball, Size = Vector3.new(0.5, 0.5, 0.5), Color = SC.revenu }, {
 				orbite = {
 					centre = pos + Vector3.new(0, 3.2, 0),
 					angle = i * 1.256,
@@ -595,7 +714,7 @@ function M.demarrer(ctx)
 				debutFondu = 0.6,
 			})
 		end)
-		texteFlottant(position + Vector3.new(0, 4, 0), "BONK !", Charte.dore, 2.8, 1.2)
+		texteFlottant(position + Vector3.new(0, 4, 0), "BONK !", SC.revenu, 3, 1.1, { degrade = OR, contour = 5 })
 	end
 
 	-- verrou : dôme translucide rouge sur la base tant qu'elle est verrouillée
@@ -678,7 +797,7 @@ function M.demarrer(ctx)
 			task.delay(i * 0.03, function()
 				local taille = 0.6
 				if i % 3 == 0 then taille = 0.9 end
-				particule({ Name = "Spirale", Shape = Enum.PartType.Ball, Size = Vector3.new(taille, taille, taille), Color = (i % 4 == 0) and Charte.creme or Charte.dore }, {
+				particule({ Name = "Spirale", Shape = Enum.PartType.Ball, Size = Vector3.new(taille, taille, taille), Color = (i % 4 == 0) and SC.texte or ((i % 2 == 0) and B.violet[1] or SC.revenu) }, {
 					orbite = {
 						centre = pos,
 						angle = i * 0.55,
@@ -692,13 +811,13 @@ function M.demarrer(ctx)
 				})
 			end)
 		end)
-		local anneau = nouvellePart({ Name = "Anneau", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 3, 3), Color = Charte.dore, Transparency = 0.2 }, 2)
+		local anneau = nouvellePart({ Name = "Anneau", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 3, 3), Color = B.violet[1], Transparency = 0.2 }, 2)
 		if anneau then
 			animer(anneau, { pos = centre + Vector3.new(0, 0.3, 0), base = VERTICAL, croissance = 6, vie = 1 })
 		end
 		local niveau = tonumber(d.niveau)
 		if niveau then
-			texteFlottant(position + Vector3.new(0, 6, 0), "Renaissance " .. niveau .. " !", Charte.dore, 2.5, 2.4)
+			texteFlottant(position + Vector3.new(0, 6, 0), "RENAISSANCE " .. niveau .. " !", B.violet[1], 2.8, 2.4, { degrade = VIOLET, contour = 5 })
 		end
 	end
 
@@ -708,7 +827,7 @@ function M.demarrer(ctx)
 		if type(d.nom) ~= "string" or d.nom == "" then return end
 		local infos = E.evenements.liste[d.nom]
 		local titre = (infos and infos.nom) or d.nom
-		local couleur = COULEURS_EVENEMENT[d.nom] or Charte.dore
+		local couleur = COULEURS_EVENEMENT[d.nom] or SC.revenu
 		if titreActif then titreActif:Destroy() end
 
 		local flash = Instance.new("Frame")
@@ -726,7 +845,7 @@ function M.demarrer(ctx)
 		bloc.Name = "TitreEvenement"
 		bloc.AnchorPoint = Vector2.new(0.5, 0.5)
 		bloc.Position = UDim2.fromScale(0.5, 0.36)
-		bloc.Size = UDim2.new(0.8, 0, 0, 150)
+		bloc.Size = UDim2.new(0.94, 0, 0, 170)
 		bloc.BackgroundTransparency = 1
 		bloc.ZIndex = 42
 		bloc.Parent = couche
@@ -734,31 +853,48 @@ function M.demarrer(ctx)
 		local echelle = Instance.new("UIScale")
 		echelle.Scale = 0.2
 		echelle.Parent = bloc
-		local sur = Outils.etiquette(bloc, {
-			Size = UDim2.new(1, 0, 0, 36),
-			Text = "ÉVÉNEMENT !",
-			TextColor3 = Charte.creme,
+		-- sur-titre jaune-orangé cerné, puis titre géant arc-en-ciel animé cerné de noir épais
+		local sur = Style.texte(bloc, {
+			Name = "SurTitre",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 0),
+			Size = UDim2.new(0.8, 0, 0, 44),
+			Text = "⚡ ÉVÉNEMENT ! ⚡",
+			titre = true,
+			contour = 4,
+			tailleMax = 44,
 			ZIndex = 43,
 		})
-		contour(sur, Charte.encre, 3)
-		local grand = Outils.etiquette(bloc, {
-			Position = UDim2.new(0, 0, 0, 38),
-			Size = UDim2.new(1, 0, 0, 100),
+		Style.degrade(sur, OR[1], OR[2])
+		local grand = Style.texte(bloc, {
+			Name = "Titre",
+			Position = UDim2.new(0, 0, 0, 46),
+			Size = UDim2.new(1, 0, 0, 118),
 			Text = titre,
-			TextColor3 = couleur,
+			titre = true,
+			contour = 6,
+			tailleMax = 110,
 			ZIndex = 43,
 		})
-		contour(grand, Charte.encre, 5)
+		Style.degradeRarete(grand, "Divin")
 		tween(echelle, 0.5, { Scale = 1 }, Enum.EasingStyle.Back)
+		-- petit battement du titre tant qu'il est affiché
+		task.delay(0.55, function()
+			for _ = 1, 3 do
+				if titreActif ~= bloc then return end
+				tween(echelle, 0.25, { Scale = 1.08 }, Enum.EasingStyle.Sine)
+				task.wait(0.28)
+				if titreActif ~= bloc then return end
+				tween(echelle, 0.25, { Scale = 1 }, Enum.EasingStyle.Sine)
+				task.wait(0.55)
+			end
+		end)
+		confettisEcran(28)
 		task.delay(3.6, function()
 			if titreActif ~= bloc then return end
 			tween(echelle, 0.6, { Scale = 1.3 })
-			tween(sur, 0.6, { TextTransparency = 1 })
-			tween(grand, 0.6, { TextTransparency = 1 })
-			for _, c in ipairs({ sur, grand }) do
-				local s = c:FindFirstChildOfClass("UIStroke")
-				if s then tween(s, 0.6, { Transparency = 1 }) end
-			end
+			fondre(sur, 0.6)
+			fondre(grand, 0.6)
 			task.delay(0.7, function()
 				if titreActif == bloc then titreActif = nil end
 				bloc:Destroy()
@@ -843,47 +979,88 @@ function M.demarrer(ctx)
 	local function montrerCarte(espece)
 		local infos = E.especes[espece]
 		local nom = (infos and infos.nom) or espece
-		local rarete = infos and infos.rarete
-		local couleur = couleurRarete(rarete)
-		local nomRarete = ""
-		if rarete and E.raretes[rarete] then nomRarete = E.raretes[rarete].nom end
+		local rarete = (infos and infos.rarete) or "Commun"
 
-		local carte = Outils.cadre(couche, {
-			Name = "CarteDecouverte",
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, 360, 0.5, 0),
-			Size = UDim2.new(0, 300, 0, 120),
-			ZIndex = 44,
-		})
-		contour(carte, couleur, 3)
-		local haut = Outils.etiquette(carte, {
-			Position = UDim2.new(0, 12, 0, 8),
-			Size = UDim2.new(1, -24, 0, 30),
-			Text = "Nouvelle espèce !",
-			TextColor3 = Charte.dore,
+		-- bloc central : halo en dégradé de rareté derrière une carte sombre cernée de noir
+		local bloc = Instance.new("Frame")
+		bloc.Name = "CarteDecouverte"
+		bloc.AnchorPoint = Vector2.new(0.5, 0.5)
+		bloc.Position = UDim2.fromScale(0.5, 0.42)
+		bloc.Size = UDim2.new(0.86, 0, 0, 196)
+		bloc.BackgroundTransparency = 1
+		bloc.ZIndex = 44
+		local limite = Instance.new("UISizeConstraint")
+		limite.MaxSize = Vector2.new(440, 196)
+		limite.Parent = bloc
+		bloc.Parent = couche
+
+		local halo = Instance.new("Frame")
+		halo.Name = "Halo"
+		halo.AnchorPoint = Vector2.new(0.5, 0.5)
+		halo.Position = UDim2.fromScale(0.5, 0.5)
+		halo.Size = UDim2.new(1, 16, 1, 16)
+		halo.BackgroundColor3 = SC.texte
+		halo.BackgroundTransparency = 0.15
+		halo.BorderSizePixel = 0
+		halo.ZIndex = 44
+		Style.coins(halo, 24)
+		Style.bordure(halo, 4)
+		Style.degradeRarete(halo, rarete)
+		halo.Parent = bloc
+
+		local carte = Style.carte(bloc, {
+			Name = "Carte",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = SC.fond,
 			ZIndex = 45,
 		})
-		contour(haut, Charte.encre, 2)
-		Outils.etiquette(carte, {
-			Position = UDim2.new(0, 12, 0, 42),
-			Size = UDim2.new(1, -24, 0, 42),
+		local haut = Style.texte(carte, {
+			Name = "Haut",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 10),
+			Size = UDim2.new(1, -24, 0, 38),
+			Text = "✨ NOUVELLE ESPÈCE ! ✨",
+			titre = true,
+			contour = 3,
+			tailleMax = 36,
+			ZIndex = 46,
+		})
+		Style.degrade(haut, OR[1], OR[2])
+		local grand = Style.texte(carte, {
+			Name = "Nom",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 52),
+			Size = UDim2.new(1, -24, 0, 80),
 			Text = nom,
-			TextColor3 = Charte.creme,
-			ZIndex = 45,
+			titre = true,
+			contour = 5,
+			tailleMax = 78,
+			ZIndex = 46,
 		})
-		Outils.etiquette(carte, {
-			Position = UDim2.new(0, 12, 0, 86),
-			Size = UDim2.new(1, -24, 0, 24),
-			Text = nomRarete,
-			TextColor3 = couleur,
-			Font = Charte.policeTexte,
-			ZIndex = 45,
+		Style.degradeRarete(grand, rarete)
+		local bas = Style.texte(carte, {
+			Name = "Rarete",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 140),
+			Size = UDim2.new(1, -24, 0, 40),
+			Text = rareteMaj(rarete),
+			contour = 3.5,
+			tailleMax = 36,
+			ZIndex = 46,
 		})
-		tween(carte, 0.45, { Position = UDim2.new(1, -20, 0.5, 0) }, Enum.EasingStyle.Back)
+		Style.degradeRarete(bas, rarete)
+
+		Style.pop(bloc, 1.15)
+		confettisEcran(22)
 		task.wait(3.4)
-		tween(carte, 0.35, { Position = UDim2.new(1, 360, 0.5, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-		task.wait(0.4)
-		carte:Destroy()
+		local echelle = bloc:FindFirstChild("Pop")
+		if echelle then
+			tween(echelle, 0.3, { Scale = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+		end
+		task.wait(0.35)
+		bloc:Destroy()
 	end
 
 	function effets.Decouverte(position, d)
@@ -903,7 +1080,7 @@ function M.demarrer(ctx)
 		if not visible(position) then return end
 		gerbe(position, 30, function(i, pos)
 			task.delay(r(0, 0.8), function()
-				particule({ Name = "Or", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.18, 1, 1), Color = Charte.dore }, {
+				particule({ Name = "Or", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.18, 1, 1), Color = (i % 3 == 0) and B.jaune[2] or SC.revenu }, {
 					pos = pos + Vector3.new(r(-6, 6), r(14, 20), r(-6, 6)),
 					vel = Vector3.new(0, r(-4, 0), 0),
 					gravite = 30,
@@ -916,7 +1093,7 @@ function M.demarrer(ctx)
 		end)
 		local montant = tonumber(d.montant) or 0
 		if montant > 0 then
-			texteFlottant(position + Vector3.new(0, 4, 0), "+" .. Charte.argent(montant), Charte.dore, 2.6, 2.2)
+			texteFlottant(position + Vector3.new(0, 4, 0), "+" .. Style.argent(montant), SC.argent, 2.8, 2.2)
 		end
 	end
 

@@ -2,6 +2,8 @@
 -- Plancher de bois, mur du fond en rondins, toit de palmes en pente vers la Place, enseigne « BOUTIQUE »,
 -- comptoir portant l'invite « Boutique » (ouverte côté client), vitrines des objets de Equilibrage.boutique
 -- en maquettes de blocs, et un marchand jouet en casque colonial.
+-- Look « simulateur » (STYLE.md) : cabane cartoon orange et jaune vif, auvent rayé, titre flottant géant
+-- « 🛒 BOUTIQUE » cerné de noir (Style.etiquette), nom et prix de chaque vitrine en étiquette flottante.
 -- Emprise (CONTRAT §10) : 26 x 18 autour de Plan.comptoir.centre, ouverte vers +X (la Place).
 local M = {}
 
@@ -35,6 +37,13 @@ function M.construire(ctx)
 	local PALME = Charte.jungle
 	local PALME_CLAIRE = Charte.herbe
 	local PALME_OMBRE = Charte.ombre(Charte.jungle)
+	-- couleurs cartoon de la boutique (orange = boutique, jaune = argent)
+	local ORANGE = Charte.lave
+	local ORANGE_OMBRE = Charte.ombre(Charte.lave)
+	local JAUNE = Charte.dore
+	local JAUNE_CLAIR = Charte.lumiere(Charte.dore)
+
+	local Style = ctx.Style
 
 	-- ===== outils locaux =====
 	local compte = 0
@@ -85,6 +94,31 @@ function M.construire(ctx)
 			return etiquette
 		end
 		return nil
+	end
+
+	-- texte de panneau blanc cerné de noir épais (règle d'or n° 1)
+	local function ecrireCerne(part, face, texte, pixelsParStud, epaisseur)
+		local couleur = CREME
+		if Style then
+			couleur = Style.couleurs.texte
+		end
+		local etiquette = ecrire(part, face, texte, { couleur = couleur, pixelsParStud = pixelsParStud })
+		if etiquette and Style then
+			Style.contour(etiquette, epaisseur or 4)
+		end
+		return etiquette
+	end
+
+	-- étiquette géante flottante (BillboardGui), seulement si la part existe
+	local function flottante(part, lignes, props)
+		if not part or not Style then
+			return nil, {}
+		end
+		local ok, gui, textes = pcall(Style.etiquette, part, lignes, props)
+		if ok then
+			return gui, textes or {}
+		end
+		return nil, {}
 	end
 
 	local VERTICAL = CFrame.Angles(0, 0, math.rad(90)) -- oriente l'axe d'un cylindre à la verticale
@@ -156,19 +190,19 @@ function M.construire(ctx)
 	for _, signe in ipairs({ -1, 1 }) do
 		local z = CZ + signe * 8.3
 		local h = yToit(xPoteauAvant) - 0.2
-		piece(cabane, "bloc", "PoteauAvant", Vector3.new(0.8, h, 0.8), CFrame.new(xPoteauAvant, h / 2, z), BOIS_OMBRE)
+		piece(cabane, "bloc", "PoteauAvant", Vector3.new(0.8, h, 0.8), CFrame.new(xPoteauAvant, h / 2, z), ORANGE)
 		local hc = yToit(xFinCote) - 0.2 - SOL
-		piece(cabane, "bloc", "PoteauCote", Vector3.new(0.8, hc, 0.8), CFrame.new(xFinCote, SOL + hc / 2, CZ + signe * 7.4), BOIS_OMBRE)
+		piece(cabane, "bloc", "PoteauCote", Vector3.new(0.8, hc, 0.8), CFrame.new(xFinCote, SOL + hc / 2, CZ + signe * 7.4), ORANGE)
 	end
 	-- poutre avant
 	local yPoutre = yToit(xPoteauAvant) - 0.5
-	piece(cabane, "bloc", "PoutreAvant", Vector3.new(0.8, 0.6, 17.2), CFrame.new(xPoteauAvant, yPoutre, CZ), BOIS)
+	piece(cabane, "bloc", "PoutreAvant", Vector3.new(0.8, 0.6, 17.2), CFrame.new(xPoteauAvant, yPoutre, CZ), JAUNE)
 	-- chevrons sous le toit
 	for _, dz in ipairs({ -7.4, 0, 7.4 }) do
 		piece(cabane, "bloc", "Chevron", Vector3.new(portee, 0.4, 0.5),
 			CFrame.new((xToitFond + xToitAvant) / 2, (yToitFond + yToitAvant) / 2 - 0.45, CZ + dz) * pente, BOIS_OMBRE, LEGER)
 	end
-	-- bandes de palmes qui se chevauchent
+	-- auvent rayé orange et jaune (bandes qui se chevauchent)
 	local nbBandes = 6
 	local longueurPente = math.sqrt(portee * portee + chute * chute)
 	local longueurBande = longueurPente / nbBandes * 1.08
@@ -176,20 +210,20 @@ function M.construire(ctx)
 		local t = (i - 0.5) / nbBandes
 		local x = xToitFond + portee * t
 		local decalage = 0
-		local couleur = PALME
+		local couleur = ORANGE
 		if i % 2 == 0 then
 			decalage = 0.15
-			couleur = PALME_CLAIRE
+			couleur = JAUNE_CLAIR
 		end
 		piece(cabane, "bloc", "Palmes", Vector3.new(longueurBande, 0.6, 2 * DEMI_Z),
 			CFrame.new(x, yToit(x) + decalage, CZ) * pente, couleur)
 	end
-	-- frange de palmes qui pend à l'avant
+	-- frange festonnée qui pend à l'avant, orange et jaune
 	for i = 0, 9 do
 		local z = CZ - 8.1 + i * 1.8
-		local couleur = PALME_CLAIRE
+		local couleur = JAUNE
 		if i % 2 == 1 then
-			couleur = PALME_OMBRE
+			couleur = ORANGE
 		end
 		piece(cabane, "bloc", "Frange", Vector3.new(0.2, 1.4, 1.6),
 			CFrame.new(xToitAvant - 0.3, yToitAvant - 0.6, z) * CFrame.Angles(0, 0, math.rad(-12)), couleur, LEGER)
@@ -210,9 +244,24 @@ function M.construire(ctx)
 	-- ===== 4. enseigne « BOUTIQUE » tournée vers la Place =====
 	local ySigne = yToitAvant + 2
 	local xSigne = CX + 12.1
-	piece(cabane, "bloc", "SupportEnseigne", Vector3.new(0.4, 3.4, 12.6), CFrame.new(xSigne, ySigne, CZ), BOIS_OMBRE)
-	local planche = piece(cabane, "bloc", "Enseigne", Vector3.new(0.15, 2.6, 11.6), CFrame.new(xSigne + 0.27, ySigne, CZ), SABLE)
-	ecrire(planche, "Right", "BOUTIQUE", { couleur = BOIS_OMBRE, pixelsParStud = 40 })
+	piece(cabane, "bloc", "SupportEnseigne", Vector3.new(0.4, 3.4, 12.6), CFrame.new(xSigne, ySigne, CZ), ORANGE_OMBRE)
+	local planche = piece(cabane, "bloc", "Enseigne", Vector3.new(0.15, 2.6, 11.6), CFrame.new(xSigne + 0.27, ySigne, CZ), ORANGE)
+	ecrireCerne(planche, "Right", "🛒 BOUTIQUE", 40, 5)
+	-- titre flottant géant, lisible depuis toute la Place
+	local _, titres = flottante(planche, {
+		{ texte = "🛒 BOUTIQUE", titre = true, taille = 1.7, contour = 4, nom = "Titre" },
+		{ texte = "Objets d'explorateur", taille = 0.8, contour = 3, nom = "SousTitre", couleur = Style and Style.couleurs.revenu or JAUNE },
+	}, {
+		Name = "TitreBoutique",
+		largeur = 24,
+		hauteurLigne = 2.6,
+		StudsOffset = Vector3.new(0, 6.5, 0),
+		MaxDistance = 260,
+	})
+	if titres[1] and Style then
+		-- dégradé jaune -> orange sur le titre blanc
+		Style.degrade(titres[1], Style.boutons.jaune[1], Style.boutons.orange[2])
+	end
 	-- petits os croisés décoratifs aux coins de l'enseigne
 	for _, signe in ipairs({ -1, 1 }) do
 		piece(cabane, "bloc", "Os", Vector3.new(0.2, 0.5, 1.8),
@@ -286,17 +335,17 @@ function M.construire(ctx)
 	-- ===== 6. le comptoir et son invite =====
 	local xComptoir = CX + 6
 	local hComptoir = 3.4
-	piece(modeleComptoir, "bloc", "Caisson", Vector3.new(2, hComptoir, 7), CFrame.new(xComptoir, SOL + hComptoir / 2, CZ), BOIS)
+	piece(modeleComptoir, "bloc", "Caisson", Vector3.new(2, hComptoir, 7), CFrame.new(xComptoir, SOL + hComptoir / 2, CZ), ORANGE)
 	local partComptoir = piece(modeleComptoir, "bloc", "Plateau", Vector3.new(2.8, 0.4, 7.8),
-		CFrame.new(xComptoir, SOL + hComptoir + 0.2, CZ), BOIS_CLAIR)
+		CFrame.new(xComptoir, SOL + hComptoir + 0.2, CZ), JAUNE)
 	local yPlateau = SOL + hComptoir + 0.4
 	for _, signe in ipairs({ -1, 1 }) do
 		piece(modeleComptoir, "bloc", "Montant", Vector3.new(0.3, hComptoir, 0.5),
-			CFrame.new(xComptoir + 1.05, SOL + hComptoir / 2, CZ + signe * 3.25), BOIS_OMBRE, LEGER)
+			CFrame.new(xComptoir + 1.05, SOL + hComptoir / 2, CZ + signe * 3.25), JAUNE, LEGER)
 	end
 	local plaque = piece(modeleComptoir, "bloc", "Plaque", Vector3.new(0.15, 1.3, 5.2),
-		CFrame.new(xComptoir + 1.05, SOL + hComptoir / 2 + 0.3, CZ), SABLE, LEGER)
-	ecrire(plaque, "Right", "OBJETS D'EXPLORATEUR", { couleur = BOIS_OMBRE, pixelsParStud = 30 })
+		CFrame.new(xComptoir + 1.05, SOL + hComptoir / 2 + 0.3, CZ), ORANGE_OMBRE, LEGER)
+	ecrireCerne(plaque, "Right", "OBJETS D'EXPLORATEUR", 30, 3)
 	-- caisse enregistreuse et clochette
 	piece(modeleComptoir, "bloc", "CaisseEnregistreuse", Vector3.new(1.2, 0.8, 1.4), CFrame.new(xComptoir - 0.2, yPlateau + 0.4, CZ + 2.2), DORE, LEGER)
 	piece(modeleComptoir, "coin", "Clavier", Vector3.new(1.2, 0.4, 0.9),
@@ -411,23 +460,37 @@ function M.construire(ctx)
 		local vitrine = Outils.modele(vitrines, "Vitrine_" .. tostring(cle))
 		vitrine:SetAttribute("Objet", tostring(cle))
 		local hSocle = 2.6
-		piece(vitrine, "bloc", "Socle", Vector3.new(2.2, hSocle, 2.2), CFrame.new(xVitrine, SOL + hSocle / 2, z), BOIS)
-		piece(vitrine, "bloc", "Lisere", Vector3.new(2.4, 0.2, 2.4), CFrame.new(xVitrine, SOL + hSocle + 0.1, z), DORE)
+		piece(vitrine, "bloc", "Socle", Vector3.new(2.2, hSocle, 2.2), CFrame.new(xVitrine, SOL + hSocle / 2, z), ORANGE)
+		piece(vitrine, "bloc", "Lisere", Vector3.new(2.4, 0.2, 2.4), CFrame.new(xVitrine, SOL + hSocle + 0.1, z), JAUNE)
 		local yVerre = SOL + hSocle + 0.2
 		piece(vitrine, "bloc", "Verre", Vector3.new(2.2, 2.4, 2.2), CFrame.new(xVitrine, yVerre + 1.2, z),
 			Charte.lumiere(Charte.gemme), { Material = Enum.Material.Glass, Transparency = 0.7 })
-		piece(vitrine, "bloc", "Chapeau", Vector3.new(2.4, 0.2, 2.4), CFrame.new(xVitrine, yVerre + 2.5, z), BOIS_OMBRE)
+		local chapeau = piece(vitrine, "bloc", "Chapeau", Vector3.new(2.4, 0.2, 2.4), CFrame.new(xVitrine, yVerre + 2.5, z), JAUNE)
 		-- étiquette : nom et prix, lisible depuis la Place
-		local etiquette = piece(vitrine, "bloc", "Etiquette", Vector3.new(0.12, 1.4, 2), CFrame.new(xVitrine + 1.16, SOL + hSocle / 2 + 0.2, z), CREME, LEGER)
+		local etiquette = piece(vitrine, "bloc", "Etiquette", Vector3.new(0.12, 1.4, 2), CFrame.new(xVitrine + 1.16, SOL + hSocle / 2 + 0.2, z), ORANGE_OMBRE, LEGER)
 		local nom = infos.nom
 		if type(nom) ~= "string" then
 			nom = NOMS_DEFAUT[cle] or tostring(cle)
 		end
 		local texte = nom
+		local lignes = { { texte = nom, taille = 1, nom = "Nom" } }
 		if type(infos.prix) == "number" then
 			texte = nom .. "\n" .. Charte.argent(infos.prix)
+			local vert = JAUNE
+			if Style then
+				vert = Style.couleurs.argent
+			end
+			table.insert(lignes, { texte = Charte.argent(infos.prix), taille = 1.1, nom = "Prix", couleur = vert })
 		end
-		ecrire(etiquette, "Right", texte, { couleur = ENCRE, pixelsParStud = 40 })
+		ecrireCerne(etiquette, "Right", texte, 40, 3)
+		-- nom blanc et prix vert flottant au-dessus de la vitrine
+		flottante(chapeau, lignes, {
+			Name = "EtiquetteObjet",
+			largeur = 7,
+			hauteurLigne = 1.1,
+			StudsOffset = Vector3.new(0, 2, 0),
+			MaxDistance = 80,
+		})
 		-- la maquette, qui tourne doucement dans son verre
 		local objet = Outils.modele(vitrine, "Maquette")
 		local centre = CFrame.new(xVitrine, yVerre + 1.1, z)

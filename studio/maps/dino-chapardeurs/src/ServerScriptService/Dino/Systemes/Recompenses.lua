@@ -213,11 +213,19 @@ function M.demarrer(ctx)
 	end
 
 	local dernierEssai = {} -- [joueur] = os.clock() du dernier essai d'ouverture
+	local affichages = {} -- [joueur] = { gui, texte, dernier } : étiquette personnelle « Prêt ! » / minuteur
 
 	local function depart(joueur)
 		jetons[joueur] = nil
 		serieTraitee[joueur] = nil
 		dernierEssai[joueur] = nil
+		local a = affichages[joueur]
+		affichages[joueur] = nil
+		if a and a.gui then
+			pcall(function()
+				a.gui:Destroy()
+			end)
+		end
 	end
 
 	-- ===== 3. le coffre caché =====
@@ -255,33 +263,46 @@ function M.demarrer(ctx)
 		return origine * CFrame.new(x, y, z)
 	end
 
+	-- palette cartoon : bois orangé saturé, or vif, rebords sombres bien lisibles
+	local hex = Charte.hex
+	local BOIS = hex("C8702E")
+	local BOIS_CLAIR = hex("E8994A")
+	local BOIS_SOMBRE = hex("7A3E17")
+	local OR_VIF = hex("FFD84A")
+	local OR_SOMBRE = hex("E0A21A")
+
+	-- socle lumineux sous le coffre : halo doré visible de loin
+	part(Outils.cylindre, { Name = "Halo", Size = Vector3.new(0.12, 8, 8), CFrame = ici(0, 0.04, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = OR_VIF, Material = Enum.Material.Neon, Transparency = 0.55 })
+	part(Outils.cylindre, { Name = "Socle", Size = Vector3.new(0.1, 6.6, 6.6), CFrame = ici(0, 0.08, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = hex("FFF4DC") })
+
 	-- caisse en bois
-	local caisse = part(Outils.bloc, { Name = "Caisse", Size = Vector3.new(5, 2.4, 3.4), CFrame = ici(0, 1.2, 0), Color = Charte.bois, CanCollide = true })
-	part(Outils.bloc, { Name = "Fond", Size = Vector3.new(4.6, 0.1, 3), CFrame = ici(0, 2.42, 0), Color = Charte.ombre(Charte.bois) })
-	-- planches (rainures claires)
+	local caisse = part(Outils.bloc, { Name = "Caisse", Size = Vector3.new(5, 2.4, 3.4), CFrame = ici(0, 1.2, 0), Color = BOIS, CanCollide = true })
+	part(Outils.bloc, { Name = "Fond", Size = Vector3.new(4.6, 0.1, 3), CFrame = ici(0, 2.42, 0), Color = BOIS_SOMBRE })
+	-- planches (rainures sombres, style jouet)
 	for i = -1, 1, 2 do
-		part(Outils.bloc, { Name = "Planche", Size = Vector3.new(4.9, 0.12, 0.05), CFrame = ici(0, 1.2 + i * 0.6, -1.71), Color = Charte.lumiere(Charte.bois) })
+		part(Outils.bloc, { Name = "Planche", Size = Vector3.new(4.9, 0.14, 0.06), CFrame = ici(0, 1.2 + i * 0.6, -1.72), Color = BOIS_SOMBRE })
+		part(Outils.bloc, { Name = "Planche", Size = Vector3.new(4.9, 0.14, 0.06), CFrame = ici(0, 1.2 + i * 0.6, 1.72), Color = BOIS_SOMBRE })
 	end
 	-- couvercle bombé
-	part(Outils.cylindre, { Name = "Couvercle", Size = Vector3.new(5, 3.3, 3.3), CFrame = ici(0, 2.4, 0), Color = Charte.bois }, true)
-	part(Outils.bloc, { Name = "CouvercleBas", Size = Vector3.new(5, 0.3, 3.4), CFrame = ici(0, 2.55, 0), Color = Charte.ombre(Charte.bois) }, true)
+	part(Outils.cylindre, { Name = "Couvercle", Size = Vector3.new(5, 3.3, 3.3), CFrame = ici(0, 2.4, 0), Color = BOIS_CLAIR }, true)
+	part(Outils.bloc, { Name = "CouvercleBas", Size = Vector3.new(5, 0.3, 3.4), CFrame = ici(0, 2.55, 0), Color = BOIS_SOMBRE }, true)
 
 	-- ferrures dorées
 	local matDore = Enum.Material.SmoothPlastic
 	for _, x in ipairs({ -1.9, 1.9 }) do
-		part(Outils.bloc, { Name = "Ferrure", Size = Vector3.new(0.4, 2.45, 3.5), CFrame = ici(x, 1.2, 0), Color = Charte.dore, Material = matDore })
-		part(Outils.cylindre, { Name = "FerrureCouvercle", Size = Vector3.new(0.4, 3.45, 3.45), CFrame = ici(x, 2.4, 0), Color = Charte.dore, Material = matDore }, true)
+		part(Outils.bloc, { Name = "Ferrure", Size = Vector3.new(0.45, 2.45, 3.5), CFrame = ici(x, 1.2, 0), Color = OR_VIF, Material = matDore })
+		part(Outils.cylindre, { Name = "FerrureCouvercle", Size = Vector3.new(0.45, 3.45, 3.45), CFrame = ici(x, 2.4, 0), Color = OR_VIF, Material = matDore }, true)
 	end
-	part(Outils.bloc, { Name = "Plinthe", Size = Vector3.new(5.1, 0.3, 3.5), CFrame = ici(0, 0.15, 0), Color = Charte.dore })
-	part(Outils.bloc, { Name = "Rebord", Size = Vector3.new(5.1, 0.25, 3.5), CFrame = ici(0, 2.3, 0), Color = Charte.dore })
+	part(Outils.bloc, { Name = "Plinthe", Size = Vector3.new(5.2, 0.35, 3.6), CFrame = ici(0, 0.17, 0), Color = OR_SOMBRE })
+	part(Outils.bloc, { Name = "Rebord", Size = Vector3.new(5.1, 0.25, 3.5), CFrame = ici(0, 2.3, 0), Color = OR_VIF })
 	-- coins renforcés
 	for _, x in ipairs({ -2.45, 2.45 }) do
 		for _, z in ipairs({ -1.65, 1.65 }) do
-			part(Outils.bloc, { Name = "Coin", Size = Vector3.new(0.3, 2.45, 0.3), CFrame = ici(x, 1.2, z), Color = Charte.ombre(Charte.dore) })
+			part(Outils.bloc, { Name = "Coin", Size = Vector3.new(0.32, 2.45, 0.32), CFrame = ici(x, 1.2, z), Color = OR_SOMBRE })
 		end
 	end
 	-- serrure
-	local serrure = part(Outils.bloc, { Name = "Serrure", Size = Vector3.new(0.9, 1.1, 0.3), CFrame = ici(0, 2.2, -1.8), Color = Charte.dore })
+	local serrure = part(Outils.bloc, { Name = "Serrure", Size = Vector3.new(0.9, 1.1, 0.3), CFrame = ici(0, 2.2, -1.8), Color = OR_VIF })
 	part(Outils.bloc, { Name = "TrouSerrure", Size = Vector3.new(0.2, 0.45, 0.05), CFrame = ici(0, 2.1, -1.97), Color = Charte.encre })
 	part(Outils.boule, { Name = "GemmeSerrure", Size = Vector3.new(0.35, 0.35, 0.35), CFrame = ici(0, 2.55, -1.97), Color = Charte.alerte, Material = Enum.Material.Neon })
 
@@ -300,23 +321,23 @@ function M.demarrer(ctx)
 		part(Outils.cylindre, {
 			Name = "Piece",
 			Size = Vector3.new(0.12, 0.7, 0.7),
-			CFrame = ici(p[1], 0.06, p[2]) * CFrame.Angles(0, math.rad(p[3]), math.rad(90)),
-			Color = Charte.dore,
+			CFrame = ici(p[1], 0.18, p[2]) * CFrame.Angles(0, math.rad(p[3]), math.rad(90)),
+			Color = OR_VIF,
 		})
 	end
 	local eclats = { { -2.6, -2, Charte.gemme }, { 1.8, -3.6, Charte.violet }, { -0.6, -3.8, Charte.alerte } }
 	for _, g in ipairs(eclats) do
-		part(Outils.boule, { Name = "Eclat", Size = Vector3.new(0.45, 0.45, 0.45), CFrame = ici(g[1], 0.22, g[2]), Color = g[3], Material = Enum.Material.Neon })
+		part(Outils.boule, { Name = "Eclat", Size = Vector3.new(0.5, 0.5, 0.5), CFrame = ici(g[1], 0.35, g[2]), Color = g[3], Material = Enum.Material.Neon })
 	end
 
-	-- grosse gemme qui tourne au-dessus : repère visible de loin
-	local phare = part(Outils.boule, { Name = "Phare", Size = Vector3.new(1.2, 1.2, 1.2), CFrame = ici(0, 6.5, 0), Color = Charte.gemme, Material = Enum.Material.Neon })
+	-- grosse gemme qui flotte au-dessus : repère visible de loin
+	local phare = part(Outils.boule, { Name = "Phare", Size = Vector3.new(1.6, 1.6, 1.6), CFrame = ici(0, 6.5, 0), Color = Charte.gemme, Material = Enum.Material.Neon })
 	pcall(Outils.animer, phare, "flotte", 1)
-	pcall(Outils.lumiere, phare, { Range = 14, Brightness = 1.5, Color = Charte.gemme })
-	pcall(Outils.lumiere, serrure, { Range = 8, Brightness = 1, Color = Charte.dore })
+	pcall(Outils.lumiere, phare, { Range = 16, Brightness = 1.8, Color = Charte.gemme })
+	pcall(Outils.lumiere, serrure, { Range = 12, Brightness = 1.5, Color = OR_VIF })
 	pcall(function()
 		local etincelles = Instance.new("Sparkles")
-		etincelles.SparkleColor = Charte.dore
+		etincelles.SparkleColor = OR_VIF
 		etincelles.Parent = caisse
 	end)
 
@@ -325,6 +346,91 @@ function M.demarrer(ctx)
 	end)
 
 	local invite = Outils.invite(caisse, { nom = "Coffre", action = "Ouvrir", objet = "Coffre au trésor", duree = 0.5, distance = 10 })
+
+	-- ===== étiquettes flottantes (style simulateur) =====
+	local Style = ctx.Style
+
+	-- titre commun à tous : « 🎁 COFFRE » doré, cerné de noir
+	if Style then
+		pcall(function()
+			local _, lignes = Style.etiquette(caisse, {
+				{ texte = "🎁 COFFRE", titre = true, contour = 4, nom = "Titre" },
+			}, { Name = "EtiquetteCoffre", largeur = 12, hauteurLigne = 2.6, StudsOffset = Vector3.new(0, 9.4, 0), MaxDistance = 160 })
+			if lignes and lignes[1] then
+				local haut = Style.boutons.jaune[1]
+				local bas = Style.boutons.jaune[2]
+				Style.degrade(lignes[1], haut, bas)
+			end
+		end)
+	end
+
+	-- 3723 -> « 1:02:03 » ; 125 -> « 2:05 »
+	local function minuteur(secondes)
+		secondes = math.max(0, math.floor(secondes))
+		local h = math.floor(secondes / 3600)
+		local mn = math.floor((secondes % 3600) / 60)
+		local s = secondes % 60
+		if h > 0 then
+			return string.format("%d:%02d:%02d", h, mn, s)
+		end
+		return string.format("%d:%02d", mn, s)
+	end
+
+	-- secondes avant que le coffre soit de nouveau prêt pour ce joueur (0 = prêt)
+	local function resteCoffre(joueur)
+		local instant = os.time()
+		local ouvert = lireNombre(joueur, "CoffreOuvert", 0)
+		if ouvert > instant then
+			ouvert = instant
+		end
+		return math.max(0, COFFRE_RECHARGE - (instant - ouvert))
+	end
+
+	-- étiquette personnelle (dans le PlayerGui : chacun voit son propre état) « ✅ PRÊT ! » vert ou « ⏳ 3:12:45 »
+	local function rafraichir(joueur)
+		if not Style or not estJoueur(joueur) then return end
+		if joueur:GetAttribute("DonneesChargees") ~= true then return end
+		local a = affichages[joueur]
+		if not a or not a.gui or not a.gui.Parent then
+			local pg = joueur:FindFirstChild("PlayerGui")
+			if not pg then return end
+			local gui, lignes = Style.etiquette(caisse, {
+				{ texte = "", contour = 3.5, nom = "Etat" },
+			}, { Name = "EtatCoffre", largeur = 9, hauteurLigne = 1.8, StudsOffset = Vector3.new(0, 7.5, 0), MaxDistance = 90 })
+			pcall(function()
+				gui.ResetOnSpawn = false
+			end)
+			gui.Parent = pg
+			a = { gui = gui, texte = lignes[1], dernier = nil }
+			affichages[joueur] = a
+		end
+		local reste = resteCoffre(joueur)
+		local texte
+		local couleur
+		if reste <= 0 then
+			texte = "✅ PRÊT !"
+			couleur = Style.couleurs.argent
+		else
+			texte = "⏳ " .. minuteur(reste)
+			couleur = Style.couleurs.texte
+		end
+		if a.dernier ~= texte then
+			a.dernier = texte
+			a.texte.Text = texte
+			a.texte.TextColor3 = couleur
+		end
+	end
+
+	if Style then
+		task.spawn(function()
+			while true do
+				for _, joueur in ipairs(Players:GetPlayers()) do
+					pcall(rafraichir, joueur)
+				end
+				task.wait(1)
+			end
+		end)
+	end
 
 	-- ouverture visible : le couvercle bascule vers l'arrière puis se referme
 	local enAnimation = false
@@ -400,9 +506,11 @@ function M.demarrer(ctx)
 			effet("Coffre", caisse.Position + Vector3.new(0, 3, 0), { montant = math.floor(gain + 0.5) })
 			notifier(joueur, "Trésor trouvé ! +" .. montant(gain) .. ". Reviens demain !", "succes")
 			animerOuverture()
+			pcall(rafraichir, joueur)
 		else
 			-- l'argent n'a pas pu être versé : on rend le coffre disponible
 			joueur:SetAttribute("CoffreOuvert", ouvert)
+			pcall(rafraichir, joueur)
 		end
 	end
 

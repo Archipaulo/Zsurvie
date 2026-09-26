@@ -31,17 +31,25 @@ function M.construire(ctx)
 	local LONGUEUR_SEGMENT = math.max(12, reglage("longueurSegment", 28))
 	local MONTEE = math.min(4, math.max(1, reglage("montee", 3)))  -- hauteur max entre deux marches
 	local ECART = math.min(6, math.max(1, reglage("ecart", 2)))    -- vide horizontal entre deux marches
-	local EPAISSEUR_HERBE = 0.8
+	local EPAISSEUR_HERBE = 1.2 -- dessus d'herbe bien marqué (style simulateur)
+	local DEBORD = 0.5 -- l'herbe déborde un peu des terrasses hautes : bord net, lisible de loin
 
 	local rng = Outils.aleatoire(reglage("graine", 1968))
+	local Style = ctx.Style
+	local hex = Charte.hex
 
-	-- couleurs
-	local PIERRE = Charte.pierre
-	local PIERRE_OMBRE = Charte.ombre(Charte.pierre)
-	local PIERRE_CLAIRE = Charte.lumiere(Charte.pierre)
-	local TERRE = Charte.terre
-	local HERBE = Charte.herbe
-	local FEUILLAGE = Charte.jungle
+	-- couleurs (STYLE.md §3 : monde simple et vif, herbe #6BD64A, sable #F2D49B)
+	local HERBE = hex("6BD64A")          -- dessus vert vif
+	local HERBE_CLAIRE = hex("8BE45F")   -- variante plus claire
+	local SABLE = Charte.sable           -- flanc du sommet
+	local OCRE_CLAIR = hex("EDBB72")     -- flanc du milieu
+	local OCRE = hex("DE9A4E")           -- flanc bas
+	local PIERRE = hex("D8CCB8")         -- rochers et pilier : pierre claire
+	local PIERRE_OMBRE = hex("B9A88E")
+	local PIERRE_CLAIRE = hex("EFE6D6")
+	local TERRE = OCRE
+	local FEUILLAGE = hex("3CC24A")      -- lianes et buissons, vert franc
+	local BOIS = hex("C9853F")           -- bois clair de la plateforme
 
 	-- compteur de parts : on s'arrête net au budget
 	local compteur = 0
@@ -74,10 +82,23 @@ function M.construire(ctx)
 			Name = "Dalle",
 			Size = Vector3.new(8, 1, 8),
 			CFrame = CFrame.new(cx, haut - 0.5, cz),
-			Color = Charte.bois,
+			Color = BOIS,
 		})
 		if dalle then
 			m.PrimaryPart = dalle
+			-- étiquette géante flottante, lisible de loin (et sur mobile)
+			if Style and Style.etiquette then
+				Style.etiquette(dalle, {
+					{ texte = "???", couleur = Charte.dore, taille = 1.6, titre = true, nom = "Titre" },
+					{ texte = "Grimpe si tu l'oses !", taille = 0.9, nom = "Invite" },
+				}, {
+					Name = "EtiquetteMystere",
+					largeur = 12,
+					hauteurLigne = 1.6,
+					StudsOffset = Vector3.new(0, 6, 0),
+					MaxDistance = 160,
+				})
+			end
 		end
 
 		local hPilier = haut - 1
@@ -112,7 +133,7 @@ function M.construire(ctx)
 				Name = "Poteau" .. i,
 				Size = Vector3.new(0.8, 2.5, 0.8),
 				CFrame = CFrame.new(cx + c[1], haut + 1.25, cz + c[2]),
-				Color = Charte.ombre(Charte.bois),
+				Color = Charte.ombre(BOIS),
 			})
 			local gemme = decor(part(Outils.boule, m, {
 				Name = "Gemme" .. i,
@@ -176,9 +197,9 @@ function M.construire(ctx)
 			end
 			local dessus = k * montee
 			local angle = math.rad(rng:NextNumber(-10, 10))
-			local couleur = PIERRE
+			local couleur = OCRE_CLAIR
 			if k % 2 == 0 then
-				couleur = PIERRE_CLAIRE
+				couleur = SABLE
 			end
 			local hColonne = dessus - EPAISSEUR_HERBE
 			if hColonne > 0.2 then
@@ -217,16 +238,28 @@ function M.construire(ctx)
 		if coffre.Z > 0 then
 			sens = -1
 		end
-		Outils.panneau(dossier, {
+		local panneau = Outils.panneau(dossier, {
 			nom = "PanneauMystere",
 			position = Vector3.new(premiereMarche.X - 4.5, 0, premiereMarche.Z + sens * 4),
 			texte = "???",
 			angle = 90,
 			largeur = 4,
-			couleur = Charte.bois,
+			couleur = BOIS,
 			couleurTexte = Charte.dore,
 		})
 		compteur = compteur + 2 -- poteau et planche
+		local planche = panneau and panneau:FindFirstChild("Planche")
+		if planche and Style and Style.etiquette then
+			Style.etiquette(planche, {
+				{ texte = "SENTIER", titre = true, nom = "Titre" },
+			}, {
+				Name = "EtiquetteSentier",
+				largeur = 8,
+				hauteurLigne = 1.8,
+				StudsOffset = Vector3.new(0, 2.5, 0),
+				MaxDistance = 90,
+			})
+		end
 	end
 
 	-- ===== 3. les falaises en terrasses =====
@@ -274,20 +307,21 @@ function M.construire(ctx)
 		local d2 = D * 0.3
 		local d3 = D * 0.62
 		local E = EPAISSEUR_HERBE
-		local pierre = PIERRE:Lerp(PIERRE_OMBRE, rng:NextNumber(0, 0.7))
-		local pierreHaut = PIERRE:Lerp(PIERRE_CLAIRE, rng:NextNumber(0, 0.8))
-		local herbe = HERBE:Lerp(FEUILLAGE, rng:NextNumber(0, 0.25))
+		-- teintes à peine variées d'un segment à l'autre : on reste en aplats vifs
+		local pierre = OCRE:Lerp(TERRE, rng:NextNumber(0, 0.7))
+		local pierreHaut = SABLE:Lerp(PIERRE_CLAIRE, rng:NextNumber(0, 0.8) * 0.5)
+		local herbe = HERBE:Lerp(HERBE_CLAIRE, rng:NextNumber(0, 0.25) * 2)
 		local s = Outils.modele(m, "Segment" .. numero)
 
-		-- terrasse basse : pierre, dessus herbe
+		-- terrasse basse : flanc ocre, dessus herbe (affleurant côté monde, reste dans l'emprise)
 		couche(s, "Pierre", bande, a0, a1, 0, D, 0, h1 - E, pierre)
 		couche(s, "Herbe1", bande, a0, a1, 0, D, h1 - E, h1, herbe)
-		-- terrasse du milieu : terre, dessus herbe
-		couche(s, "Terre", bande, a0, a1, d2, D, h1, h2 - E, TERRE)
-		couche(s, "Herbe2", bande, a0, a1, d2, D, h2 - E, h2, herbe)
-		-- sommet : pierre claire, dessus herbe
+		-- terrasse du milieu : flanc ocre clair, dessus herbe qui déborde un peu (bord net)
+		couche(s, "Terre", bande, a0, a1, d2, D, h1, h2 - E, OCRE_CLAIR)
+		couche(s, "Herbe2", bande, a0, a1, d2 - DEBORD, D, h2 - E, h2, herbe)
+		-- sommet : flanc sable, dessus herbe qui déborde
 		couche(s, "Sommet", bande, a0, a1, d3, D, h2, h - E, pierreHaut)
-		couche(s, "Herbe3", bande, a0, a1, d3, D, h - E, h, herbe)
+		couche(s, "Herbe3", bande, a0, a1, d3 - DEBORD, D, h - E, h, herbe)
 
 		local longueur = a1 - a0
 		-- rocher posé sur la terrasse basse

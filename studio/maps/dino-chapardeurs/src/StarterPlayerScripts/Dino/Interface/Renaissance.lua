@@ -1,6 +1,6 @@
--- Interface Renaissance : panneau ouvert depuis l'Autel (ou le HUD).
--- Montre le niveau, le coût de la suivante avec une barre de progression,
--- ce que l'on perd et ce que l'on gagne, et un bouton « Renaître » à confirmer en deux temps.
+-- Interface Renaissance : panneau ouvert depuis l'Autel (ou le HUD), au style « simulateur Roblox ».
+-- Montre le niveau, le gros multiplicateur actuel ➜ suivant, une barre de progression argent / coût,
+-- ce que l'on perd et ce que l'on gagne, et un gros bouton « RENAÎTRE » à confirmer en deux temps.
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
@@ -25,12 +25,15 @@ end
 
 function M.demarrer(ctx)
 	local Charte = ctx.Charte
-	local Outils = ctx.Outils
+	local Style = ctx.Style
 	local E = ctx.Equilibrage
 	local Plan = ctx.Plan
 	local Bus = ctx.Bus
 	local Reseau = ctx.Reseau
 	local joueur = ctx.joueur
+	local couleurs = Style.couleurs
+	local ROUGE = Style.boutons.rouge[1]
+	local VERT = couleurs.argent
 
 	-- ===== chiffres (toujours via Equilibrage, avec repli sûr) =====
 	local MAX = 10
@@ -102,14 +105,14 @@ function M.demarrer(ctx)
 		if ok and type(texte) == "string" then
 			return texte
 		end
-		return tostring(math.floor(n)) .. " $"
+		return "$" .. tostring(math.floor(n))
 	end
 
 	-- ===== construction du panneau =====
 	local fond = Instance.new("Frame")
 	fond.Name = "RenaissanceFond"
 	fond.Active = true
-	fond.BackgroundColor3 = Charte.encre
+	fond.BackgroundColor3 = couleurs.ombre
 	fond.BackgroundTransparency = 0.5
 	fond.BorderSizePixel = 0
 	fond.Size = UDim2.fromScale(1, 1)
@@ -117,148 +120,168 @@ function M.demarrer(ctx)
 	fond.Visible = false
 	fond.Parent = ctx.gui
 
-	local panneau = Outils.cadre(fond, {
+	local panneau, contenu, boutonFermer = Style.panneau(fond, {
 		Name = "Renaissance",
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.92, 0.8),
-		BackgroundColor3 = Charte.nuit,
-		BackgroundTransparency = 0.05,
-		ZIndex = 41,
+		titre = "RENAISSANCE",
+		icone = "♻️",
+		couleur = "violet",
+		Size = UDim2.new(0.94, 0, 0.9, 0),
 	})
-	local limite = Instance.new("UISizeConstraint")
-	limite.MaxSize = Vector2.new(480, 440)
-	limite.Parent = panneau
-	local contour = Instance.new("UIStroke")
-	contour.Color = Charte.violet
-	contour.Thickness = 3
-	contour.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	contour.Parent = panneau
-	local echelle = Instance.new("UIScale")
-	echelle.Scale = 1
-	echelle.Parent = panneau
+	panneau.Position = UDim2.fromScale(0.5, 0.5)
+	local limite = panneau:FindFirstChildOfClass("UISizeConstraint")
+	if limite then
+		limite.MaxSize = Vector2.new(540, 600)
+		limite.MinSize = Vector2.new(300, 380)
+	end
 
-	Outils.etiquette(panneau, {
-		Name = "Titre",
-		Text = "Renaissance",
-		TextColor3 = Charte.dore,
-		Position = UDim2.new(0.05, 0, 0.03, 0),
-		Size = UDim2.new(0.75, 0, 0.11, 0),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 42,
-	})
-
-	local boutonFermer
-
-	local niveauTexte = Outils.etiquette(panneau, {
+	-- niveau actuel « RENAISSANCE 2 / 10 »
+	local niveauTexte = Style.texte(contenu, {
 		Name = "Niveau",
+		Position = UDim2.fromScale(0, 0),
+		Size = UDim2.fromScale(1, 0.08),
 		Text = "",
-		Font = Charte.policeTexte,
-		TextColor3 = Charte.creme,
-		Position = UDim2.new(0.05, 0, 0.15, 0),
-		Size = UDim2.new(0.9, 0, 0.07, 0),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 42,
+		contour = 3,
+		tailleMax = 28,
 	})
 
-	local coutTexte = Outils.etiquette(panneau, {
+	-- gros multiplicateur « x1,5 ➜ x2 »
+	local rangeeMult = Instance.new("Frame")
+	rangeeMult.Name = "Multiplicateur"
+	rangeeMult.BackgroundTransparency = 1
+	rangeeMult.Position = UDim2.fromScale(0, 0.08)
+	rangeeMult.Size = UDim2.fromScale(1, 0.17)
+	rangeeMult.Parent = contenu
+	local multActuel = Style.texte(rangeeMult, {
+		Name = "Actuel",
+		Position = UDim2.fromScale(0, 0),
+		Size = UDim2.fromScale(0.4, 1),
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Text = "x1",
+		titre = true,
+		contour = 4,
+		tailleMax = 64,
+	})
+	local fleche = Style.texte(rangeeMult, {
+		Name = "Fleche",
+		Position = UDim2.fromScale(0.4, 0.15),
+		Size = UDim2.fromScale(0.2, 0.7),
+		Text = "➜",
+		TextColor3 = couleurs.revenu,
+		contour = 3,
+		tailleMax = 48,
+	})
+	local multSuivant = Style.texte(rangeeMult, {
+		Name = "Suivant",
+		Position = UDim2.fromScale(0.6, 0),
+		Size = UDim2.fromScale(0.4, 1),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Text = "x1",
+		titre = true,
+		contour = 4,
+		tailleMax = 72,
+	})
+	Style.degradeRarete(multSuivant, "Divin")
+
+	-- coût de la suivante (argent vert)
+	local coutTexte = Style.texte(contenu, {
 		Name = "Cout",
+		Position = UDim2.fromScale(0, 0.26),
+		Size = UDim2.fromScale(1, 0.07),
 		Text = "",
-		Font = Charte.policeTexte,
-		TextColor3 = Charte.creme,
-		Position = UDim2.new(0.05, 0, 0.24, 0),
-		Size = UDim2.new(0.9, 0, 0.06, 0),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 42,
+		TextColor3 = VERT,
+		contour = 3,
+		tailleMax = 28,
 	})
 
-	-- barre de progression Argent / coût
-	local barre = Outils.cadre(panneau, {
-		Name = "Barre",
-		Position = UDim2.new(0.05, 0, 0.32, 0),
-		Size = UDim2.new(0.9, 0, 0.08, 0),
-		BackgroundColor3 = Charte.encre,
-		BackgroundTransparency = 0,
-		ClipsDescendants = true,
-		ZIndex = 42,
-	})
-	local remplissage = Outils.cadre(barre, {
-		Name = "Remplissage",
-		Size = UDim2.fromScale(0, 1),
-		BackgroundColor3 = Charte.dore,
-		BackgroundTransparency = 0,
-		ZIndex = 43,
-	})
-	local barreTexte = Outils.etiquette(barre, {
+	-- barre de progression Argent / coût : épaisse, cernée de noir, remplissage vert en dégradé
+	local barre = Instance.new("Frame")
+	barre.Name = "Barre"
+	barre.Position = UDim2.fromScale(0, 0.34)
+	barre.Size = UDim2.fromScale(1, 0.1)
+	barre.BackgroundColor3 = couleurs.carte
+	barre.BorderSizePixel = 0
+	barre.ClipsDescendants = true
+	barre.Parent = contenu
+	Style.coins(barre, 14)
+	Style.bordure(barre, 4)
+	local remplissage = Instance.new("Frame")
+	remplissage.Name = "Remplissage"
+	remplissage.Size = UDim2.fromScale(0, 1)
+	remplissage.BackgroundColor3 = Color3.new(1, 1, 1)
+	remplissage.BorderSizePixel = 0
+	remplissage.Parent = barre
+	Style.coins(remplissage, 14)
+	Style.degrade(remplissage, Style.boutons.vert[1], Style.boutons.vert[2])
+	local barreTexte = Style.texte(barre, {
 		Name = "Texte",
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromScale(0.94, 0.78),
 		Text = "",
-		TextColor3 = Charte.creme,
-		TextStrokeTransparency = 0.4,
-		TextStrokeColor3 = Charte.encre,
-		Position = UDim2.fromScale(0.02, 0.1),
-		Size = UDim2.fromScale(0.96, 0.8),
-		ZIndex = 44,
+		ZIndex = 3,
+		contour = 3,
+		tailleMax = 30,
 	})
 
-	-- colonnes « Tu perds » / « Tu gagnes »
+	-- cartes « Tu perds » / « Tu gagnes »
 	local function colonne(nom, x, titre, couleur)
-		local c = Outils.cadre(panneau, {
+		local c = Style.carte(contenu, {
 			Name = nom,
-			Position = UDim2.new(x, 0, 0.44, 0),
-			Size = UDim2.new(0.43, 0, 0.3, 0),
-			BackgroundColor3 = Charte.encre,
-			BackgroundTransparency = 0.3,
-			ZIndex = 42,
+			Position = UDim2.fromScale(x, 0.47),
+			Size = UDim2.fromScale(0.485, 0.27),
 		})
-		local bord = Instance.new("UIStroke")
-		bord.Color = couleur
-		bord.Thickness = 2
-		bord.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		bord.Parent = c
-		Outils.etiquette(c, {
+		local bord = c:FindFirstChild("Bordure")
+		if bord then
+			bord.Color = couleur
+		end
+		Style.texte(c, {
 			Name = "Titre",
+			Position = UDim2.fromScale(0.05, 0.04),
+			Size = UDim2.fromScale(0.9, 0.28),
 			Text = titre,
 			TextColor3 = couleur,
-			Position = UDim2.fromScale(0.06, 0.05),
-			Size = UDim2.fromScale(0.88, 0.24),
-			ZIndex = 43,
+			titre = true,
+			contour = 3,
+			tailleMax = 30,
 		})
 		local lignes = {}
 		for i = 1, 2 do
-			lignes[i] = Outils.etiquette(c, {
+			lignes[i] = Style.texte(c, {
 				Name = "Ligne" .. i,
-				Text = "",
-				Font = Charte.policeTexte,
-				TextColor3 = Charte.creme,
-				Position = UDim2.new(0.06, 0, 0.33 + (i - 1) * 0.32, 0),
-				Size = UDim2.new(0.88, 0, 0.27, 0),
+				Position = UDim2.fromScale(0.06, 0.36 + (i - 1) * 0.31),
+				Size = UDim2.fromScale(0.88, 0.27),
 				TextXAlignment = Enum.TextXAlignment.Left,
-				ZIndex = 43,
+				Text = "",
+				contour = 2.5,
+				tailleMax = 22,
 			})
 		end
 		return c, lignes
 	end
-	local colPerte, lignesPerte = colonne("Perte", 0.05, "Tu perds", Charte.alerte)
-	local colGain, lignesGain = colonne("Gain", 0.52, "Tu gagnes", Charte.herbe)
+	local colPerte, lignesPerte = colonne("Perte", 0, "❌ TU PERDS", ROUGE)
+	local colGain, lignesGain = colonne("Gain", 0.515, "✅ TU GAGNES", VERT)
 
-	local messageMax = Outils.etiquette(panneau, {
+	-- « MAX » géant doré à la place des cartes
+	local messageMax = Style.texte(contenu, {
 		Name = "Max",
-		Text = "MAX",
-		TextColor3 = Charte.dore,
-		Position = UDim2.new(0.05, 0, 0.44, 0),
-		Size = UDim2.new(0.9, 0, 0.3, 0),
+		Position = UDim2.fromScale(0, 0.47),
+		Size = UDim2.fromScale(1, 0.27),
+		Text = "👑 MAX 👑",
 		Visible = false,
-		ZIndex = 42,
+		titre = true,
+		contour = 4,
+		tailleMax = 90,
 	})
+	Style.degradeRarete(messageMax, "Legendaire")
 
-	local raison = Outils.etiquette(panneau, {
+	local raison = Style.texte(contenu, {
 		Name = "Raison",
+		Position = UDim2.fromScale(0, 0.76),
+		Size = UDim2.fromScale(1, 0.06),
 		Text = "",
-		Font = Charte.policeTexte,
-		TextColor3 = Charte.sable,
-		Position = UDim2.new(0.05, 0, 0.76, 0),
-		Size = UDim2.new(0.9, 0, 0.05, 0),
-		ZIndex = 42,
+		TextColor3 = couleurs.revenu,
+		contour = 2.5,
+		tailleMax = 22,
 	})
 
 	-- ===== état du bouton =====
@@ -267,7 +290,12 @@ function M.demarrer(ctx)
 	local finAttente = 0        -- os.clock() jusqu'auquel le bouton reste bloqué après envoi
 	local ouvert = false
 
-	local boutonRenaitre
+	local boutonRenaitre, libelleRenaitre
+
+	local function styleBouton(texte, couleur)
+		libelleRenaitre.Text = texte
+		Style.couleurBouton(boutonRenaitre, couleur)
+	end
 
 	-- vrai si la renaissance est possible, sinon faux et la raison
 	local function possible()
@@ -288,7 +316,7 @@ function M.demarrer(ctx)
 		end
 		local argent = argentActuel()
 		if argent < cout then
-			return false, "Il te manque " .. montant(cout - argent) .. "."
+			return false, "Il te manque " .. montant(cout - argent) .. " !"
 		end
 		return true, ""
 	end
@@ -298,48 +326,56 @@ function M.demarrer(ctx)
 		local argent = argentActuel()
 		local estMax = niveau >= MAX
 
-		niveauTexte.Text = "Niveau actuel : " .. niveau .. " / " .. MAX .. "   (revenus x" .. formaterMultiplicateur(multiplicateurDe(niveau)) .. ")"
+		niveauTexte.Text = "NIVEAU " .. niveau .. " / " .. MAX
+		multActuel.Text = "x" .. formaterMultiplicateur(multiplicateurDe(niveau))
 
 		colPerte.Visible = not estMax
 		colGain.Visible = not estMax
 		messageMax.Visible = estMax
+		fleche.Visible = not estMax
+		multSuivant.Visible = not estMax
+		if estMax then
+			multActuel.Size = UDim2.fromScale(1, 1)
+			multActuel.TextXAlignment = Enum.TextXAlignment.Center
+		else
+			multActuel.Size = UDim2.fromScale(0.4, 1)
+			multActuel.TextXAlignment = Enum.TextXAlignment.Right
+			multSuivant.Text = "x" .. formaterMultiplicateur(multiplicateurDe(niveau + 1))
+		end
 
 		local progression = 1
 		if estMax then
 			coutTexte.Text = "Renaissance maximale atteinte !"
+			coutTexte.TextColor3 = couleurs.revenu
 			barreTexte.Text = "MAX"
 		else
+			coutTexte.TextColor3 = VERT
 			local cout = coutDe(niveau)
 			if cout and cout > 0 then
 				progression = math.clamp(argent / cout, 0, 1)
-				coutTexte.Text = "Prochaine renaissance : " .. montant(cout)
+				coutTexte.Text = "Coût : " .. montant(cout)
 				barreTexte.Text = montant(argent) .. " / " .. montant(cout)
 			elseif cout then
-				coutTexte.Text = "Prochaine renaissance : gratuite"
+				coutTexte.Text = "Coût : GRATUIT"
 				barreTexte.Text = montant(argent)
 			else
 				progression = 0
-				coutTexte.Text = "Prochaine renaissance : indisponible"
+				coutTexte.Text = "Coût : indisponible"
 				barreTexte.Text = "..."
 			end
-			lignesPerte[1].Text = "Tout ton argent (retour à " .. montant(ARGENT_DEPART) .. ")"
-			lignesPerte[2].Text = "Tous les dinos de ta Base"
-			lignesGain[1].Text = "Revenus x" .. formaterMultiplicateur(multiplicateurDe(niveau + 1))
+			lignesPerte[1].Text = "💸 Ton argent (retour à " .. montant(ARGENT_DEPART) .. ")"
+			lignesPerte[2].Text = "🦖 Tous les dinos de ta Base"
+			lignesGain[1].Text = "💰 Revenus x" .. formaterMultiplicateur(multiplicateurDe(niveau + 1))
 			if emplacementsDe(niveau + 1) > emplacementsDe(niveau) then
-				lignesGain[2].Text = "+1 emplacement (" .. emplacementsDe(niveau + 1) .. " au total)"
+				lignesGain[2].Text = "🏠 +1 emplacement (" .. emplacementsDe(niveau + 1) .. ")"
 			else
-				lignesGain[2].Text = "Emplacements déjà au maximum"
+				lignesGain[2].Text = "🏠 Emplacements déjà au max"
 			end
 		end
 
-		local couleurBarre = Charte.dore
-		if progression >= 1 then
-			couleurBarre = Charte.herbe
-		end
 		pcall(function()
 			TweenService:Create(remplissage, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				Size = UDim2.fromScale(progression, 1),
-				BackgroundColor3 = couleurBarre,
 			}):Play()
 		end)
 
@@ -347,30 +383,20 @@ function M.demarrer(ctx)
 		local ok, pourquoi = possible()
 		if estMax then
 			confirmation = false
-			boutonRenaitre.Text = "MAX"
-			boutonRenaitre.BackgroundColor3 = Charte.pierre
-			boutonRenaitre.AutoButtonColor = false
+			styleBouton("👑 MAX", "gris")
 			raison.Text = "Tu as atteint le sommet. Bravo !"
 		elseif os.clock() < finAttente then
-			boutonRenaitre.Text = "..."
-			boutonRenaitre.BackgroundColor3 = Charte.pierre
-			boutonRenaitre.AutoButtonColor = false
+			styleBouton("...", "gris")
 			raison.Text = ""
 		elseif not ok then
 			confirmation = false
-			boutonRenaitre.Text = "Renaître"
-			boutonRenaitre.BackgroundColor3 = Charte.pierre
-			boutonRenaitre.AutoButtonColor = false
+			styleBouton("♻️ RENAÎTRE", "gris")
 			raison.Text = pourquoi
 		elseif confirmation then
-			boutonRenaitre.Text = "Sûr ? Clique encore"
-			boutonRenaitre.BackgroundColor3 = Charte.alerte
-			boutonRenaitre.AutoButtonColor = true
+			styleBouton("SÛR ? RECLIQUE !", "rouge")
 			raison.Text = "Ton argent et tes dinos seront perdus."
 		else
-			boutonRenaitre.Text = "Renaître"
-			boutonRenaitre.BackgroundColor3 = Charte.violet
-			boutonRenaitre.AutoButtonColor = true
+			styleBouton("♻️ RENAÎTRE", "violet")
 			raison.Text = ""
 		end
 	end
@@ -398,6 +424,7 @@ function M.demarrer(ctx)
 			local jeton = jetonConfirmation
 			Bus.emettre("Son", "clic")
 			rafraichir()
+			Style.pop(boutonRenaitre, 1.08)
 			task.delay(DELAI_CONFIRMATION, function()
 				if jetonConfirmation == jeton and confirmation then
 					confirmation = false
@@ -423,15 +450,20 @@ function M.demarrer(ctx)
 		end)
 	end
 
-	boutonRenaitre = Outils.bouton(panneau, {
+	boutonRenaitre, libelleRenaitre = Style.bouton(contenu, {
 		Name = "Renaitre",
-		Text = "Renaître",
-		BackgroundColor3 = Charte.violet,
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0.83, 0),
-		Size = UDim2.new(0.6, 0, 0.13, 0),
-		ZIndex = 42,
+		texte = "♻️ RENAÎTRE",
+		couleur = "violet",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.fromScale(0.5, 1),
+		Size = UDim2.fromScale(0.8, 0.15),
+		tailleMax = 40,
+		rayon = 18,
 	}, clicRenaitre)
+	local tailleBouton = Instance.new("UISizeConstraint")
+	tailleBouton.MinSize = Vector2.new(180, 56)
+	tailleBouton.MaxSize = Vector2.new(420, 84)
+	tailleBouton.Parent = boutonRenaitre
 
 	-- ===== ouverture / fermeture =====
 	local function fermer()
@@ -448,27 +480,13 @@ function M.demarrer(ctx)
 		ouvert = true
 		fond.Visible = true
 		rafraichir()
-		echelle.Scale = 0.85
-		pcall(function()
-			TweenService:Create(echelle, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
-		end)
+		Style.pop(panneau)
 	end
 
-	boutonFermer = Outils.bouton(panneau, {
-		Name = "Fermer",
-		Text = "X",
-		BackgroundColor3 = Charte.alerte,
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(0.96, 0, 0.03, 0),
-		Size = UDim2.new(0.11, 0, 0.11, 0),
-		ZIndex = 43,
-	}, function()
+	boutonFermer.Activated:Connect(function()
 		Bus.emettre("Son", "clic")
 		fermer()
 	end)
-	local carre = Instance.new("UIAspectRatioConstraint")
-	carre.AspectRatio = 1
-	carre.Parent = boutonFermer
 
 	Bus.ecouter("OuvrirPanneau", function(nom)
 		if nom == "Renaissance" then
