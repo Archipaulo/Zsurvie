@@ -42,7 +42,7 @@ p { margin: 0 0 8px; color: var(--doux); font-size: 12.5px; }
 .rangee { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 button { font: inherit; font-size: 13px; cursor: pointer; border: 1px solid var(--bord); background: transparent; color: var(--texte); border-radius: 999px; padding: 5px 11px; }
 button.actif, button:hover { background: var(--accent); border-color: var(--accent); color: #1e1b2e; }
-#zones { max-height: 30vh; overflow: auto; margin-top: 4px; }
+#zones { max-height: 22vh; overflow: auto; margin-top: 4px; }
 #zones button { font-size: 12px; padding: 3px 9px; }
 #stats { font-size: 12px; color: var(--doux); }
 #replier { position: absolute; top: 8px; right: 10px; border: 0; padding: 2px 6px; }
@@ -171,7 +171,7 @@ const viser = (cx, cy, cz, dist, haut = 0.55) => {
   conteneur.appendChild(bt);
 });
 document.getElementById("stats").textContent = D.parts.length.toLocaleString("fr-FR") + " parts · " + zones.size + " zones construites";
-const VUES = { prairie: () => viser(0, 4, 8, 120, 0.8), ile: () => viser(0, 0, 600, 130, 0.7), haut: () => viser(0, 0, 300, 620, 0.9) };
+const VUES = { prairie: () => viser(0, 4, 8, 120, 0.8), ile: () => viser(0, 0, 600, 130, 0.7), haut: () => viser(0, 0, 300, 430, 1.1) };
 document.querySelectorAll("[data-vue]").forEach(b => b.onclick = () => {
   document.querySelectorAll("[data-vue]").forEach(x => x.classList.toggle("actif", x === b));
   VUES[b.dataset.vue]();
@@ -183,7 +183,13 @@ document.getElementById("replier").onclick = e => {
 };
 VUES.prairie();
 addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); rendu.setSize(innerWidth, innerHeight); });
-rendu.setAnimationLoop(() => { orbite.update(); rendu.render(scene, camera); });
+rendu.setAnimationLoop(() => {
+  orbite.update();
+  // le brouillard suit la distance de la caméra : lointain en vue d'ensemble, proche en vue de jeu
+  const dist = camera.position.distanceTo(orbite.target);
+  scene.fog.near = dist * 1.4 + 120; scene.fog.far = dist * 3.2 + 500;
+  rendu.render(scene, camera);
+});
 window.__pret = true;
 </script>
 </body>

@@ -194,7 +194,10 @@ local function textesVisibles(gui)
 	end
 	for _, o in ipairs(gui:GetDescendants()) do
 		if (o:IsA("TextLabel") or o:IsA("TextButton")) and o.Text ~= "" and visible(o) then
-			table.insert(t, o.Name .. "=" .. string.sub(o.Text, 1, 60))
+			local texte = o.Text
+			local fin = utf8.offset(texte, 61)
+			if fin then texte = string.sub(texte, 1, fin - 1) end
+			table.insert(t, o.Name .. "=" .. texte)
 		end
 	end
 	return t

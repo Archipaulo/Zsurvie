@@ -174,6 +174,7 @@ end
 function math.sign(x) if x > 0 then return 1 elseif x < 0 then return -1 end return 0 end
 function math.round(x) if x >= 0 then return math.floor(x + 0.5) end return math.ceil(x - 0.5) end
 function math.pow(a, b) return a ^ b end
+function math.atan2(y, x) return math.atan(y, x) end
 math.log10 = function(x) return math.log(x, 10) end
 function math.noise(x, y, z)
 	x, y, z = x or 0, y or 0, z or 0

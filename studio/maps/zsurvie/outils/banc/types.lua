@@ -140,6 +140,21 @@ local function mulR(a, b)
 	end
 	return r
 end
+-- Gram-Schmidt sur les colonnes : Roblox garde ses rotations orthonormées
+local function orthonormer(r)
+	local ax, ay, az = r[1], r[4], r[7]
+	local m = math.sqrt(ax * ax + ay * ay + az * az)
+	if m < 1e-12 then return r end
+	ax, ay, az = ax / m, ay / m, az / m
+	local bx, by, bz = r[2], r[5], r[8]
+	local d = ax * bx + ay * by + az * bz
+	bx, by, bz = bx - d * ax, by - d * ay, bz - d * az
+	m = math.sqrt(bx * bx + by * by + bz * bz)
+	if m < 1e-12 then return r end
+	bx, by, bz = bx / m, by / m, bz / m
+	local cx, cy, cz = ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx
+	return { ax, bx, cx, ay, by, cy, az, bz, cz }
+end
 local function appliquerR(r, x, y, z)
 	return r[1] * x + r[2] * y + r[3] * z, r[4] * x + r[5] * y + r[6] * z, r[7] * x + r[8] * y + r[9] * z
 end
@@ -210,7 +225,7 @@ CFmt.__mul = function(a, b)
 	if not estType(a, "CFrame") then error("multiplication invalide : " .. typeof(a) .. " * " .. typeof(b), 2) end
 	if estType(b, "CFrame") then
 		local x, y, z = appliquerR(a.r, b.x, b.y, b.z)
-		return cf(a.x + x, a.y + y, a.z + z, mulR(a.r, b.r))
+		return cf(a.x + x, a.y + y, a.z + z, orthonormer(mulR(a.r, b.r)))
 	elseif estType(b, "Vector3") then
 		local x, y, z = appliquerR(a.r, b.X, b.Y, b.Z)
 		return v3(a.x + x, a.y + y, a.z + z)

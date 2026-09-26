@@ -364,7 +364,7 @@ function M.demarrer(ctx)
 					local dx = centreMaison.X - infos.x
 					local dz = centreMaison.Z - infos.z
 					local distance = math.sqrt(dx * dx + dz * dz)
-					local enMarche = distance > portee
+					local enMarche = distance > portee + 0.05 -- marge : l'arrivée pile à la portée ne doit pas bloquer l'attaque
 					if enMarche then
 						local avance = math.min(stats.vitesse * dt, distance - portee)
 						infos.x = infos.x + dx / distance * avance

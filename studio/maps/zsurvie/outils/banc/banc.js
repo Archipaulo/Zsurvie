@@ -128,6 +128,7 @@ function executer(fichiers) {
     if (f === "scenario.lua") resultat = lua.lua_tojsstring(L, -1);
     lua.lua_pop(L, 1);
   }
+  fs.writeFileSync(path.join(SORTIE, "brut.json"), resultat);
   return JSON.parse(resultat);
 }
 
