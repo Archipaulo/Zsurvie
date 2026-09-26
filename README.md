@@ -80,3 +80,10 @@ coopératif, dans [`studio/productions/zsurvie-roblox/`](studio/productions/zsur
 jouable, écrite en Luau par les 50 agents (un module chacun). Ouvrez
 `Zsurvie.rbxlx` dans Roblox Studio et appuyez sur Jouer, ou regardez
 `Apercu-3D.html` dans un navigateur.
+
+## 🦖 Dino Chapardeurs — un jeu Roblox complet par les 50 agents
+
+[`studio/maps/dino-chapardeurs/`](studio/maps/dino-chapardeurs/README.md) : un
+jeu du genre « vole un dino » (tapis roulant de dinos, bases, vols, batte,
+verrou, raretés, mutations, événements, renaissances). Ouvrez
+`DinoChapardeurs.rbxlx` dans Roblox Studio.
