@@ -56,7 +56,9 @@ précédente), fait travailler les 50 agents qui y écrivent tous leurs livrable
 (et les scripts Luau au format Rojo, dans `scripts/<agent>/`), puis renvoie une
 commande d'assemblage que Claude exécute pour produire `production.json` et
 `BIBLE-COMPLETE.md`. Importez `production.json` dans l'application avec
-**📥 Importer une production**.
+**📥 Importer une production**. Pour pouvoir reprendre une exécution
+interrompue, lancez-la avec un identifiant unique :
+`{ nom, brief, jeton: "zsurvie-01" }`.
 
 En cas d'échec d'un agent, l'application ne passe pas à l'étape suivante avec
 des données incomplètes : elle propose **🔁 Réessayer les échecs** ou

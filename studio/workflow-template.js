@@ -15,6 +15,9 @@ const BRIEF = String(entree.brief || "").trim()
 if (!BRIEF) {
   throw new Error('Brief manquant. Exemple : Workflow({ name: "atelier-roblox", args: { nom: "Île du Volcan", brief: "Une île tropicale..." } })')
 }
+if (entree.jeton !== undefined && !(typeof entree.jeton === "string" && /^[A-Za-z0-9_-]{4,64}$/.test(entree.jeton))) {
+  throw new Error("args.jeton invalide : 4 à 64 caractères parmi lettres, chiffres, - et _.")
+}
 const NOM = String(entree.nom || BRIEF.split(/\s+/).slice(0, 6).join(" ")).trim()
 const par = id => AGENTS.find(a => a.id === id)
 const etiquette = a => `${a.emoji} ${a.nom.split(" ")[0]} · ${a.role}`
@@ -68,8 +71,10 @@ Pour chaque candidat, dans l'ordre, fais un appel séparé à l'outil Glob avec 
 /* réservation exclusive : Write refuse de remplacer un fichier que l'agent n'a pas lu,
    donc un seul lancement peut créer le marqueur (deux lancements simultanés du même nom).
    args.jeton (facultatif) identifie le lancement : une reprise après interruption reconnaît son marqueur. */
-const JETON = typeof entree.jeton === "string" && /^[A-Za-z0-9_-]{4,64}$/.test(entree.jeton) ? entree.jeton : ""
-const CONTENU_MARQUEUR = `${NOM}|${JETON}`
+const JETON = entree.jeton || ""
+// uniquement des caractères sûrs : la relecture compare sans ambiguïté d'échappement
+const CONTENU_MARQUEUR = `${slugProd(NOM)}|${JETON}`
+const normaliserMarqueur = v => String(v || "").replace(/["'`]/g, "").trim()
 const marqueur = await agent(
   `N'utilise pas l'outil Bash et surtout ne lis PAS le fichier avant. Avec l'outil Write, crée le fichier \`${RACINE}/.reservation\` contenant exactement : ${JSON.stringify(CONTENU_MARQUEUR)}
 Si l'outil Write échoue (par exemple parce que le fichier existe déjà), n'insiste pas et réponds cree = false ; s'il réussit, réponds cree = true.`,
@@ -80,11 +85,13 @@ if (!reserve && JETON) {
   const relu = await agent(
     `N'utilise pas l'outil Bash. Lis le fichier \`${RACINE}/.reservation\` avec l'outil Read et renvoie son contenu exact (sans les numéros de ligne).`,
     { label: "🔐 Vérification du marqueur", phase: "Vision", effort: "low", schema: objet({ contenu: { type: "string" } }) })
-  reserve = !!relu && String(relu.contenu || "").trim().replace(/^"|"$/g, "") === CONTENU_MARQUEUR
+  reserve = !!relu && normaliserMarqueur(relu.contenu) === CONTENU_MARQUEUR
 }
 if (!reserve) {
-  throw new Error(`${RACINE} vient d'être pris par un autre lancement : relancez, un nouveau dossier sera réservé.` +
-    (JETON ? "" : " (Pour pouvoir reprendre une exécution interrompue, passez un args.jeton unique.)"))
+  if (!marqueur) throw new Error("La réservation exclusive n'a pas pu être faite (agent en échec) : relancez le workflow.")
+  throw new Error(typeof entree.dossier === "string"
+    ? `${RACINE} est déjà réservé par un autre lancement : choisissez un autre dossier vide, ou relancez sans args.dossier.`
+    : `${RACINE} vient d'être pris par un autre lancement : relancez, un nouveau dossier sera réservé.`)
 }
 const echecs = []
 log(`Brief reçu pour « ${NOM} ». Livrables dans ${RACINE}/`)
