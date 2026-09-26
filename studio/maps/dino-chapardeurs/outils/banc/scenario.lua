@@ -204,17 +204,17 @@ local function textesVisibles(gui)
 end
 
 local function instantane(nom)
-	local etat = ReplicatedStorage:FindFirstChild("ZsurvieEtat")
+	local etat = ReplicatedStorage:FindFirstChild("DinoEtat")
 	local e = {
 		nom = nom, t = banc.maintenant(),
 		etat = etat and attributs(etat) or {},
 		joueur = banc.joueurLocal and attributs(banc.joueurLocal) or {},
-		zbires = 0,
+		dinos = 0,
 		textes = {},
 	}
-	local racine = workspace:FindFirstChild("Zsurvie")
-	local horde = racine and racine:FindFirstChild("Horde")
-	if horde then e.zbires = #horde:GetChildren() end
+	local racine = workspace:FindFirstChild("Dino")
+	local horde = racine and racine:FindFirstChild("Dinos")
+	if horde then e.dinos = #horde:GetChildren() end
 	if banc.joueurLocal then
 		local pg = banc.joueurLocal:FindFirstChild("PlayerGui")
 		if pg then e.textes = textesVisibles(pg) end
@@ -232,78 +232,87 @@ local function commeClient(fn)
 	banc.reprendre(banc.nouvelleCoroutine(fn, "client"))
 end
 
-local function zbirePlusProche(p)
-	local racine = workspace:FindFirstChild("Zsurvie")
-	local horde = racine and racine:FindFirstChild("Horde")
-	if not horde then return nil end
-	local meilleur, dm
-	for _, z in ipairs(horde:GetChildren()) do
-		if z:IsA("Model") then
-			local ok, piv = pcall(function() return z:GetPivot() end)
-			if ok then
-				local d = (piv.Position - p).Magnitude
-				if not dm or d < dm then meilleur, dm = z, d end
-			end
-		end
-	end
-	return meilleur, dm
-end
+-- ===== outils propres à Dino Chapardeurs =====
+local PPS = game:GetService("ProximityPromptService")
+local Reseau = function() return ReplicatedStorage:WaitForChild("DinoReseau") end
+local E -- Equilibrage (côté serveur)
+local busServeur
 
-local function deplacer(pos)
-	local perso = banc.joueurLocal.Character
-	perso:PivotTo(CFrame.new(pos))
+local function serveur(fn)
+	banc.reprendre(banc.nouvelleCoroutine(fn, "serveur"))
 end
-
-local function invites(dossierNom, nomInvite)
-	local racine = workspace:FindFirstChild("Zsurvie")
+local function demander(nom, ...)
+	local args = table.pack(...)
+	local res
+	serveur(function() res = table.pack(busServeur.demander(nom, table.unpack(args, 1, args.n))) end)
+	return res and res[1]
+end
+local function racineJeu() return workspace:FindFirstChild("Dino") end
+local function dinosDe(j)
 	local t = {}
-	if not racine then return t end
-	for _, o in ipairs(racine:GetDescendants()) do
-		if o:IsA("ProximityPrompt") and (not nomInvite or o.Name == nomInvite) then
-			if not dossierNom or o:IsDescendantOf(racine:FindFirstChild(dossierNom) or game) then table.insert(t, o) end
-		end
+	local d = racineJeu() and racineJeu():FindFirstChild("Dinos")
+	if not d then return t end
+	for _, m in ipairs(d:GetChildren()) do
+		if m:GetAttribute("Proprietaire") == j.UserId then table.insert(t, m) end
 	end
 	return t
 end
-
-local function declencher(invite)
-	local j = banc.joueurLocal
-	local part = invite.Parent
-	if part and part:IsA("BasePart") then deplacer(part.Position + v3(0, 3, 3)) end
-	banc.obtenirSignal(invite, "Triggered"):Fire(j)
-	commeClient(function() banc.obtenirSignal(PPS, "PromptTriggered"):Fire(invite, j) end)
+local function dinosEtat(etat)
+	local t = {}
+	local d = racineJeu() and racineJeu():FindFirstChild("Dinos")
+	if not d then return t end
+	for _, m in ipairs(d:GetChildren()) do
+		if m:GetAttribute("Etat") == etat then table.insert(t, m) end
+	end
+	return t
 end
+local function baseModele(j)
+	local b = racineJeu() and racineJeu():FindFirstChild("Bases")
+	local i = j:GetAttribute("Base")
+	return b and i and b:FindFirstChild("Base" .. tostring(i))
+end
+local function inviteSur(inst, nom)
+	if not inst then return nil end
+	for _, o in ipairs(inst:GetDescendants()) do
+		if o:IsA("ProximityPrompt") and o.Name == nom then return o end
+	end
+	return nil
+end
+local function placer(j, pos, regard)
+	local perso = j.Character
+	if regard then perso:PivotTo(CFrame.lookAt(pos, regard)) else perso:PivotTo(CFrame.new(pos)) end
+end
+-- un joueur active une invite (le client local reçoit aussi l'événement s'il s'agit de lui)
+local function activer(invite, j)
+	if not invite then return end
+	local part = invite.Parent
+	if part and part:IsA("BasePart") then placer(j, part.Position + v3(0, 3, 4)) end
+	banc.obtenirSignal(invite, "Triggered"):FireCote("serveur", j)
+	banc.obtenirSignal(PPS, "PromptTriggered"):FireCote("serveur", invite, j)
+	if j == banc.joueurLocal then
+		banc.obtenirSignal(PPS, "PromptTriggered"):FireCote("client", invite, j)
+	end
+end
+local function compteur(nom) return banc.compteurs["bus:" .. nom] or 0 end
 
 -- ===== 1. démarrage du serveur =====
 local sss = game:GetService("ServerScriptService")
-local demarrage = sss:FindFirstChild("Zsurvie") and sss.Zsurvie:FindFirstChild("Demarrage")
+local demarrage = sss:FindFirstChild("Dino") and sss.Dino:FindFirstChild("Demarrage")
 if not demarrage then error("Demarrage introuvable") end
 lancerScript(demarrage, "serveur")
 avancer(3)
-
--- espionne le bus du serveur
-local busServeur
-do
-	local modBus = ReplicatedStorage.Zsurvie:FindFirstChild("Bus")
-	local co = banc.nouvelleCoroutine(function() busServeur = require(modBus) end, "serveur")
-	banc.reprendre(co)
-	if busServeur then
-		local emettre = busServeur.emettre
-		busServeur.emettre = function(nom, ...)
-			banc.compter("bus:" .. tostring(nom))
-			return emettre(nom, ...)
-		end
-	end
-end
-local function demanderServeur(nom, ...)
-	local args = table.pack(...)
-	local res
-	banc.reprendre(banc.nouvelleCoroutine(function() res = table.pack(busServeur.demander(nom, table.unpack(args, 1, args.n))) end, "serveur"))
-	return res and res[1]
+serveur(function()
+	busServeur = require(ReplicatedStorage.Dino.Bus)
+	E = require(ReplicatedStorage.Dino.Equilibrage)
+end)
+local emettre = busServeur.emettre
+busServeur.emettre = function(nom, ...)
+	banc.compter("bus:" .. tostring(nom))
+	return emettre(nom, ...)
 end
 
-local racine = workspace:FindFirstChild("Zsurvie")
-controle("map construite", racine and racine:GetAttribute("Construit"), "")
+local racine = racineJeu()
+controle("monde construit", racine and racine:GetAttribute("Construit"), "")
 rapport.parts = 0
 rapport.dossiers = {}
 if racine then
@@ -316,191 +325,224 @@ if racine then
 		rapport.parts = rapport.parts + #parts
 	end
 end
-local stockage = game:GetService("ServerStorage"):FindFirstChild("Zsurvie")
+local stock = game:GetService("ServerStorage"):FindFirstChild("Dino")
+local nbGabarits = 0
 rapport.gabarits = {}
-if stockage and stockage:FindFirstChild("Zbires") then
-	for _, z in ipairs(stockage.Zbires:GetChildren()) do
-		local info = { classe = z.ClassName, parts = #banc.partsDe(z) }
-		if z:IsA("Model") then
-			info.primaryPart = z.PrimaryPart and z.PrimaryPart.Name or "aucune"
-			local ok, piv = pcall(function() return z:GetPivot() end)
-			local mn, mx = banc.boite(banc.partsDe(z))
-			if ok and mn then info.pivotY = piv.Position.Y info.basY = mn.Y info.hauteur = mx.Y - mn.Y end
-			info.barre = z:FindFirstChild("Barre", true) ~= nil
-		end
-		rapport.gabarits[z.Name] = info
+if stock and stock:FindFirstChild("Dinos") then
+	for _, g in ipairs(stock.Dinos:GetChildren()) do
+		nbGabarits = nbGabarits + 1
+		local mn, mx = banc.boite(banc.partsDe(g))
+		local ok, piv = pcall(function() return g:GetPivot() end)
+		rapport.gabarits[g.Name] = { parts = #banc.partsDe(g), primaryPart = g.PrimaryPart and g.PrimaryPart.Name or "aucune",
+			basY = mn and mn.Y, pivotY = ok and piv.Position.Y or nil, taille = mn and { mx.X - mn.X, mx.Y - mn.Y, mx.Z - mn.Z } }
 	end
+end
+controle("20 gabarits de dinos", nbGabarits == 20, nbGabarits)
+local bases = racine and racine:FindFirstChild("Bases")
+local nbBasesOk = 0
+if bases then
+	for i = 1, 8 do
+		local b = bases:FindFirstChild("Base" .. i)
+		local ok = b ~= nil
+		if b then
+			for _, n in ipairs({ "Sol", "Zone", "Entree", "BoutonVerrou", "Collecte", "Emplacements", "Enseigne", "Apparition" }) do
+				if not b:FindFirstChild(n) then ok = false end
+			end
+			if not (b:FindFirstChild("Emplacements") and b.Emplacements:FindFirstChild("E12")) then ok = false end
+			if not inviteSur(b, "Verrouiller") then ok = false end
+		end
+		if ok then nbBasesOk = nbBasesOk + 1 end
+	end
+end
+controle("8 bases conformes", nbBasesOk == 8, nbBasesOk)
+local nbSpawn = 0
+for _, o in ipairs(workspace:GetDescendants()) do if o:IsA("SpawnLocation") then nbSpawn = nbSpawn + 1 end end
+controle("une seule SpawnLocation", nbSpawn == 1, nbSpawn)
+for _, n in ipairs({ "Boutique", "Renaissance", "Index" }) do
+	controle("invite « " .. n .. " »", inviteSur(racine, n) ~= nil, "")
 end
 instantane("serveur démarré")
 
--- ===== 2. un joueur rejoint =====
-local j = banc.creerJoueur("Testeur", 1)
-table.insert(banc.joueurs, j)
-banc.joueurLocal = j
-j.Parent = Players
-local perso = j.Character
-local spawn = nil
-for _, o in ipairs(workspace:GetDescendants()) do if o:IsA("SpawnLocation") then spawn = o break end end
-controle("une SpawnLocation existe", spawn ~= nil, spawn and tostring(spawn.Position) or "")
-if spawn then perso:PivotTo(CFrame.new(spawn.Position + v3(0, 4, 0))) end
-perso.Parent = workspace
-banc.obtenirSignal(Players, "PlayerAdded"):Fire(j)
-banc.obtenirSignal(j, "CharacterAdded"):Fire(perso)
--- les scripts du joueur (copie de StarterPlayerScripts)
+-- ===== 2. deux joueurs arrivent : Testeur (avec client) et Voleur (sans client) =====
+local A = banc.creerJoueur("Testeur", 1)
+local B = banc.creerJoueur("Voleur", 2)
+for _, j in ipairs({ A, B }) do
+	table.insert(banc.joueurs, j)
+	j.Parent = Players
+	j.Character.Parent = workspace
+end
+banc.joueurLocal = A
+banc.obtenirSignal(Players, "PlayerAdded"):Fire(A)
+banc.obtenirSignal(A, "CharacterAdded"):Fire(A.Character)
+banc.obtenirSignal(Players, "PlayerAdded"):FireCote("serveur", B)
+banc.obtenirSignal(B, "CharacterAdded"):FireCote("serveur", B.Character)
 local sps = game:GetService("StarterPlayer"):FindFirstChild("StarterPlayerScripts")
 if sps then
-	for _, e in ipairs(sps:GetChildren()) do
-		local c = e:Clone()
-		c.Parent = j.PlayerScripts
-	end
-	for _, s in ipairs(j.PlayerScripts:GetDescendants()) do
+	for _, e in ipairs(sps:GetChildren()) do e:Clone().Parent = A.PlayerScripts end
+	for _, s in ipairs(A.PlayerScripts:GetDescendants()) do
 		if s.ClassName == "LocalScript" then lancerScript(s, "client") end
 	end
 end
-avancer(6)
-local lobby = instantane("joueur au lobby")
-controle("données chargées", j:GetAttribute("DonneesChargees") == true, "")
-controle("phase Lobby", lobby.etat.Phase == "Lobby", lobby.etat.Phase)
-controle("interface créée", #lobby.textes > 0, #lobby.textes .. " textes visibles")
+avancer(8)
+local arrivee = instantane("joueurs arrivés")
+controle("bases attribuées", A:GetAttribute("Base") and B:GetAttribute("Base") and A:GetAttribute("Base") ~= B:GetAttribute("Base"),
+	tostring(A:GetAttribute("Base")) .. " / " .. tostring(B:GetAttribute("Base")))
+controle("données chargées", A:GetAttribute("DonneesChargees") == true and B:GetAttribute("DonneesChargees") == true, "")
+controle("argent de départ", A:GetAttribute("Argent") == E.argentDepart, tostring(A:GetAttribute("Argent")))
+controle("batte dans le sac", A.Backpack:FindFirstChild("Batte") ~= nil or A.Character:FindFirstChild("Batte") ~= nil, "")
+local bA, bB = baseModele(A), baseModele(B)
+controle("apparition dans sa base", bA and bA:FindFirstChild("Apparition") and (A.Character:GetPivot().Position - bA.Apparition.Position).Magnitude < 12,
+	tostring(A.Character:GetPivot().Position))
+controle("enseigne au nom du joueur", bA and bA:FindFirstChild("Enseigne") and bA.Enseigne:FindFirstChild("Titre", true)
+	and string.find(bA.Enseigne:FindFirstChild("Titre", true).Text, "Testeur") ~= nil, "")
+controle("interface créée", #arrivee.textes > 0, #arrivee.textes .. " textes")
 
--- ===== 3. départ en capsule =====
-local capsules = invites("QuaiCapsules")
-controle("invites de capsule", #capsules > 0, #capsules)
-if capsules[1] then declencher(capsules[1]) end
-avancer(12)
-local depart = instantane("départ de la run")
-controle("run lancée (phase Horde)", depart.etat.Phase == "Horde", depart.etat.Phase)
-controle("joueur EnRun", j:GetAttribute("EnRun") == true, tostring(j:GetAttribute("EnRun")))
-local posDepart = perso:GetPivot().Position
-controle("joueur téléporté sur la Prairie", posDepart.Magnitude < 150, tostring(posDepart))
+-- ===== 3. le Tapis =====
+avancer(10)
+local surTapis = dinosEtat("Tapis")
+controle("des dinos défilent sur le Tapis", #surTapis >= 3, #surTapis)
+local xAvant = surTapis[1] and surTapis[1]:GetPivot().Position.X
+avancer(1)
+controle("les dinos avancent", surTapis[1] and surTapis[1].Parent and surTapis[1]:GetPivot().Position.X > xAvant, "")
+controle("étiquette et invite Acheter", surTapis[1] and surTapis[1]:FindFirstChild("Etiquette", true) ~= nil and inviteSur(surTapis[1], "Acheter") ~= nil, "")
 
--- ===== 4. combat =====
-local camera = workspace.CurrentCamera
-local tirs = 0
-local function viser()
-	local z = zbirePlusProche(perso:GetPivot().Position)
-	if z then
-		local cible = z:GetPivot().Position + v3(0, 1.5, 0)
-		banc.souris.Hit = CFrame.new(cible)
-		banc.souris.Target = z.PrimaryPart or z:FindFirstChildWhichIsA("BasePart")
-		local pos = select(1, camera:WorldToViewportPoint(cible))
-		banc.souris.X, banc.souris.Y = pos.X, pos.Y
-		banc.souris.UnitRay = Ray.new(camera.CFrame.Position, (cible - camera.CFrame.Position).Unit)
+-- ===== 4. achats =====
+demander("AjouterArgent", A, 1000000, "test")
+local achetes = {}
+for k = 1, 3 do
+	local cible = nil
+	for _, d in ipairs(dinosEtat("Tapis")) do
+		if inviteSur(d, "Acheter") and d:GetPivot().Position.X < 60 then cible = d break end
 	end
-	return z
-end
-local function clic()
-	local z = viser()
-	if not z then return end
-	commeClient(function()
-		local entree = { UserInputType = Enum.UserInputType.MouseButton1, UserInputState = Enum.UserInputState.Begin,
-			KeyCode = Enum.KeyCode.Unknown, Position = v3(banc.souris.X, banc.souris.Y, 0), Delta = Vector3.zero }
-		banc.obtenirSignal(UIS, "InputBegan"):Fire(entree, false)
-		banc.souris.Button1Down:Fire()
-		for _, a in pairs(banc.actions) do
-			banc.reprendre(banc.nouvelleCoroutine(a.fn, "client"), "action", Enum.UserInputState.Begin, entree)
-		end
-		local fin = { UserInputType = Enum.UserInputType.MouseButton1, UserInputState = Enum.UserInputState.End,
-			KeyCode = Enum.KeyCode.Unknown, Position = v3(banc.souris.X, banc.souris.Y, 0), Delta = Vector3.zero }
-		banc.obtenirSignal(UIS, "InputEnded"):Fire(fin, false)
-		banc.souris.Button1Up:Fire()
-	end)
-end
-local function tirDirect()
-	local z = viser()
-	if not z then return end
-	tirs = tirs + 1
-	local id = z:GetAttribute("Id")
-	local cible = z:GetPivot().Position + v3(0, 1.5, 0)
-	commeClient(function() ReplicatedStorage.ZsurvieReseau.Tirer:FireServer(cible, id) end)
-end
-
--- 4a. 20 s de clics « réels » (teste Interface/Blaster)
-deplacer(v3(0, 3, 30))
-local avantClics = banc.compteurs["remote:Tirer"] or 0
-local tc = 0
-avancer(20, function()
-	tc = tc + 1
-	if tc % 3 == 0 then clic() end
-end)
-local tirsClient = (banc.compteurs["remote:Tirer"] or 0) - avantClics
-controle("le Blaster client envoie des tirs", tirsClient > 0, tirsClient .. " tirs")
-
--- 4b. tirs directs + achats + réparation
-local etabli = invites(nil, "Etabli")
-controle("invite Etabli", #etabli > 0, #etabli)
-avancer(10, function()
-	tc = tc + 1
-	if tc % 3 == 0 then tirDirect() end
-end)
-demanderServeur("AjouterPieces", j, 500)
-if etabli[1] then declencher(etabli[1]) end
-avancer(1)
-local panneauEtabli = instantane("panneau Établi ouvert")
-commeClient(function() ReplicatedStorage.ZsurvieReseau.Acheter:FireServer("Degats") end)
-commeClient(function() ReplicatedStorage.ZsurvieReseau.Acheter:FireServer("Solidite") end)
-avancer(1)
-controle("achat Degats", (j:GetAttribute("Niv_Degats") or 0) >= 1, tostring(j:GetAttribute("Niv_Degats")))
-controle("achat Solidite (PV max)", (ReplicatedStorage.ZsurvieEtat:GetAttribute("PVMaisonMax") or 0) > 400, tostring(ReplicatedStorage.ZsurvieEtat:GetAttribute("PVMaisonMax")))
-commeClient(function() banc.obtenirSignal(game:GetService("UserInputService"), "InputBegan"):Fire({ UserInputType = Enum.UserInputType.Keyboard, KeyCode = Enum.KeyCode.Escape, UserInputState = Enum.UserInputState.Begin, Position = Vector3.zero }, false) end)
-deplacer(v3(0, 3, 12))
-local pvAvant = ReplicatedStorage.ZsurvieEtat:GetAttribute("PVMaison")
-for _ = 1, 3 do
-	commeClient(function() ReplicatedStorage.ZsurvieReseau.Reparer:FireServer() end)
+	if cible then
+		activer(inviteSur(cible, "Acheter"), A)
+		table.insert(achetes, cible)
+	end
 	avancer(0.5)
 end
-commeClient(function() ReplicatedStorage.ZsurvieReseau.Ping:FireServer("Aide !") end)
-deplacer(v3(0, 3, 30))
-local texteMilieu
-avancer(90, function()
-	tc = tc + 1
-	if tc % 3 == 0 then tirDirect() end
-	if not texteMilieu and banc.maintenant() > 90 then
-		texteMilieu = instantane("milieu de run")
-		if EXPORTER then EXPORTER("pendant") end
-	end
-end)
-local combat = instantane("après 2 minutes de combat")
-controle("des Zbires sont apparus", (banc.compteurs["bus:ZbireApparu"] or 0) > 0, banc.compteurs["bus:ZbireApparu"] or 0)
-controle("des Zbires ont été vaincus", (banc.compteurs["bus:ZbireVaincu"] or 0) > 0, banc.compteurs["bus:ZbireVaincu"] or 0)
-controle("le joueur gagne des pièces", (banc.compteurs["bus:PiecesGagnees"] or 0) > 0, banc.compteurs["bus:PiecesGagnees"] or 0)
-controle("la Maison subit des dégâts", (banc.compteurs["bus:DegatsMaison"] or 0) > 0, banc.compteurs["bus:DegatsMaison"] or 0)
-controle("au moins un jour passé", (combat.etat.Jour or 0) >= 2, combat.etat.Jour)
-controle("la Mine produit des gemmes", (banc.compteurs["bus:GemmesGagnees"] or 0) > 0, banc.compteurs["bus:GemmesGagnees"] or 0)
-controle("réparation (SoinMaison)", (banc.compteurs["bus:SoinMaison"] or 0) > 0, pvAvant)
+controle("achat : le dino part vers la base", achetes[1] and (achetes[1]:GetAttribute("Etat") == "EnRoute" or achetes[1]:GetAttribute("Etat") == "Enclos"), achetes[1] and achetes[1]:GetAttribute("Etat"))
+avancer(25)
+local enclos = 0
+for _, d in ipairs(dinosDe(A)) do if d:GetAttribute("Etat") == "Enclos" then enclos = enclos + 1 end end
+controle("3 dinos installés dans la base", enclos == 3, enclos)
+controle("revenu par seconde", (A:GetAttribute("RevenuParSeconde") or 0) > 0, tostring(A:GetAttribute("RevenuParSeconde")))
+controle("Dinodex : espèce découverte", achetes[1] and A:GetAttribute("Index_" .. tostring(achetes[1]:GetAttribute("Espece"))) == true, "")
+if EXPORTER then EXPORTER("pendant") end
 
--- ===== 5. défaite =====
-local gemmesAvant = j:GetAttribute("Gemmes") or 0
-banc.reprendre(banc.nouvelleCoroutine(function() busServeur.emettre("DegatsMaison", 100000) end, "serveur"))
-avancer(15)
-local defaite = instantane("après la chute de la Maison")
-controle("MaisonTombee émis", (banc.compteurs["bus:MaisonTombee"] or 0) > 0, "")
-controle("retour au Lobby", defaite.etat.Phase == "Lobby", defaite.etat.Phase)
-controle("joueur plus EnRun", j:GetAttribute("EnRun") ~= true, "")
-controle("gemmes de fin de run", (j:GetAttribute("Gemmes") or 0) > gemmesAvant, gemmesAvant .. " -> " .. tostring(j:GetAttribute("Gemmes")))
-controle("joueur revenu sur l'île", (perso:GetPivot().Position - v3(0, 0, 600)).Magnitude < 90, tostring(perso:GetPivot().Position))
-controle("Horde vidée", defaite.zbires == 0, defaite.zbires)
-
--- ===== 6. recherche au Laboratoire =====
-demanderServeur("AjouterGemmes", j, 200, "test")
-local arbre = invites(nil, "ArbreRecherches")
-controle("invite ArbreRecherches", #arbre > 0, #arbre)
-if arbre[1] then declencher(arbre[1]) end
+-- ===== 5. collecte =====
+avancer(8)
+local stockAvant = 0
+for _, d in ipairs(dinosDe(A)) do stockAvant = stockAvant + (d:GetAttribute("Stock") or 0) end
+controle("l'argent s'accumule", stockAvant > 0, stockAvant)
+local argentAvant = A:GetAttribute("Argent") or 0
+if bA and bA:FindFirstChild("Collecte") then
+	placer(A, bA.Collecte.Position + v3(0, 3, 0))
+	banc.obtenirSignal(bA.Collecte, "Touched"):FireCote("serveur", A.Character.HumanoidRootPart)
+end
 avancer(1)
-instantane("panneau Recherches ouvert")
-commeClient(function() ReplicatedStorage.ZsurvieReseau.Rechercher:FireServer("TourelleToit") end)
+commeClient(function() Reseau().Collecter:FireServer() end)
 avancer(1)
-controle("recherche TourelleToit", j:GetAttribute("Rech_TourelleToit") == true, tostring(j:GetAttribute("Rech_TourelleToit")))
+controle("collecte encaissée", (A:GetAttribute("Argent") or 0) > argentAvant, argentAvant .. " -> " .. tostring(A:GetAttribute("Argent")))
 
--- ===== 7. deuxième run avec la tourelle =====
-capsules = invites("QuaiCapsules")
-if capsules[1] then declencher(capsules[1]) end
-local degatsAvant = banc.compteurs["bus:DegatsZbire"] or 0
-avancer(45)
-local run2 = instantane("deuxième run")
-controle("deuxième run lancée", run2.etat.Phase == "Horde" or run2.etat.Phase == "Repit", run2.etat.Phase)
-controle("dégâts sans tir du joueur (tourelle)", (banc.compteurs["bus:DegatsZbire"] or 0) > degatsAvant, (banc.compteurs["bus:DegatsZbire"] or 0) - degatsAvant)
+-- ===== 6. vol réussi =====
+local proie = nil
+for _, d in ipairs(dinosDe(A)) do if d:GetAttribute("Etat") == "Enclos" then proie = d break end end
+if proie then
+	placer(B, proie:GetPivot().Position + v3(0, 3, 3))
+	activer(inviteSur(proie, "Voler"), B)
+end
+avancer(0.5)
+controle("vol : le dino est porté", proie and proie:GetAttribute("Etat") == "Porte" and B:GetAttribute("Porte") == proie:GetAttribute("Id"),
+	proie and tostring(proie:GetAttribute("Etat")))
+local zoneB = bB and bB:FindFirstChild("Zone")
+if zoneB then
+	placer(B, (proie and proie:GetPivot().Position or zoneB.Position) + v3(0, 3, 0))
+	avancer(0.5)
+	placer(B, zoneB.Position + v3(0, -zoneB.Size.Y / 2 + 4, 0))
+end
+avancer(3)
+controle("vol livré chez le voleur", proie and proie:GetAttribute("Proprietaire") == B.UserId and proie:GetAttribute("Etat") == "Enclos",
+	proie and (tostring(proie:GetAttribute("Proprietaire")) .. " " .. tostring(proie:GetAttribute("Etat"))))
+controle("compteur de vols", (B:GetAttribute("Vols") or 0) == 1, tostring(B:GetAttribute("Vols")))
+controle("porteur libéré", (B:GetAttribute("Porte") or "") == "", tostring(B:GetAttribute("Porte")))
+
+-- ===== 7. la batte fait lâcher le butin =====
+local proie2 = nil
+for _, d in ipairs(dinosDe(A)) do if d:GetAttribute("Etat") == "Enclos" then proie2 = d break end end
+if proie2 then
+	placer(B, proie2:GetPivot().Position + v3(0, 3, 3))
+	activer(inviteSur(proie2, "Voler"), B)
+	avancer(0.5)
+	local pB = B.Character:GetPivot().Position
+	placer(A, pB + v3(0, 0, 4), pB)
+	avancer(0.2)
+	commeClient(function() Reseau().Frapper:FireServer() end)
+	avancer(2)
+end
+controle("frappe enregistrée", compteur("Frappe") > 0, compteur("Frappe"))
+controle("vol raté : le dino rentre chez sa victime", proie2 and proie2:GetAttribute("Proprietaire") == A.UserId and proie2:GetAttribute("Etat") == "Enclos",
+	proie2 and (tostring(proie2:GetAttribute("Proprietaire")) .. " " .. tostring(proie2:GetAttribute("Etat"))))
+avancer(3)
+
+-- ===== 8. le verrou protège la base =====
+activer(bA and inviteSur(bA, "Verrouiller"), A)
+avancer(0.5)
+controle("base verrouillée", bA and bA:GetAttribute("Verrouillee") == true, "")
+local proie3 = nil
+for _, d in ipairs(dinosDe(A)) do if d:GetAttribute("Etat") == "Enclos" then proie3 = d break end end
+if proie3 then
+	placer(B, proie3:GetPivot().Position + v3(0, 3, 3))
+	activer(inviteSur(proie3, "Voler"), B)
+end
+avancer(1.5)
+controle("vol refusé quand la base est verrouillée", proie3 and proie3:GetAttribute("Etat") == "Enclos" and proie3:GetAttribute("Proprietaire") == A.UserId, "")
+local dedans = demander("DansBase", B.Character:GetPivot().Position, A:GetAttribute("Base"))
+controle("intrus expulsé de la base verrouillée", dedans == false, tostring(dedans))
+
+-- ===== 9. boutique, vente, événement, panneaux =====
+commeClient(function() Reseau().Acheter:FireServer("Bottes") end)
+avancer(1)
+controle("objet acheté (Bottes)", A:GetAttribute("Objet_Bottes") == true, "")
+controle("bottes : vitesse augmentée", (A.Character.Humanoid.WalkSpeed or 0) > 16, tostring(A.Character.Humanoid.WalkSpeed))
+local nAvant = #dinosDe(A)
+local vendu = nil
+for _, d in ipairs(dinosDe(A)) do if d:GetAttribute("Etat") == "Enclos" then vendu = d break end end
+argentAvant = A:GetAttribute("Argent") or 0
+activer(vendu and inviteSur(vendu, "Vendre"), A)
+avancer(1)
+controle("vente d'un dino", #dinosDe(A) == nAvant - 1 and (A:GetAttribute("Argent") or 0) > argentAvant, nAvant .. " -> " .. #dinosDe(A))
+local lance = demander("LancerEvenement", "PluieDeMeteores")
+avancer(6)
+controle("événement lancé", ReplicatedStorage.DinoEtat:GetAttribute("Evenement") == "PluieDeMeteores", tostring(lance))
+activer(inviteSur(racine, "Boutique"), A)
+avancer(0.5)
+local panneau = instantane("panneau Boutique ouvert")
+local vuBottes = false
+for _, t in ipairs(panneau.textes) do if string.find(t, "Bottes") then vuBottes = true end end
+controle("panneau Boutique affiché", vuBottes, #panneau.textes .. " textes")
+activer(inviteSur(racine, "Index"), A)
+avancer(0.5)
+instantane("panneau Dinodex ouvert")
+
+-- ===== 10. renaissance =====
+demander("AjouterArgent", A, E.coutRenaissance(0) + 10, "test")
+commeClient(function() Reseau().Renaissance:FireServer() end)
+avancer(2)
+controle("renaissance", A:GetAttribute("Renaissances") == 1, tostring(A:GetAttribute("Renaissances")))
+controle("argent remis à zéro", A:GetAttribute("Argent") == E.argentDepart, tostring(A:GetAttribute("Argent")))
+controle("base vidée", #dinosDe(A) == 0, #dinosDe(A))
 if EXPORTER then EXPORTER("fin") end
+
+-- ===== 11. départ d'un joueur =====
+banc.obtenirSignal(Players, "PlayerRemoving"):FireCote("serveur", B)
+for i, j in ipairs(banc.joueurs) do if j == B then table.remove(banc.joueurs, i) break end end
+B.Parent = nil
+avancer(4)
+controle("base libérée au départ", bB and (bB:GetAttribute("Proprietaire") or 0) == 0, bB and tostring(bB:GetAttribute("Proprietaire")))
+local sauvegardes = 0
+for nom, contenu in pairs(banc.magasins) do for _ in pairs(contenu) do sauvegardes = sauvegardes + 1 end end
+controle("progression sauvegardée", sauvegardes > 0, sauvegardes)
+instantane("fin")
 
 -- ===== rapport =====
 rapport.erreurs = banc.erreurs

@@ -164,6 +164,14 @@ function SignalM.Fire(s, ...)
 	s.attentes = {}
 	for _, co in ipairs(attentes) do reprendre(co, ...) end
 end
+-- déclenche seulement les connexions d'un côté (ex. une invite activée par un joueur sans client)
+function SignalM.FireCote(s, cote, ...)
+	for _, c in ipairs(s.connexions) do
+		if c.Connected and c.cote == cote then
+			reprendre(banc.nouvelleCoroutine(c.fn, c.cote), ...)
+		end
+	end
+end
 banc.Signal = SignalM
 
 -- ===== bibliothèque standard Luau =====

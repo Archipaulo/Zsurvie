@@ -53,11 +53,12 @@ button.actif, button:hover { background: var(--accent); border-color: var(--acce
 <body>
 <div id="ui">
   <button id="replier" title="Replier">–</button>
-  <h1><b>ZSURVIE</b> · aperçu de la map Roblox</h1>
-  <p>Chaque bloc a été construit par les scripts Luau des 50 agents, exécutés dans le banc d'essai (Roblox simulé), en pleine run. Glisser pour tourner, molette ou pincement pour zoomer.</p>
+  <h1><b>DINO CHAPARDEURS</b> · aperçu du jeu Roblox</h1>
+  <p>Chaque bloc a été construit par les scripts Luau des 50 agents, exécutés dans le banc d'essai (Roblox simulé), pendant une partie à deux joueurs. Glisser pour tourner, molette ou pincement pour zoomer.</p>
   <div class="rangee">
-    <button data-vue="prairie" class="actif">🏠 La Prairie</button>
-    <button data-vue="ile">🔬 L'île du Laboratoire</button>
+    <button data-vue="tapis" class="actif">🦖 Tapis & bases</button>
+    <button data-vue="place">⛲ La Place</button>
+    <button data-vue="volcan">🌋 Le Volcan</button>
     <button data-vue="haut">🛰️ Vue d'ensemble</button>
   </div>
   <div id="stats"></div>
@@ -153,7 +154,7 @@ for (const t of D.terrain || []) {
   m.applyMatrix4(m4); scene.add(m);
 }
 
-const NOMS = { Horde: "👾 Horde (Zbires en jeu)", Maison: "🏠 Maison", Mine: "⛏️ Mine", Props: "🛠️ Établi & props", Prairie: "🌱 Prairie", Relief: "⛰️ Relief", Vegetation: "🌳 Végétation", Eau: "💧 Étang", PointsInteret: "📍 Points d'intérêt", Portails: "🌀 Portails", Lumieres: "💡 Lumières", Signaletique: "🪧 Signalétique", Fanions: "🎏 Fanions", IleLabo: "🏝️ Île", Laboratoire: "🔬 Laboratoire", QuaiCapsules: "🚀 Quai des capsules", Galerie: "🖼️ Galerie des Zbires", Parcours: "🏃 Parcours", Enigme: "🧩 Énigme", Records: "🏆 Records", Monument: "🗿 Monument", ScenePhoto: "📸 Scène photo", TourelleToit: "🗼 Tourelle", Pieces: "🪙 Pièces" };
+const NOMS = { Dinos: "🦖 Dinos en jeu", Bases: "🏠 Bases", Tapis: "🟥 Tapis roulant", Sol: "🌱 Sol", Falaises: "⛰️ Falaises", Jungle: "🌴 Jungle", Riviere: "💧 Rivière", Volcan: "🌋 Volcan", Nurserie: "🥚 Nurserie", FinTapis: "🚪 Grande Porte", Place: "⛲ Place", Comptoir: "🛒 Boutique", Autel: "♻️ Autel", Cratere: "☄️ Cratère", Fossiles: "🦴 Fossiles", Lumieres: "🔥 Torches", Signaletique: "🪧 Panneaux", Classement: "🏆 Classement", Coffre: "💰 Coffre caché" };
 const conteneur = document.getElementById("zones");
 const viser = (cx, cy, cz, dist, haut = 0.55) => {
   orbite.target.set(cx, cy, cz);
@@ -171,7 +172,7 @@ const viser = (cx, cy, cz, dist, haut = 0.55) => {
   conteneur.appendChild(bt);
 });
 document.getElementById("stats").textContent = D.parts.length.toLocaleString("fr-FR") + " parts · " + zones.size + " zones construites";
-const VUES = { prairie: () => viser(0, 4, 8, 120, 0.8), ile: () => viser(0, 0, 600, 130, 0.7), haut: () => viser(0, 0, 300, 430, 1.1) };
+const VUES = { tapis: () => viser(0, 2, 10, 150, 0.75), place: () => viser(0, 2, 100, 70, 0.6), volcan: () => viser(0, 20, -135, 120, 0.45), haut: () => viser(0, 0, -10, 330, 1.1) };
 document.querySelectorAll("[data-vue]").forEach(b => b.onclick = () => {
   document.querySelectorAll("[data-vue]").forEach(x => x.classList.toggle("actif", x === b));
   VUES[b.dataset.vue]();
@@ -181,7 +182,7 @@ document.getElementById("replier").onclick = e => {
   ui.classList.toggle("replie");
   e.target.textContent = ui.classList.contains("replie") ? "+" : "–";
 };
-VUES.prairie();
+VUES.tapis();
 addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); rendu.setSize(innerWidth, innerHeight); });
 rendu.setAnimationLoop(() => {
   orbite.update();
