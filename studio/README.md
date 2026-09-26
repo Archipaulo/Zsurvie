@@ -22,7 +22,8 @@ Réglages pour faire une copie de sauvegarde ou changer d'ordinateur).
 - **🤖 Consultation IA** : ajoutez une clé API Anthropic dans ⚙️ Réglages et
   discutez directement avec chaque expert (il connaît le projet ouvert). Sans
   clé, le bouton « 📋 Copier le prompt expert » permet de l'interroger dans
-  n'importe quel chat IA. La clé reste stockée uniquement dans votre navigateur.
+  n'importe quel chat IA. La clé reste stockée uniquement dans votre navigateur :
+  elle n'est jamais incluse dans les exports, et un import ne la remplace pas.
 
 ## 🎬 Un seul brief, les 50 agents ensemble
 
@@ -49,11 +50,18 @@ arrêtée : rien de ce qui est déjà livré n'est refait ni refacturé.
 
 **2. Dans Claude Code** — demandez simplement :
 « lance le workflow atelier-roblox avec le brief : … ». Le workflow
-`.claude/workflows/atelier-roblox.js` fait travailler les 50 agents, écrit tous
-les livrables (et les scripts Luau au format Rojo) dans
-`studio/productions/<projet>/`, puis assemble `production.json` et
+`.claude/workflows/atelier-roblox.js` réserve un dossier neuf
+`studio/productions/<projet>/` (jamais de mélange avec une production
+précédente), fait travailler les 50 agents qui y écrivent tous leurs livrables
+(et les scripts Luau au format Rojo, dans `scripts/<agent>/`), puis renvoie une
+commande d'assemblage que Claude exécute pour produire `production.json` et
 `BIBLE-COMPLETE.md`. Importez `production.json` dans l'application avec
 **📥 Importer une production**.
+
+En cas d'échec d'un agent, l'application ne passe pas à l'étape suivante avec
+des données incomplètes : elle propose **🔁 Réessayer les échecs** ou
+**⏭️ Continuer sans eux**. Une seule production tourne à la fois, même avec
+plusieurs onglets ouverts, et les onglets restent synchronisés.
 
 ## 👥 L'équipe (10 départements × 5 experts)
 
