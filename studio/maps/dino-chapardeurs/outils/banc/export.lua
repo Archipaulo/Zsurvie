@@ -78,5 +78,9 @@ function EXPORTER(nom)
 			end
 		end
 	end
-	__ecrire("parts-" .. nom, banc.json({ parts = parts, terrain = terrain, eclairage = eclairage, etiquettes = etiquettes }))
+	local couleursTerrain = {}
+	for k, c in pairs(banc.couleursTerrain or {}) do couleursTerrain[k] = hex(c) end
+	local t = workspace.Terrain
+	eclairage.Eau = hex(t.WaterColor)
+	__ecrire("parts-" .. nom, banc.json({ parts = parts, terrain = terrain, eclairage = eclairage, etiquettes = etiquettes, couleursTerrain = couleursTerrain }))
 end

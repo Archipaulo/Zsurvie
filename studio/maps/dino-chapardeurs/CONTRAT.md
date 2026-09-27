@@ -251,4 +251,4 @@ Style jouet : blocs lisses (SmoothPlastic ; Neon pour ce qui brille), couleurs
 **uniquement** via `ctx.Charte`. Sons intégrés `rbxasset://sounds/...` seulement
 (ex. `electronicpingshort.wav`, `button.wav`, `swordslash.wav`, `uuhhh.mp3`,
 `action_jump.mp3`, `impact_water.mp3`) ; la musique a des SoundId vides à
-compléter. Budget total ~9000 parts ; chacun respecte le sien.
+compléter. Budget total ~14000 parts ; chacun respecte le sien (voir sa mission).

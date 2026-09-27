@@ -3,7 +3,7 @@ local Charte = require(script.Parent.Charte)
 
 local Outils = {}
 local compteurParts = 0
-local BUDGET_PARTS = 9000
+local BUDGET_PARTS = 14000
 
 local function appliquer(inst, props)
 	if not props then return end
@@ -141,6 +141,73 @@ end
 function Outils.distanceXZ(a, b)
 	local dx, dz = a.X - b.X, a.Z - b.Z
 	return math.sqrt(dx * dx + dz * dz)
+end
+
+
+-- ===== terrain Roblox (sol, roches, eau) : toujours dans un pcall, sans jamais bloquer la construction =====
+local function remplir(methode, ...)
+	local args = table.pack(...)
+	local ok, err = pcall(function()
+		local t = workspace.Terrain
+		t[methode](t, table.unpack(args, 1, args.n))
+	end)
+	if not ok then warn("[Dino] Terrain:" .. methode .. " : " .. tostring(err)) end
+end
+-- bloc de terrain (cf = centre, taille = Vector3, materiau = Enum.Material : Grass, LeafyGrass, Ground, Sand, Rock, Slate, Basalt, CrackedLava, Water, Mud...)
+function Outils.terrainBloc(cf, taille, materiau) remplir("FillBlock", cf, taille, materiau) end
+function Outils.terrainBoule(centre, rayon, materiau) remplir("FillBall", centre, rayon, materiau) end
+-- cylindre de terrain d'axe Y (cf = centre)
+function Outils.terrainCylindre(cf, hauteur, rayon, materiau) remplir("FillCylinder", cf, hauteur, rayon, materiau) end
+-- coin de terrain (comme une WedgePart : pente vers -Z local)
+function Outils.terrainCoin(cf, taille, materiau) remplir("FillWedge", cf, taille, materiau) end
+function Outils.couleurTerrain(materiau, couleur)
+	pcall(function() workspace.Terrain:SetMaterialColor(materiau, couleur) end)
+end
+
+-- ===== formes « pro » =====
+-- bloc aux arêtes verticales arrondies (piliers, socles, meubles) : 2 blocs en croix + 4 cylindres d'angle.
+-- props : Size, CFrame (centre), Color, Material, Name... ; rayon : rayon des arêtes (défaut 0,6). Renvoie un Model.
+function Outils.blocArrondi(parent, props, rayon)
+	local m = Outils.modele(parent, props.Name or "BlocArrondi")
+	local taille = props.Size or Vector3.new(4, 4, 4)
+	local cf = props.CFrame or CFrame.new()
+	local r = math.min(rayon or 0.6, taille.X / 2 - 0.05, taille.Z / 2 - 0.05)
+	local function copie(extra)
+		local t = {}
+		for k, v in pairs(props) do t[k] = v end
+		for k, v in pairs(extra) do t[k] = v end
+		return t
+	end
+	Outils.bloc(m, copie({ Name = "CoeurX", Size = Vector3.new(taille.X - 2 * r, taille.Y, taille.Z), CFrame = cf }))
+	Outils.bloc(m, copie({ Name = "CoeurZ", Size = Vector3.new(taille.X, taille.Y, taille.Z - 2 * r), CFrame = cf }))
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			Outils.cylindre(m, copie({
+				Name = "Arete",
+				Size = Vector3.new(taille.Y, 2 * r, 2 * r),
+				CFrame = cf * CFrame.new(sx * (taille.X / 2 - r), 0, sz * (taille.Z / 2 - r)) * CFrame.Angles(0, 0, math.rad(90)),
+			}))
+		end
+	end
+	return m
+end
+
+-- dalle posée sur un liseré plus sombre et un peu plus large (bordure en relief) ; renvoie la dalle et le liseré
+function Outils.dalleBordee(parent, props, bord, couleurBord)
+	bord = bord or 0.4
+	local taille = props.Size or Vector3.new(8, 1, 8)
+	local cf = props.CFrame or CFrame.new()
+	local liseret = Outils.bloc(parent, {
+		Name = (props.Name or "Dalle") .. "Bord",
+		Size = Vector3.new(taille.X + 2 * bord, taille.Y * 0.8, taille.Z + 2 * bord),
+		CFrame = cf * CFrame.new(0, -taille.Y * 0.2, 0),
+		Color = couleurBord or Charte.ombre(props.Color or Charte.creme),
+		Material = props.MaterialBord or props.Material or Enum.Material.SmoothPlastic,
+	})
+	local t = {}
+	for k, v in pairs(props) do if k ~= "MaterialBord" then t[k] = v end end
+	local dalle = Outils.bloc(parent, t)
+	return dalle, liseret
 end
 
 function Outils.nombreParts()

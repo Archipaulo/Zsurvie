@@ -91,8 +91,12 @@ methode("Terrain", "FillCylinder", function(self, c, h, r, m) remplir("cylindre"
 methode("Terrain", "FillWedge", function(self, c, s, m) remplir("coin", c, s, m) end)
 methode("Terrain", "FillRegion", function(self, reg, res, m) remplir("bloc", reg.CFrame, reg.Size, m) end)
 methode("Terrain", "Clear", function() banc.remplissages = {} end)
-methode("Terrain", "SetMaterialColor", function() end)
-methode("Terrain", "GetMaterialColor", function() return Color3.new(0.5, 0.5, 0.5) end)
+banc.couleursTerrain = {}
+methode("Terrain", "SetMaterialColor", function(self, m, c)
+	if typeof(m) ~= "EnumItem" or typeof(c) ~= "Color3" then error("SetMaterialColor : Enum.Material et Color3 attendus", 2) end
+	banc.couleursTerrain[m.Name] = c
+end)
+methode("Terrain", "GetMaterialColor", function(self, m) return banc.couleursTerrain[m.Name] or Color3.new(0.5, 0.5, 0.5) end)
 methode("Terrain", "ReadVoxels", function() return {}, {} end)
 methode("Terrain", "WriteVoxels", function() end)
 methode("Terrain", "ReplaceMaterial", function() end)

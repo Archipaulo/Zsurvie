@@ -17,7 +17,8 @@ Style.couleurs = {
 	contour = hex("0E0D16"),
 	argent = hex("5CFF5C"),   -- les prix et l'argent : vert vif
 	revenu = hex("FFE14D"),   -- les revenus par seconde : jaune
-	fond = hex("1E2240"),     -- fond des panneaux
+	fond = hex("1E2240"),     -- fond des panneaux (bas du dégradé)
+	fondHaut = hex("2E3570"), -- haut du dégradé des panneaux
 	carte = hex("2D3363"),    -- fond des cartes dans un panneau
 	carteClaire = hex("3B4380"),
 	ombre = hex("000000"),
@@ -197,6 +198,21 @@ function Style.bouton(parent, props, rappel)
 	Style.bordure(b, 3)
 	local degrade = Style.degrade(b, palette[1], palette[2])
 	degrade.Name = "Fond"
+	-- reflet brillant sur la moitié haute (effet « bonbon »)
+	local reflet = Instance.new("Frame")
+	reflet.Name = "Reflet"
+	reflet.BackgroundColor3 = Color3.new(1, 1, 1)
+	reflet.BackgroundTransparency = 0.72
+	reflet.BorderSizePixel = 0
+	reflet.Position = UDim2.new(0, 4, 0, 3)
+	reflet.Size = UDim2.new(1, -8, 0.42, 0)
+	reflet.ZIndex = props.ZIndex or 1
+	Style.coins(reflet, math.max(4, (props.rayon or 14) - 4))
+	local fonduReflet = Instance.new("UIGradient")
+	fonduReflet.Rotation = 90
+	fonduReflet.Transparency = NumberSequence.new(0.1, 1)
+	fonduReflet.Parent = reflet
+	reflet.Parent = b
 	local texte = props.texte or ""
 	if props.icone and texte ~= "" then texte = props.icone .. " " .. texte elseif props.icone then texte = props.icone end
 	local libelle = Style.texte(b, {
@@ -235,11 +251,14 @@ end
 -- carte (cadre sombre arrondi et cerné) pour les listes des panneaux
 function Style.carte(parent, props)
 	local f = Instance.new("Frame")
-	f.BackgroundColor3 = Style.couleurs.carte
+	f.BackgroundColor3 = Color3.new(1, 1, 1)
 	f.BorderSizePixel = 0
+	local couleur = (props and props.BackgroundColor3) or Style.couleurs.carte
 	appliquer(f, props)
+	f.BackgroundColor3 = Color3.new(1, 1, 1)
 	Style.coins(f, 16)
 	Style.bordure(f, 3)
+	Style.degrade(f, couleur:Lerp(Color3.new(1, 1, 1), 0.08), couleur:Lerp(Color3.new(0, 0, 0), 0.12)).Name = "Fond"
 	f.Parent = parent
 	return f
 end
@@ -254,11 +273,12 @@ function Style.panneau(parent, props)
 	cadre.AnchorPoint = Vector2.new(0.5, 0.5)
 	cadre.Position = UDim2.fromScale(0.5, 0.52)
 	cadre.Size = props.Size or UDim2.new(0.62, 0, 0.7, 0)
-	cadre.BackgroundColor3 = Style.couleurs.fond
+	cadre.BackgroundColor3 = Color3.new(1, 1, 1)
 	cadre.BorderSizePixel = 0
 	cadre.Active = true
 	Style.coins(cadre, 22)
 	Style.bordure(cadre, 5)
+	Style.degrade(cadre, Style.couleurs.fondHaut, Style.couleurs.fond).Name = "Fond"
 	local contrainte = Instance.new("UISizeConstraint")
 	contrainte.MaxSize = Vector2.new(900, 620)
 	contrainte.MinSize = Vector2.new(300, 240)
@@ -303,6 +323,30 @@ function Style.panneau(parent, props)
 	contenu.Size = UDim2.new(1, -32, 1, -92)
 	contenu.Parent = cadre
 
+	-- ombre portée : cadre frère décalé, qui suit la visibilité, la taille et la position du panneau
+	local ombre = Instance.new("Frame")
+	ombre.Name = (props.Name or "Panneau") .. "Ombre"
+	ombre.BackgroundColor3 = Style.couleurs.ombre
+	ombre.BackgroundTransparency = 0.55
+	ombre.BorderSizePixel = 0
+	ombre.AnchorPoint = cadre.AnchorPoint
+	Style.coins(ombre, 24)
+	local contrainteOmbre = contrainte:Clone()
+	contrainteOmbre.Parent = ombre
+	local function suivre()
+		ombre.Size = cadre.Size
+		ombre.Position = cadre.Position + UDim2.fromOffset(0, 10)
+		ombre.Visible = cadre.Visible
+		ombre.ZIndex = math.max(1, cadre.ZIndex - 1)
+	end
+	suivre()
+	for _, prop in ipairs({ "Size", "Position", "Visible", "ZIndex" }) do
+		cadre:GetPropertyChangedSignal(prop):Connect(suivre)
+	end
+	cadre.AncestryChanged:Connect(function()
+		if cadre.Parent == nil then ombre:Destroy() end
+	end)
+	ombre.Parent = parent
 	cadre.Parent = parent
 	return cadre, contenu, fermer
 end

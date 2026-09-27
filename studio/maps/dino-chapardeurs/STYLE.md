@@ -71,3 +71,45 @@ plutôt que de refaire les réglages à la main.
 - **Couleurs du monde** : herbe #6BD64A, allées sable #F2D49B, pierre claire
   pour les socles, couleurs de base saturées. SmoothPlastic partout, Neon
   seulement pour ce qui brille.
+
+## 4. Version 2 — rendu professionnel
+
+Le monde garde la lisibilité « simulateur » (étiquettes, couleurs de base,
+tapis rouge) mais passe au niveau des jeux Roblox les plus soignés :
+
+**Terrain Roblox** (fonctions `Outils.terrainBloc/Boule/Cylindre/Coin`,
+`Outils.couleurTerrain`) pour tout ce qui est naturel : sol d'herbe
+(`Grass`, avec `workspace.Terrain.Decoration = true`), chemins (`Ground`,
+`Sand`), falaises et rochers (`Rock`, `Slate`), volcan (`Basalt`,
+`CrackedLava`), rivière (`Water`, `Terrain.WaterColor` turquoise). Ordre des
+remplissages : Sol d'abord, puis Falaises, Jungle, Rivière, Volcan (l'eau et la
+roche remplacent l'herbe). Dessus du sol à Y = 0.
+
+**Vrais matériaux** sur les parts (jamais tout en SmoothPlastic) :
+bois (`Wood`, `WoodPlanks`) pour les structures, `Fabric` pour le tapis rouge,
+`Slate`/`Cobblestone`/`Concrete` pour les sols bâtis et socles, `Metal`/
+`DiamondPlate` pour les pièces mécaniques, `Brick`/`Plaster` pour les murs,
+`Grass`/`LeafyGrass` pour les feuillages, `Glass` pour les vitres,
+`Neon` seulement pour les lumières. Les dinos restent en SmoothPlastic (jouets).
+
+**Finition** : bordures et plinthes en relief (`Outils.dalleBordee`), arêtes
+arrondies sur piliers et socles (`Outils.blocArrondi`), boules et cylindres
+pour les formes organiques, couleurs en trois teintes (base, `Charte.ombre`,
+`Charte.lumiere`) pour donner du volume, petits détails (rivets, clous,
+planches, mousse, cailloux) là où le regard se pose, jamais au milieu des
+passages.
+
+**Lumière** : `Lighting.Technology = Future`, ombres douces, reflets
+(`EnvironmentDiffuseScale`/`EnvironmentSpecularScale` = 1), Atmosphere légère,
+Bloom discret, SunRays, ColorCorrection vive ; lampes et torches avec
+`PointLight`/`SpotLight` à ombres pour les coins importants.
+
+**Ambiance** : particules d'ambiance (lucioles près de la jungle, feuilles,
+fumée du volcan, éclaboussures de la cascade), animations douces
+(`Outils.animer`).
+
+**Interface** : même style qu'avant, en plus soigné : reflet brillant sur les
+boutons (déjà dans `Style.bouton`), panneaux en dégradé avec ombre portée
+(`Style.panneau`), cartes en dégradé (`Style.carte`), espacements réguliers
+(UIPadding, UIListLayout), icônes plus grandes, transitions (ouverture en pop,
+fermeture en fondu), compteurs qui défilent.
