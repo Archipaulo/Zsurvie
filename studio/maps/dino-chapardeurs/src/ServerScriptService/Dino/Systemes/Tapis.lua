@@ -1,6 +1,9 @@
 -- Systemes/Tapis : fabrique tous les dinos vivants (répondeur CreerDino), fait apparaître
 -- des dinos au début du Tapis roulant et les fait avancer jusqu'à la Fin du tapis.
+-- Version 2 : sur le Tapis, les dinos marchent (pattes, queue et ailes animées par rotation
+-- locale dans la boucle Heartbeat) ; les raretés Épique et plus portent une aura d'étincelles.
 local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
 
 local M = {}
 
@@ -9,6 +12,49 @@ local DANDINEMENT_ANGLE = 0.07    -- radians de roulis
 local DANDINEMENT_HAUTEUR = 0.15  -- studs de sautillement
 local DANDINEMENT_FREQUENCE = 7   -- radians par seconde
 local INTERVALLE_ADOPTION = 1     -- secondes entre deux recherches de dinos « Tapis » inconnus
+
+-- marche : un pas par sautillement, pattes en diagonale (AvG avec ArD, AvD avec ArG)
+local MARCHE_ANGLE = 0.42         -- radians de balancement des pattes
+local QUEUE_ANGLE = 0.2           -- radians de balancement de la queue (de gauche à droite)
+local QUEUE_RETARD = 0.9          -- la queue suit le pas avec un léger retard
+local AILE_ANGLE = 0.3            -- radians de battement des ailes
+local AILE_RYTHME = 1.5           -- battements plus rapides que les pas
+local DISTANCE_ANIMATION = 160    -- au-delà de tout joueur, les membres ne sont plus animés
+local PATTES = {
+	PatteAvG = { cote = "G", decal = 0 },
+	PatteArD = { cote = "D", decal = 0 },
+	PatteAvD = { cote = "D", decal = math.pi },
+	PatteArG = { cote = "G", decal = math.pi },
+}
+-- parts rattachées à la patte la plus proche du même côté (nom terminé par G ou D)
+local ACCESSOIRES = { "Pied", "Main", "Griffe", "Pouce", "Cuisse", "Sabot", "Orteil", "Ongle" }
+local TEXTURE_AURA = "rbxasset://textures/particles/sparkles_main.dds"
+-- parts du visage : jamais recolorées par une mutation (le dino garde un regard lisible)
+local VISAGE = { "Oeil", "Iris", "Pupille", "Reflet", "Eclat", "Narine", "Joue", "Sourcil", "Bouche", "Dent" }
+-- mutation Lave : parts qui deviennent des coulées de lave (Neon), le reste vire à la pierre
+local LAVE_DEBUT = { "Tache", "Bosse", "Crete", "Pied" }
+-- capitales accentuées (string.upper ne traite pas les lettres UTF-8)
+local ACCENTS_MAJ = {
+	["é"] = "É", ["è"] = "È", ["ê"] = "Ê", ["ë"] = "Ë", ["à"] = "À", ["â"] = "Â",
+	["î"] = "Î", ["ï"] = "Ï", ["ô"] = "Ô", ["û"] = "Û", ["ù"] = "Ù", ["ç"] = "Ç",
+}
+
+local function commencePar(nom, liste)
+	for _, prefixe in ipairs(liste) do
+		if string.sub(nom, 1, #prefixe) == prefixe then
+			return true
+		end
+	end
+	return false
+end
+
+local function majuscules(s)
+	s = string.upper(tostring(s or ""))
+	for min, maj in pairs(ACCENTS_MAJ) do
+		s = string.gsub(s, min, maj)
+	end
+	return s
+end
 
 function M.demarrer(ctx)
 	local Charte = ctx.Charte
@@ -73,8 +119,9 @@ function M.demarrer(ctx)
 			return
 		end
 		local parts = partsDe(modele)
-		for i, p in ipairs(parts) do
-			if p.Transparency < 1 then
+		local teinteArc = 0
+		for _, p in ipairs(parts) do
+			if p.Transparency < 1 and not commencePar(p.Name, VISAGE) then
 				if mutation == "Or" then
 					p.Color = p.Color:Lerp(teinte, 0.75)
 					p.Material = Enum.Material.Metal
@@ -83,9 +130,13 @@ function M.demarrer(ctx)
 					p.Material = Enum.Material.Glass
 					p.Reflectance = 0.15
 				elseif mutation == "ArcEnCiel" then
-					p.Color = p.Color:Lerp(teinte, 0.5)
+					-- chaque part prend sa propre teinte (angle d'or) : un vrai dino arc-en-ciel
+					teinteArc = teinteArc + 1
+					local h = (teinteArc * 0.137) % 1
+					p.Color = Color3.fromHSV(h, 0.55, 1)
+					p:SetAttribute("TeinteArc", h) -- teinte de départ, que le client peut faire défiler
 				elseif mutation == "Lave" then
-					if i % 3 == 1 then
+					if commencePar(p.Name, LAVE_DEBUT) or string.sub(p.Name, -4) == "Bout" then
 						p.Color = teinte
 						p.Material = Enum.Material.Neon
 					else
@@ -97,12 +148,85 @@ function M.demarrer(ctx)
 			end
 		end
 		if mutation == "ArcEnCiel" then
-			Outils.animer(modele, "pulse", 1.5)
+			-- aura de particules qui passe par toutes les couleurs
+			if not corps:FindFirstChild("AuraArcEnCiel") then
+				local points = {}
+				for k = 0, 6 do
+					table.insert(points, ColorSequenceKeypoint.new(k / 6, Color3.fromHSV((k / 6) % 1, 0.7, 1)))
+				end
+				local k = math.max(0.8, math.min(2, corps.Size.Y / 2.6))
+				local e = Instance.new("ParticleEmitter")
+				e.Name = "AuraArcEnCiel"
+				e.Texture = TEXTURE_AURA
+				e.Color = ColorSequence.new(points)
+				e.LightEmission = 0.9
+				e.LightInfluence = 0
+				e.Size = NumberSequence.new({
+					NumberSequenceKeypoint.new(0, 0),
+					NumberSequenceKeypoint.new(0.25, 0.5 * k),
+					NumberSequenceKeypoint.new(1, 0),
+				})
+				e.Transparency = NumberSequence.new({
+					NumberSequenceKeypoint.new(0, 1),
+					NumberSequenceKeypoint.new(0.2, 0.15),
+					NumberSequenceKeypoint.new(1, 1),
+				})
+				e.Lifetime = NumberRange.new(1.2, 2)
+				e.Rate = 9
+				e.Speed = NumberRange.new(0.8, 1.8)
+				e.SpreadAngle = Vector2.new(180, 180)
+				e.Acceleration = Vector3.new(0, 2, 0)
+				e.Drag = 1.5
+				e.Rotation = NumberRange.new(0, 360)
+				e.RotSpeed = NumberRange.new(-90, 90)
+				e.Parent = corps
+			end
+			Outils.lumiere(corps, { genre = "Point", Range = 10, Brightness = 1.2, Color = Color3.fromHSV(0.83, 0.4, 1) })
 		elseif mutation == "Meteore" then
 			Outils.lumiere(corps, { genre = "Point", Range = 12, Brightness = 2, Color = Charte.violet })
 		elseif mutation == "Lave" then
 			Outils.lumiere(corps, { genre = "Point", Range = 8, Brightness = 1, Color = Charte.lave })
 		end
+	end
+
+	-- aura discrète d'étincelles de la couleur de rareté (Épique et plus), plus dense aux raretés hautes
+	local function poserAura(corps, rarete)
+		local infos = E.raretes[rarete]
+		local seuil = E.raretes.Epique
+		local couleur = Charte.raretes[rarete]
+		if not (infos and seuil and couleur) or infos.ordre < seuil.ordre then
+			return
+		end
+		if corps:FindFirstChild("AuraRarete") then
+			return
+		end
+		local rang = infos.ordre - seuil.ordre
+		local k = math.max(0.8, math.min(2, corps.Size.Y / 2.6))
+		local e = Instance.new("ParticleEmitter")
+		e.Name = "AuraRarete"
+		e.Texture = TEXTURE_AURA
+		e.Color = ColorSequence.new(Charte.lumiere(couleur), couleur)
+		e.LightEmission = 0.8
+		e.LightInfluence = 0
+		e.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(0.25, 0.42 * k),
+			NumberSequenceKeypoint.new(1, 0),
+		})
+		e.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.2, 0.25),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		e.Lifetime = NumberRange.new(1.1, 1.8)
+		e.Rate = 3 + rang * 1.5
+		e.Speed = NumberRange.new(0.6, 1.4)
+		e.SpreadAngle = Vector2.new(180, 180)
+		e.Acceleration = Vector3.new(0, 1.5, 0)
+		e.Drag = 1.5
+		e.Rotation = NumberRange.new(0, 360)
+		e.RotSpeed = NumberRange.new(-60, 60)
+		e.Parent = corps
 	end
 
 	-- hauteur du haut du modèle au-dessus du centre du Corps
@@ -136,11 +260,11 @@ function M.demarrer(ctx)
 				couleurMut = Charte.violet -- la teinte Météore est trop sombre pour être lue
 			end
 			local nomMut = (mut.nom and mut.nom ~= "" and mut.nom) or mutation
-			table.insert(lignes, { nom = "Mutation", texte = string.upper(nomMut), couleur = couleurMut, taille = 0.8 })
+			table.insert(lignes, { nom = "Mutation", texte = majuscules(nomMut), couleur = couleurMut, taille = 0.8 })
 		end
 		table.insert(lignes, {
 			nom = "Nom",
-			texte = string.upper((infosEspece and infosEspece.nom) or espece),
+			texte = majuscules((infosEspece and infosEspece.nom) or espece),
 			titre = true,
 			taille = 1.4,
 			contour = 3.5,
@@ -231,6 +355,7 @@ function M.demarrer(ctx)
 
 		pcall(appliquerMutation, modele, corps, mutation)
 		pcall(poserEtiquette, modele, corps, espece, rarete, mutation, prix, revenu)
+		pcall(poserAura, corps, rarete)
 
 		modele.Parent = ctx.dinos
 		return modele
@@ -313,9 +438,10 @@ function M.demarrer(ctx)
 	end
 
 	-- ===== suivi des dinos sur le Tapis =====
-	-- dino -> { x, phase }
+	-- dino -> { x, phase, groupes (membres animés), anime (un joueur est assez près) }
 	local surTapis = {}
 	local nombreSurTapis = 0
+	local positionsJoueurs = {}
 
 	local function cadreTapis(x, t, phase)
 		local oscillation = math.sin(t * DANDINEMENT_FREQUENCE + phase)
@@ -325,18 +451,252 @@ function M.demarrer(ctx)
 			* CFrame.Angles(0, 0, oscillation * DANDINEMENT_ANGLE)
 	end
 
+	-- ===== membres animés (repère du pivot : sol sous le dino, regard vers -Z) =====
+
+	local function commencePar(nom, prefixe)
+		return string.sub(nom, 1, #prefixe) == prefixe
+	end
+
+	local function coteDe(nom)
+		local c = string.sub(nom, -1)
+		if c == "G" or c == "D" then
+			return c
+		end
+		return nil
+	end
+
+	-- deux bouts d'une part allongée le long de son plus grand axe (le centre deux fois sinon)
+	local function extremites(repos, taille)
+		local axes = {
+			{ repos.RightVector, taille.X },
+			{ repos.UpVector, taille.Y },
+			{ -repos.LookVector, taille.Z },
+		}
+		table.sort(axes, function(a, b) return a[2] > b[2] end)
+		if axes[1][2] > axes[2][2] * 1.3 then
+			local demi = axes[1][1] * (axes[1][2] / 2)
+			return repos.Position + demi, repos.Position - demi
+		end
+		return repos.Position, repos.Position
+	end
+
+	local function distanceSegment(p, a, b)
+		local ab = b - a
+		local l2 = ab:Dot(ab)
+		if l2 < 0.000001 then
+			return (p - a).Magnitude
+		end
+		local u = math.max(0, math.min(1, (p - a):Dot(ab) / l2))
+		return (p - (a + ab * u)).Magnitude
+	end
+
+	local function nouveauGroupe(genre, point, decal, cote)
+		return {
+			genre = genre,
+			avant = CFrame.new(point),
+			apres = CFrame.new(-point),
+			decal = decal or 0,
+			cote = cote,
+			membres = {},
+		}
+	end
+
+	-- repère les pattes (+ pieds, mains, griffes), la queue et les ailes ; mémorise leur pose de repos
+	local function analyserMembres(dino)
+		local pivot = dino:GetPivot()
+		local parts = partsDe(dino)
+		local groupes = {}
+		local pattes = {}
+		local queue = {}
+		local ailes = { G = {}, D = {} }
+		for _, p in ipairs(parts) do
+			local nom = p.Name
+			local repos = pivot:ToObjectSpace(p.CFrame)
+			local infoPatte = PATTES[nom]
+			if infoPatte and not pattes[nom] then
+				local a, b = extremites(repos, p.Size)
+				local haut, bas = a, b
+				if b.Y > a.Y then
+					haut, bas = b, a
+				end
+				local g = nouveauGroupe("patte", haut, infoPatte.decal, infoPatte.cote)
+				g.haut = haut
+				g.bas = bas
+				g.portee = math.max(p.Size.X, p.Size.Y, p.Size.Z) * 0.8 + 0.8
+				table.insert(g.membres, { part = p, repos = repos })
+				pattes[nom] = g
+				table.insert(groupes, g)
+			elseif string.find(nom, "Queue", 1, true) or commencePar(nom, "Massue") then
+				table.insert(queue, { part = p, repos = repos })
+			elseif commencePar(nom, "Aile") and coteDe(nom) then
+				table.insert(ailes[coteDe(nom)], { part = p, repos = repos })
+			end
+		end
+
+		-- accessoires : rattachés à la patte du même côté dont le segment est le plus proche
+		for _, p in ipairs(parts) do
+			local cote = coteDe(p.Name)
+			if cote and not PATTES[p.Name] then
+				local accessoire = false
+				for _, prefixe in ipairs(ACCESSOIRES) do
+					if commencePar(p.Name, prefixe) then
+						accessoire = true
+						break
+					end
+				end
+				if accessoire then
+					local repos = pivot:ToObjectSpace(p.CFrame)
+					local meilleur, meilleureDistance = nil, math.huge
+					for _, g in pairs(pattes) do
+						if g.cote == cote then
+							local d = distanceSegment(repos.Position, g.haut, g.bas)
+							if d <= g.portee and d < meilleureDistance then
+								meilleur, meilleureDistance = g, d
+							end
+						end
+					end
+					if meilleur then
+						table.insert(meilleur.membres, { part = p, repos = repos })
+					end
+				end
+			end
+		end
+
+		-- queue : pivote autour de sa racine (le bout du premier segment le plus proche du corps)
+		if #queue > 0 then
+			local racine = queue[1]
+			for _, m in ipairs(queue) do
+				if m.part.Name == "Queue" then
+					racine = m
+					break
+				end
+				if m.repos.Position.Z < racine.repos.Position.Z then
+					racine = m
+				end
+			end
+			local a, b = extremites(racine.repos, racine.part.Size)
+			local point = a
+			if b.Z < a.Z then
+				point = b
+			end
+			local g = nouveauGroupe("queue", point)
+			g.membres = queue
+			table.insert(groupes, g)
+		end
+
+		-- ailes : battent autour de leur attache (le bout le plus proche de l'axe du corps)
+		for _, cote in ipairs({ "G", "D" }) do
+			local liste = ailes[cote]
+			if #liste > 0 then
+				local racine = liste[1]
+				for _, m in ipairs(liste) do
+					if m.part.Name == "Aile" .. cote then
+						racine = m
+						break
+					end
+				end
+				local a, b = extremites(racine.repos, racine.part.Size)
+				local point = a
+				if math.abs(b.X) < math.abs(a.X) then
+					point = b
+				end
+				local g = nouveauGroupe("aile", point, 0, cote)
+				g.membres = liste
+				table.insert(groupes, g)
+			end
+		end
+
+		if #groupes == 0 then
+			return nil
+		end
+		return groupes
+	end
+
+	-- pose les membres autour du pivot cf à l'instant t
+	local function animerMembres(cf, fiche, t)
+		local base = t * DANDINEMENT_FREQUENCE + fiche.phase
+		for _, g in ipairs(fiche.groupes) do
+			local rotation
+			if g.genre == "patte" then
+				rotation = CFrame.Angles(math.sin(base + g.decal) * MARCHE_ANGLE, 0, 0)
+			elseif g.genre == "queue" then
+				rotation = CFrame.Angles(0, math.sin(base - QUEUE_RETARD) * QUEUE_ANGLE, 0)
+			else
+				local battement = math.sin(base * AILE_RYTHME) * AILE_ANGLE
+				if g.cote == "G" then
+					battement = -battement
+				end
+				rotation = CFrame.Angles(0, 0, battement)
+			end
+			local m = cf * g.avant * rotation * g.apres
+			for _, membre in ipairs(g.membres) do
+				membre.part.CFrame = m * membre.repos
+			end
+		end
+	end
+
+	-- remet les membres au repos (le dino quitte le Tapis : achat, vol, autre système)
+	local function reposerMembres(dino, fiche)
+		if not fiche.groupes then
+			return
+		end
+		local cf = dino:GetPivot()
+		for _, g in ipairs(fiche.groupes) do
+			for _, membre in ipairs(g.membres) do
+				if membre.part.Parent then
+					membre.part.CFrame = cf * membre.repos
+				end
+			end
+		end
+	end
+
+	-- un joueur est-il assez près de ce point du Tapis pour voir les membres bouger ?
+	local function joueurProche(x)
+		local z = Plan.tapis.debut.Z
+		local limite = DISTANCE_ANIMATION * DISTANCE_ANIMATION
+		for _, p in ipairs(positionsJoueurs) do
+			local dx, dz = p.X - x, p.Z - z
+			if dx * dx + dz * dz <= limite then
+				return true
+			end
+		end
+		return false
+	end
+
+	local function releverJoueurs()
+		local liste = {}
+		for _, joueur in ipairs(Players:GetPlayers()) do
+			local perso = joueur.Character
+			local racine = perso and (perso.PrimaryPart or perso:FindFirstChild("HumanoidRootPart"))
+			if racine and racine:IsA("BasePart") then
+				table.insert(liste, racine.Position)
+			end
+		end
+		positionsJoueurs = liste
+	end
+
 	local function suivre(dino, x)
 		if surTapis[dino] then
 			return
 		end
-		surTapis[dino] = { x = x, phase = alea:NextNumber() * math.pi * 2 }
+		local fiche = { x = x, phase = alea:NextNumber() * math.pi * 2 }
+		local ok, groupes = pcall(analyserMembres, dino)
+		if ok then
+			fiche.groupes = groupes
+		end
+		fiche.anime = joueurProche(x)
+		surTapis[dino] = fiche
 		nombreSurTapis = nombreSurTapis + 1
 	end
 
-	local function oublier(dino)
-		if surTapis[dino] then
+	local function oublier(dino, sansRepos)
+		local fiche = surTapis[dino]
+		if fiche then
 			surTapis[dino] = nil
 			nombreSurTapis = nombreSurTapis - 1
+			if not sansRepos and dino.Parent then
+				pcall(reposerMembres, dino, fiche)
+			end
 		end
 	end
 
@@ -427,6 +787,11 @@ function M.demarrer(ctx)
 		if tempsAdoption >= INTERVALLE_ADOPTION then
 			tempsAdoption = 0
 			pcall(adopter)
+			if pcall(releverJoueurs) then
+				for _, fiche in pairs(surTapis) do
+					fiche.anime = joueurProche(fiche.x)
+				end
+			end
 		end
 
 		local aDetruire = {}
@@ -440,7 +805,11 @@ function M.demarrer(ctx)
 					table.insert(aDetruire, dino)
 				else
 					local ok = pcall(function()
-						dino:PivotTo(cadreTapis(fiche.x, t, fiche.phase))
+						local cf = cadreTapis(fiche.x, t, fiche.phase)
+						dino:PivotTo(cf)
+						if fiche.anime and fiche.groupes then
+							animerMembres(cf, fiche, t)
+						end
 					end)
 					if not ok then
 						table.insert(aOublier, dino)
@@ -452,7 +821,7 @@ function M.demarrer(ctx)
 			oublier(dino)
 		end
 		for _, dino in ipairs(aDetruire) do
-			oublier(dino)
+			oublier(dino, true)
 			pcall(function()
 				dino:Destroy()
 			end)

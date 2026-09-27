@@ -265,22 +265,116 @@ const MAT_TERRAIN = { Grass: "#6cc24a", LeafyGrass: "#5aa83e", Rock: "#77727f", 
   Basalt: "#3e3a44", CrackedLava: "#3a2a26", Snow: "#f2f6fa", Sandstone: "#d8a878", Limestone: "#d9d2c0", Pavement: "#9b9aa3", Cobblestone: "#8c8a90", Salt: "#eeeeea", Asphalt: "#444448", Glacier: "#bfe6ff", Ice: "#cfefff" };
 const couleursTerrain = D.couleursTerrain || {};
 const eau = [];
-for (const t of D.terrain || []) {
+// Comme dans Roblox, un remplissage remplace ce qui était là avant lui : les remplissages Air (creuser)
+// et Water (l'eau remplace l'herbe) « découpent » les remplissages plus anciens. Le fragment d'un
+// remplissage est jeté s'il tombe dans une découpe plus récente (grille XZ pour ne tester que les voisines).
+const TERRAIN = D.terrain || [];
+const GENRES_DEC = { bloc: 0, boule: 1, cylindre: 2, coin: 3 };
+const decoupes = [];
+TERRAIN.forEach((t, ordre) => {
   const [genre, x,y,z, a,b,c, d,e,f, g,h,i, sx,sy,sz, mat] = t;
+  if (mat !== "Air" && mat !== "Water") return;
+  const mm = new THREE.Matrix4().set(a,b,c,x, d,e,f,y, g,h,i,z, 0,0,0,1).multiply(new THREE.Matrix4().makeScale(Math.max(sx, .01), Math.max(sy, .01), Math.max(sz, .01)));
+  const boite = new THREE.Box3(new THREE.Vector3(-.5, -.5, -.5), new THREE.Vector3(.5, .5, .5)).applyMatrix4(mm);
+  decoupes.push({ ordre, genre: GENRES_DEC[genre] ?? 0, inv: mm.clone().invert(), boite, eau: mat === "Water" });
+});
+let decoupe = null;
+if (decoupes.length) {
+  const CEL = 16, TW = 1024;
+  const min = new THREE.Vector2(Infinity, Infinity), max = new THREE.Vector2(-Infinity, -Infinity);
+  for (const q of decoupes) { min.x = Math.min(min.x, q.boite.min.x); min.y = Math.min(min.y, q.boite.min.z); max.x = Math.max(max.x, q.boite.max.x); max.y = Math.max(max.y, q.boite.max.z); }
+  const GX = Math.max(1, Math.ceil((max.x - min.x) / CEL)), GZ = Math.max(1, Math.ceil((max.y - min.y) / CEL));
+  const cellules = Array.from({ length: GX * GZ }, () => []);
+  decoupes.forEach((q, k) => {
+    const i0 = Math.max(0, Math.floor((q.boite.min.x - min.x) / CEL)), i1 = Math.min(GX - 1, Math.floor((q.boite.max.x - min.x) / CEL));
+    const j0 = Math.max(0, Math.floor((q.boite.min.z - min.y) / CEL)), j1 = Math.min(GZ - 1, Math.floor((q.boite.max.z - min.y) / CEL));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) cellules[j * GX + i].push(k);
+  });
+  const HB = decoupes.length * 4, LB = HB + GX * GZ;
+  const total = LB + cellules.reduce((s, l) => s + l.length, 0);
+  const TH = Math.max(1, Math.ceil(total / TW));
+  const px = new Float32Array(TW * TH * 4);
+  const ecrire = (n, v0, v1 = 0, v2 = 0, v3 = 0) => { px.set([v0, v1, v2, v3], n * 4); };
+  decoupes.forEach((q, k) => {
+    const el = q.inv.elements; // colonnes
+    ecrire(4 * k, q.genre, q.ordre, q.eau ? 1 : 0);
+    for (let r = 0; r < 3; r++) ecrire(4 * k + 1 + r, el[r], el[4 + r], el[8 + r], el[12 + r]);
+  });
+  let pos = 0;
+  cellules.forEach((l, c) => { ecrire(HB + c, pos, l.length); for (const k of l) ecrire(LB + pos++, k); });
+  const tex = new THREE.DataTexture(px, TW, TH, THREE.RGBAFormat, THREE.FloatType);
+  tex.needsUpdate = true;
+  decoupe = { tex, grille: new THREE.Vector4(min.x, min.y, CEL, GX), bases: new THREE.Vector4(HB, LB, TW, GZ) };
+}
+const GLSL_DECOUPE = \`
+uniform highp sampler2D decTex; uniform float decOrdre; uniform float decEau; uniform vec4 decGrille; uniform vec4 decBases;
+varying vec3 vPd;
+vec4 decLire(int k){ int tw = int(decBases.z); return texelFetch(decTex, ivec2(k - (k / tw) * tw, k / tw), 0); }
+bool decDedans(vec3 p){
+  vec2 g = floor((p.xz - decGrille.xy) / decGrille.z);
+  if (g.x < 0.0 || g.y < 0.0 || g.x >= decGrille.w || g.y >= decBases.w) return false;
+  vec4 cel = decLire(int(decBases.x) + int(g.y * decGrille.w + g.x));
+  int debut = int(cel.x); int n = int(cel.y);
+  for (int k = 0; k < 1024; k++) {
+    if (k >= n) break;
+    int c = int(decLire(int(decBases.y) + debut + k).x + 0.5);
+    vec4 t0 = decLire(4 * c);
+    // un remplissage plus récent découpe ; entre deux eaux, les parois intérieures disparaissent aussi
+    // et la surface commune (même hauteur) n'est gardée qu'une fois
+    bool recent = t0.y > decOrdre + 0.5;
+    bool eaux = decEau > 0.5 && t0.z > 0.5;
+    if (!recent && !(eaux && t0.y < decOrdre - 0.5)) continue;
+    float E = (eaux && recent) ? 0.5005 : 0.4995;
+    vec4 q = vec4(p, 1.0);
+    vec3 l = vec3(dot(decLire(4 * c + 1), q), dot(decLire(4 * c + 2), q), dot(decLire(4 * c + 3), q));
+    int genre = int(t0.x + 0.5);
+    bool dans;
+    if (genre == 1) dans = length(l) < E;
+    else if (genre == 2) dans = length(l.xz) < E && abs(l.y) < E;
+    else dans = all(lessThan(abs(l), vec3(E))) && (genre != 3 || l.y < l.z);
+    if (dans) return true;
+  }
+  return false;
+}\`;
+// ajoute la découpe à un matériau (couleur ou ombre) du remplissage numéro « ordre »
+function avecDecoupe(materiau, ordre, cle, estEau) {
+  if (!decoupe) return materiau;
+  const avant = materiau.onBeforeCompile;
+  materiau.onBeforeCompile = (sh, r) => {
+    if (avant) avant.call(materiau, sh, r);
+    Object.assign(sh.uniforms, { decTex: { value: decoupe.tex }, decOrdre: { value: ordre }, decEau: { value: estEau ? 1 : 0 }, decGrille: { value: decoupe.grille }, decBases: { value: decoupe.bases } });
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\\nvarying vec3 vPd;")
+      .replace("#include <project_vertex>", "#include <project_vertex>\\nvPd = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", "#include <common>\\n" + GLSL_DECOUPE)
+      .replace("#include <clipping_planes_fragment>", "#include <clipping_planes_fragment>\\nif (decDedans(vPd)) discard;");
+  };
+  materiau.customProgramCacheKey = () => "dec|" + cle;
+  return materiau;
+}
+TERRAIN.forEach((t, ordre) => {
+  const [genre, x,y,z, a,b,c, d,e,f, g,h,i, sx,sy,sz, mat] = t;
+  if (mat === "Air") return; // l'air ne se dessine pas : il découpe
   const geo = genre === "boule" ? geoBoule : genre === "cylindre" ? geoCylY : genre === "coin" ? geoCoin : geoBloc;
+  m4.set(a,b,c,x, d,e,f,y, g,h,i,z, 0,0,0,1); s4.makeScale(sx, sy, sz); m4.multiply(s4);
+  // découpe seulement si une découpe plus récente touche ce remplissage (les autres gardent le shader simple)
+  const boite = new THREE.Box3(new THREE.Vector3(-.5, -.5, -.5), new THREE.Vector3(.5, .5, .5)).applyMatrix4(m4);
+  const decoupe_ = decoupes.some(q => (q.ordre > ordre || (mat === "Water" && q.eau && q.ordre !== ordre)) && q.boite.intersectsBox(boite));
+  const decouper = (materiau, cle) => decoupe_ ? avecDecoupe(materiau, ordre, cle, mat === "Water") : materiau;
   let materiau;
   if (mat === "Water") {
-    materiau = new THREE.MeshStandardMaterial({ color: D.eclairage && D.eclairage.Eau ? "#" + D.eclairage.Eau : "#2bb3c8", transparent: true, opacity: 0.72, roughness: 0.08, metalness: 0.1, depthWrite: false });
+    materiau = decouper(new THREE.MeshStandardMaterial({ color: D.eclairage && D.eclairage.Eau ? "#" + D.eclairage.Eau : "#2bb3c8", transparent: true, opacity: 0.72, roughness: 0.08, metalness: 0.1, depthWrite: false }), "eau");
   } else {
-    materiau = materiauProcedural(FAMILLES[mat] ?? 9, { color: couleursTerrain[mat] ? "#" + couleursTerrain[mat] : (MAT_TERRAIN[mat] || "#888") });
+    const fam = FAMILLES[mat] ?? 9;
+    materiau = decouper(materiauProcedural(fam, { color: couleursTerrain[mat] ? "#" + couleursTerrain[mat] : (MAT_TERRAIN[mat] || "#888") }), "fam" + fam);
   }
   const m = new THREE.Mesh(geo, materiau);
-  m4.set(a,b,c,x, d,e,f,y, g,h,i,z, 0,0,0,1); s4.makeScale(sx, sy, sz); m4.multiply(s4);
   m.applyMatrix4(m4);
-  m.receiveShadow = true; m.castShadow = mat !== "Water";
+  m.receiveShadow = true; m.castShadow = mat !== "Water"; // (ombres sans découpe : plus rapide, même rendu)
   if (mat === "Water") { m.renderOrder = 3; eau.push(m); }
   scene.add(m);
-}
+});
 
 // post-traitement : halo lumineux sur le Neon
 const composeur = new EffectComposer(rendu);

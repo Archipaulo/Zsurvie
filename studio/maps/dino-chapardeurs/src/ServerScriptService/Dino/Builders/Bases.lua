@@ -1,12 +1,16 @@
--- Constructeur Bases : les 8 Bases des joueurs (CONTRAT §5), look « simulateur Roblox » (STYLE.md §3).
--- Chaque Base : plateforme gris clair surélevée de 44 x 50 avec rampe d'entrée, murets bas et piliers dans la couleur
--- saturée de la base, portique simple avec la barrière « Entree » et l'« Enseigne », gros bouton de verrou rouge,
--- dalle de collecte vert vif, 12 podiums gris clair à liseré de couleur, point d'apparition au fond.
+-- Constructeur Bases : les 8 Bases des joueurs (CONTRAT §5), rendu « version 2 » (STYLE.md §4).
+-- Chaque Base se reconnaît à la couleur de son sol : dalle d'ardoise teintée (couleur claire de la base) bordée d'ardoise
+-- sur 44 x 50 avec rampe d'entrée de la même teinte, allée dans l'ombre de la couleur, murets de brique peints sous
+-- couvertine d'ardoise, piliers d'angle arrondis coiffés d'une lanterne, portique de métal peint éclairé par deux spots,
+-- enseigne encadrée lisible des deux côtés, gros bouton de verrou rouge sur socle de métal, dalle de collecte en tôle verte,
+-- 12 podiums carrés aux arêtes arrondies (ombre de la couleur) à plateau de métal coloré et bandeau lumineux carré,
+-- point d'apparition au fond, plantes et caisses contre les murs.
 -- Repère local d'une base : x en travers, z positif vers le Tapis (l'entrée). Les bases du sud sont tournées de 180°.
--- Emprise (CONTRAT §10) : le rectangle 44 x 50 de chaque base, rien entre elles. Budget : 90 parts par base.
+-- Emprise (CONTRAT §10) : le rectangle 44 x 50 de chaque base, rien entre elles. Budget : 170 parts par base.
 local M = {}
 
-local BUDGET = 90
+local BUDGET = 170
+local OBLIGATOIRES = 20 -- Sol, Rampe, Entree, Enseigne, BoutonVerrou, Collecte, E1..E12, Apparition, Zone
 local LARGEUR_ENTREE = 12
 local HAUTEUR_ZONE = 30
 local ECART_PODIUMS = 9
@@ -32,17 +36,15 @@ function M.construire(ctx)
 	local demiL = LARGEUR / 2
 	local demiP = PROFONDEUR / 2
 	local hex = Charte.hex
+	local Mat = Enum.Material
 
-	-- palette : plateforme et podiums gris clair, contours sombres façon « trait noir » cartoon
-	local GRIS = hex("DCE1EA")
-	local GRIS_CLAIR = hex("F2F4F8")
-	local NOIR = hex("1B1A2E")
-	local ROUGE = hex("E8233F")
-	local VERT = hex("5CFF5C")
-	if Style and Style.couleurs then
-		NOIR = Style.couleurs.contour or NOIR
-		VERT = Style.couleurs.argent or VERT
-	end
+	-- palette des matériaux bâtis : ardoise, métal (les sols prennent la teinte de chaque base)
+	local ARDOISE = hex("4A505E")
+	local METAL = hex("C3C9D3")
+	local METAL_SOMBRE = hex("383D48")
+	local VERT_TOLE = hex("39C24B")
+	local ROUGE = hex("F0223C")
+	local LUMIERE_SPOT = hex("FFF1D6")
 	if Style and Style.boutons and Style.boutons.rouge then
 		ROUGE = Style.boutons.rouge[2] or ROUGE
 	end
@@ -105,118 +107,232 @@ function M.construire(ctx)
 
 		local couleur = teintes[((index - 1) % #teintes) + 1] or Charte.lave
 		local couleurClaire = Charte.lumiere(couleur)
+		local couleurSombre = Charte.ombre(couleur)
+		-- teinte du sol : la couleur claire de la base, adoucie vers le blanc (chaque base se reconnaît de loin)
+		local couleurSol = couleurClaire:Lerp(Color3.new(1, 1, 1), 0.55)
 
 		local modele = Outils.modele(dossier, "Base" .. index)
 		modele:SetAttribute("Index", index)
 		modele:SetAttribute("Couleur", couleur)
 		local decor = Outils.modele(modele, "Decor")
 
-		-- compteur de parts : le décor est sacrifié si le budget est atteint, jamais les pièces obligatoires
+		-- compteur de parts : les pièces obligatoires ont leur place réservée, le décor s'arrête avant le budget
 		local compte = 0
+		local reserve = OBLIGATOIRES
+		local function place(n)
+			return compte + reserve + n <= BUDGET
+		end
 		local function part(fabrique, parent, props, facultatif)
-			if facultatif and compte >= BUDGET then
-				return nil
+			if facultatif then
+				if not place(1) then
+					return nil
+				end
+			else
+				reserve = math.max(0, reserve - 1)
 			end
 			compte = compte + 1
 			return fabrique(parent, props)
 		end
+		-- pilier arrondi (6 parts)
+		local function arrondi(props, rayon)
+			if not place(6) then
+				return nil
+			end
+			compte = compte + 6
+			return Outils.blocArrondi(decor, props, rayon)
+		end
 
-		-- ===== plateforme gris clair surélevée et rampe =====
+		-- ===== dalle d'ardoise teintée bordée d'ardoise sombre, et rampe =====
+		local BORD = 0.4
 		local longueurSol = PROFONDEUR - 3
-		local sol = part(Outils.bloc, modele, {
-			Name = "Sol",
-			Size = Vector3.new(LARGEUR, H, longueurSol),
-			CFrame = ici(0, H / 2, -demiP + longueurSol / 2),
-			Color = GRIS,
-		})
+		local zAvant = -demiP + longueurSol -- bord avant de la plateforme (début de la rampe)
+		local cfSol = ici(0, H / 2, -demiP + longueurSol / 2)
+		local sol, liseret
+		if place(1) then
+			compte = compte + 2
+			reserve = reserve - 1
+			sol, liseret = Outils.dalleBordee(modele, {
+				Name = "Sol",
+				Size = Vector3.new(LARGEUR - 2 * BORD, H, longueurSol - 2 * BORD),
+				CFrame = cfSol,
+				Color = couleurSol,
+				Material = Mat.Slate,
+				MaterialBord = Mat.Slate,
+			}, BORD, ARDOISE)
+			if liseret then
+				liseret.Parent = decor
+			end
+		else
+			sol = part(Outils.bloc, modele, {
+				Name = "Sol",
+				Size = Vector3.new(LARGEUR, H, longueurSol),
+				CFrame = cfSol,
+				Color = couleurSol,
+				Material = Mat.Slate,
+			})
+		end
 		modele.PrimaryPart = sol
-		local zAvant = -demiP + longueurSol -- bord avant du sol (début de la rampe)
 
 		-- la rampe descend vers le Tapis : coin retourné d'un demi-tour, le haut contre la plateforme
+		local zRampe = zAvant - BORD
 		part(Outils.coin, modele, {
 			Name = "Rampe",
-			Size = Vector3.new(LARGEUR_ENTREE, H, demiP - zAvant),
-			CFrame = ici(0, H / 2, (zAvant + demiP) / 2, CFrame.Angles(0, math.pi, 0)),
-			Color = GRIS,
+			Size = Vector3.new(LARGEUR_ENTREE, H, demiP - zRampe),
+			CFrame = ici(0, H / 2, (zRampe + demiP) / 2, CFrame.Angles(0, math.pi, 0)),
+			Color = couleurSol,
+			Material = Mat.Slate,
 		})
 
-		-- ===== murets bas (fond, côtés, façade de part et d'autre du portique) =====
-		local HAUT_MURET = 3
+		-- ===== murets de brique peints dans la couleur de la base, couvertine d'ardoise =====
+		local HAUT_MURET = 3.5
+		local EP_MURET = 1
 		local function muret(x, z, sx, sz)
 			part(Outils.bloc, decor, {
 				Name = "Muret",
 				Size = Vector3.new(sx, HAUT_MURET, sz),
 				CFrame = ici(x, H + HAUT_MURET / 2, z),
 				Color = couleur,
+				Material = Mat.Brick,
+			}, true)
+			local debord = 0.5
+			local lx, lz = sx + debord, sz + debord
+			if sx > sz then
+				lx = sx
+			else
+				lz = sz
+			end
+			part(Outils.bloc, decor, {
+				Name = "Couvertine",
+				Size = Vector3.new(lx, 0.4, lz),
+				CFrame = ici(x, H + HAUT_MURET + 0.2, z),
+				Color = ARDOISE,
+				Material = Mat.Slate,
 			}, true)
 		end
-		local zFacade = zAvant - 0.5
-		local zMilieu = (-demiP + zAvant) / 2
-		muret(0, -demiP + 0.5, LARGEUR, 1)
-		muret(-demiL + 0.5, zMilieu, 1, longueurSol)
-		muret(demiL - 0.5, zMilieu, 1, longueurSol)
+		local xCote = demiL - BORD - EP_MURET / 2
+		local zFond = -demiP + BORD + EP_MURET / 2
+		local zFacade = zAvant - BORD - EP_MURET / 2
+		local zMilieu = (zFond + zFacade) / 2
+		muret(0, zFond, LARGEUR - 2 * BORD, EP_MURET)
+		muret(-xCote, zMilieu, EP_MURET, zFacade - zFond)
+		muret(xCote, zMilieu, EP_MURET, zFacade - zFond)
 		local debutFacade = LARGEUR_ENTREE / 2 + 2.5
-		local longueurFacade = demiL - debutFacade
-		muret(-(debutFacade + longueurFacade / 2), zFacade, longueurFacade, 1)
-		muret(debutFacade + longueurFacade / 2, zFacade, longueurFacade, 1)
+		local finFacade = demiL - BORD
+		local longueurFacade = finFacade - debutFacade
+		muret(-(debutFacade + longueurFacade / 2), zFacade, longueurFacade, EP_MURET)
+		muret(debutFacade + longueurFacade / 2, zFacade, longueurFacade, EP_MURET)
 
-		-- ===== piliers (coins et milieu des côtés) : couleur de la base, chapeau clair =====
-		local HAUT_PILIER = 5
+		-- ===== piliers d'angle arrondis (ombre de la couleur), chapeau d'ardoise et lanterne =====
+		local HAUT_PILIER = HAUT_MURET + 1.6
+		local xPilier = demiL - BORD - 1.3
 		local positionsPiliers = {
-			{ -demiL + 1, -demiP + 1 }, { demiL - 1, -demiP + 1 },
-			{ -demiL + 1, zFacade }, { demiL - 1, zFacade },
-			{ -demiL + 1, zMilieu }, { demiL - 1, zMilieu },
+			{ -xPilier, zFond - 0.5 + 1.3 }, { xPilier, zFond - 0.5 + 1.3 },
+			{ -xPilier, zFacade + 0.5 - 1.3 }, { xPilier, zFacade + 0.5 - 1.3 },
 		}
 		for _, p in ipairs(positionsPiliers) do
-			part(Outils.bloc, decor, {
+			arrondi({
 				Name = "Pilier",
-				Size = Vector3.new(2.2, HAUT_PILIER, 2.2),
+				Size = Vector3.new(2.6, HAUT_PILIER, 2.6),
 				CFrame = ici(p[1], H + HAUT_PILIER / 2, p[2]),
-				Color = couleur,
+				Color = couleurSombre,
+				Material = Mat.Plaster,
+			}, 0.7)
+			part(Outils.cylindre, decor, {
+				Name = "Chapeau",
+				Size = Vector3.new(0.5, 3.1, 3.1),
+				CFrame = ici(p[1], H + HAUT_PILIER + 0.25, p[2], VERTICAL),
+				Color = ARDOISE,
+				Material = Mat.Slate,
 			}, true)
-			part(Outils.bloc, decor, {
-				Name = "Chapiteau",
-				Size = Vector3.new(2.8, 0.6, 2.8),
-				CFrame = ici(p[1], H + HAUT_PILIER + 0.3, p[2]),
+			part(Outils.boule, decor, {
+				Name = "Lanterne",
+				Size = Vector3.new(1.3, 1.3, 1.3),
+				CFrame = ici(p[1], H + HAUT_PILIER + 1.1, p[2]),
 				Color = couleurClaire,
+				Material = Mat.Neon,
+				CanCollide = false,
+				CastShadow = false,
 			}, true)
 		end
 
-		-- ===== portique d'entrée : deux poteaux et un linteau, nets =====
+		-- ===== portique d'entrée en métal peint, socles d'ardoise, deux spots vers le sol =====
 		local HAUT_PORTIQUE = 12
 		local xPoteau = LARGEUR_ENTREE / 2 + 1.25
 		for _, cote in ipairs({ -1, 1 }) do
+			part(Outils.bloc, decor, {
+				Name = "SoclePoteau",
+				Size = Vector3.new(3.3, 1.2, 3.3),
+				CFrame = ici(cote * xPoteau, H + 0.6, zFacade),
+				Color = ARDOISE,
+				Material = Mat.Slate,
+			}, true)
 			part(Outils.bloc, decor, {
 				Name = "Poteau",
 				Size = Vector3.new(2.5, H + HAUT_PORTIQUE, 2.5),
 				CFrame = ici(cote * xPoteau, (H + HAUT_PORTIQUE) / 2, zFacade),
 				Color = couleur,
+				Material = Mat.Metal,
 			}, true)
 		end
 		local yLinteau = H + HAUT_PORTIQUE + 1
 		part(Outils.bloc, decor, {
 			Name = "Linteau",
-			Size = Vector3.new(LARGEUR_ENTREE + 5, 2, 2.5),
+			Size = Vector3.new(LARGEUR_ENTREE + 5, 2, 2.9),
 			CFrame = ici(0, yLinteau, zFacade),
-			Color = couleurClaire,
+			Color = couleurSombre,
+			Material = Mat.Metal,
 		}, true)
+		for _, cote in ipairs({ -1, 1 }) do
+			local spot = part(Outils.bloc, decor, {
+				Name = "Projecteur",
+				Size = Vector3.new(1.3, 0.7, 1.3),
+				CFrame = ici(cote * 3.5, yLinteau - 1.35, zFacade),
+				Color = METAL_SOMBRE,
+				Material = Mat.Metal,
+				CanCollide = false,
+			}, true)
+			if spot then
+				local lumiere = Outils.lumiere(spot, { genre = "Spot", Range = 18, Brightness = 4, Color = LUMIERE_SPOT })
+				pcall(function()
+					lumiere.Face = Enum.NormalId.Bottom
+					lumiere.Angle = 75
+					lumiere.Shadows = true
+				end)
+			end
+		end
 
-		-- enseigne face au Tapis : panneau de la couleur de la base, cadre noir, nom blanc cerné de noir
+		-- enseigne lisible des deux côtés : panneau de métal peint serti dans un cadre sombre centré sur la façade.
+		-- Le panneau (1,3) est un peu plus épais que le cadre (1,0) : il dépasse de 0,15 de chaque côté et le cadre
+		-- forme une bordure de 0,6 tout autour, vue du Tapis comme de l'intérieur de la base.
 		local yEnseigne = yLinteau + 1 + 2.9
 		part(Outils.bloc, decor, {
 			Name = "CadreEnseigne",
-			Size = Vector3.new(LARGEUR_ENTREE + 5.6, 6.4, 0.6),
-			CFrame = ici(0, yEnseigne, zFacade - 0.3),
-			Color = NOIR,
+			Size = Vector3.new(LARGEUR_ENTREE + 5.6, 6.4, 1.0),
+			CFrame = ici(0, yEnseigne, zFacade),
+			Color = couleurSombre,
+			Material = Mat.Metal,
 		}, true)
 		local enseigne = part(Outils.bloc, modele, {
 			Name = "Enseigne",
-			Size = Vector3.new(LARGEUR_ENTREE + 4.4, 5.2, 0.4),
-			CFrame = ici(0, yEnseigne, zFacade + 0.2),
+			Size = Vector3.new(LARGEUR_ENTREE + 4.4, 5.2, 1.3),
+			CFrame = ici(0, yEnseigne, zFacade),
 			Color = couleur,
+			Material = Mat.Metal,
 		})
-		-- la face « Back » (+Z local de la part) regarde le Tapis
-		texteFace(enseigne, "Back", "Affiche", "Titre", "BASE LIBRE", 30)
+		-- la face « Back » (+Z local de la part) regarde le Tapis (« Affiche », CONTRAT §5) ; la face « Front » regarde
+		-- l'intérieur (« AfficheDos »), recopiée automatiquement quand Systemes/Bases change le titre de « Affiche »
+		local titreAvant = texteFace(enseigne, "Back", "Affiche", "Titre", "BASE LIBRE", 30)
+		local titreDos = texteFace(enseigne, "Front", "AfficheDos", "Titre", "BASE LIBRE", 30)
+		if titreAvant and titreDos then
+			pcall(function()
+				titreAvant:GetPropertyChangedSignal("Text"):Connect(function()
+					titreDos.Text = titreAvant.Text
+				end)
+				titreAvant:GetPropertyChangedSignal("TextColor3"):Connect(function()
+					titreDos.TextColor3 = titreAvant.TextColor3
+				end)
+			end)
+		end
 
 		-- ===== barrière laser de l'entrée (invisible tant que la base n'est pas verrouillée) =====
 		part(Outils.bloc, modele, {
@@ -224,7 +340,7 @@ function M.construire(ctx)
 			Size = Vector3.new(LARGEUR_ENTREE, HAUT_PORTIQUE, 0.6),
 			CFrame = ici(0, H + HAUT_PORTIQUE / 2, zFacade),
 			Color = Charte.alerte,
-			Material = Enum.Material.Neon,
+			Material = Mat.Neon,
 			Transparency = 1,
 			CanCollide = false,
 			CanQuery = false,
@@ -232,36 +348,39 @@ function M.construire(ctx)
 			CastShadow = false,
 		})
 
-		-- allée de la couleur de la base, de l'entrée jusqu'au fond
+		-- allée d'ardoise dans l'ombre de la couleur de la base, de l'entrée jusqu'au point d'apparition
 		local zFinAllee = -demiP + 4
 		part(Outils.bloc, decor, {
 			Name = "Allee",
-			Size = Vector3.new(4, 0.1, zFacade - zFinAllee),
+			Size = Vector3.new(4.5, 0.1, zFacade - zFinAllee),
 			CFrame = ici(0, H + 0.05, (zFacade + zFinAllee) / 2),
-			Color = couleurClaire,
+			Color = couleurSombre,
+			Material = Mat.Slate,
 			CanCollide = false,
 		}, true)
 
-		-- ===== gros bouton de verrou rond rouge : juste à l'intérieur, à droite en entrant (+x local) =====
+		-- ===== gros bouton de verrou rouge brillant sur socle de métal : à droite en entrant (+x local) =====
 		local xBouton, zBouton = 10, zFacade - 4.5
 		part(Outils.cylindre, decor, {
 			Name = "SocleVerrou",
-			Size = Vector3.new(0.8, 5.6, 5.6),
-			CFrame = ici(xBouton, H + 0.4, zBouton, VERTICAL),
-			Color = GRIS_CLAIR,
+			Size = Vector3.new(1, 5.8, 5.8),
+			CFrame = ici(xBouton, H + 0.5, zBouton, VERTICAL),
+			Color = METAL_SOMBRE,
+			Material = Mat.Metal,
 		}, true)
 		part(Outils.cylindre, decor, {
 			Name = "BagueVerrou",
-			Size = Vector3.new(0.4, 4.6, 4.6),
-			CFrame = ici(xBouton, H + 1, zBouton, VERTICAL),
-			Color = NOIR,
+			Size = Vector3.new(0.5, 4.8, 4.8),
+			CFrame = ici(xBouton, H + 1.2, zBouton, VERTICAL),
+			Color = METAL,
+			Material = Mat.Metal,
 		}, true)
 		local bouton = part(Outils.cylindre, modele, {
 			Name = "BoutonVerrou",
 			Size = Vector3.new(0.9, 4, 4),
-			CFrame = ici(xBouton, H + 1.6, zBouton, VERTICAL),
+			CFrame = ici(xBouton, H + 1.75, zBouton, VERTICAL),
 			Color = ROUGE,
-			Material = Enum.Material.Neon,
+			Material = Mat.Neon,
 		})
 		pcall(function()
 			Outils.invite(bouton, { nom = "Verrouiller", action = "Verrouiller", objet = "Base", distance = 10 })
@@ -278,54 +397,66 @@ function M.construire(ctx)
 			})
 		end
 
-		-- ===== dalle de collecte vert vif (Neon léger) : à gauche en entrant (-x local) =====
+		-- ===== dalle de collecte en tôle verte, cadre d'ardoise : à gauche en entrant (-x local) =====
 		local xCollecte, zCollecte = -10, zFacade - 4.5
 		part(Outils.bloc, decor, {
 			Name = "BordCollecte",
 			Size = Vector3.new(8, 0.2, 8),
 			CFrame = ici(xCollecte, H + 0.1, zCollecte),
-			Color = NOIR,
+			Color = ARDOISE,
+			Material = Mat.Slate,
 		}, true)
 		local collecte = part(Outils.bloc, modele, {
 			Name = "Collecte",
 			Size = Vector3.new(7, 0.3, 7),
 			CFrame = ici(xCollecte, H + 0.15, zCollecte),
-			Color = VERT,
-			Material = Enum.Material.Neon,
-			Transparency = 0.15,
+			Color = VERT_TOLE,
+			Material = Mat.DiamondPlate,
 			CanTouch = true,
 		})
 		texteFace(collecte, "Top", "Marquage", "Signe", "$", 20)
 
 		-- ===== 12 podiums : 3 rangées de 4, E1 au premier rang (côté entrée) =====
-		-- socle cylindrique gris clair, liseré de la couleur de la base, plaque E<n> au-dessus
+		-- socle carré aux arêtes arrondies dans l'ombre de la couleur, bandeau lumineux carré au ras du dessus,
+		-- plateau de métal E<n> dans la couleur claire de la base (tout reste carré : pas d'effet « bouche d'égout »)
 		local emplacements = Outils.dossier(modele, "Emplacements")
 		local colonnes = 4
 		local rangees = math.ceil(NB_EMPLACEMENTS / colonnes)
 		local zPremier = 9
-		local HAUT_SOCLE = 1.2
+		local HAUT_SOCLE = 1.3
 		for numero = 1, NB_EMPLACEMENTS do
 			local col = (numero - 1) % colonnes
 			local rang = math.floor((numero - 1) / colonnes)
 			local x = (col - (colonnes - 1) / 2) * ECART_PODIUMS
 			local z = zPremier - rang * ECART_PODIUMS
-			part(Outils.cylindre, decor, {
+			local propsSocle = {
 				Name = "Socle",
-				Size = Vector3.new(HAUT_SOCLE, 6, 6),
-				CFrame = ici(x, H + HAUT_SOCLE / 2, z, VERTICAL),
-				Color = GRIS_CLAIR,
-			})
-			part(Outils.cylindre, decor, {
-				Name = "Lisere",
-				Size = Vector3.new(0.35, 6.5, 6.5),
-				CFrame = ici(x, H + HAUT_SOCLE - 0.2, z, VERTICAL),
+				Size = Vector3.new(5.2, HAUT_SOCLE, 5.2),
+				CFrame = ici(x, H + HAUT_SOCLE / 2, z),
+				Color = couleurSombre,
+				Material = Mat.Slate,
+			}
+			if not arrondi(propsSocle, 1.2) then
+				part(Outils.bloc, decor, propsSocle, true)
+			end
+			-- bandeau lumineux : dépasse du socle de 0,1 sur les faces et nettement aux angles arrondis ; son dessus
+			-- reste 0,05 sous celui du socle (pas de faces confondues)
+			part(Outils.bloc, decor, {
+				Name = "Anneau",
+				Size = Vector3.new(5.4, 0.28, 5.4),
+				CFrame = ici(x, H + HAUT_SOCLE - 0.05 - 0.14, z),
 				Color = couleur,
-			})
+				Material = Mat.Neon,
+				Transparency = 0,
+				CanCollide = false,
+				CastShadow = false,
+			}, true)
 			local plaque = part(Outils.bloc, emplacements, {
 				Name = "E" .. numero,
 				Size = Vector3.new(4.2, 0.3, 4.2),
 				CFrame = ici(x, H + HAUT_SOCLE + 0.15, z),
-				Color = GRIS_CLAIR,
+				Color = couleurClaire,
+				Material = Mat.Metal,
 			})
 			plaque:SetAttribute("Debloque", numero <= 8)
 		end
@@ -348,32 +479,68 @@ function M.construire(ctx)
 			Size = Vector3.new(0.2, 6, 6),
 			CFrame = ici(0, H + 0.12, zApparition, VERTICAL),
 			Color = couleurClaire,
-			Material = Enum.Material.Neon,
+			Material = Mat.Neon,
 			Transparency = 0.3,
 			CanCollide = false,
 		}, true)
 
-		-- drapeaux de la couleur de la base aux coins du fond
+		-- drapeaux de tissu de la couleur de la base aux coins du fond
 		for _, cote in ipairs({ -1, 1 }) do
-			local xMat = cote * (demiL - 3.5)
-			local zMat = -demiP + 3.5
+			local xMat = cote * (demiL - 4.5)
+			local zMat = zFond + 2.2
 			part(Outils.bloc, decor, {
 				Name = "Mat",
-				Size = Vector3.new(0.6, 10, 0.6),
+				Size = Vector3.new(0.5, 10, 0.5),
 				CFrame = ici(xMat, H + 5, zMat),
-				Color = GRIS_CLAIR,
+				Color = METAL,
+				Material = Mat.Metal,
 				CanCollide = false,
 			}, true)
 			local drapeau = part(Outils.bloc, decor, {
 				Name = "Drapeau",
 				Size = Vector3.new(4.5, 2.8, 0.2),
-				CFrame = ici(xMat - cote * 2.55, H + 8.4, zMat),
+				CFrame = ici(xMat - cote * 2.5, H + 8.4, zMat),
 				Color = couleur,
+				Material = Mat.Fabric,
 				CanCollide = false,
 			}, true)
 			if drapeau then
 				Outils.animer(drapeau, "flotte", 0.6)
 			end
+		end
+
+		-- ===== petits détails contre les murs : plantes en pot à l'avant, caisses au fond =====
+		for _, cote in ipairs({ -1, 1 }) do
+			local xPot = cote * (xCote - 2.2)
+			local zPot = zFacade - 3.6
+			part(Outils.cylindre, decor, {
+				Name = "Pot",
+				Size = Vector3.new(1.6, 2, 2),
+				CFrame = ici(xPot, H + 0.8, zPot, VERTICAL),
+				Color = Charte.terre,
+				Material = Mat.Concrete,
+			}, true)
+			part(Outils.boule, decor, {
+				Name = "Feuillage",
+				Size = Vector3.new(3, 3, 3),
+				CFrame = ici(xPot, H + 2.6, zPot),
+				Color = Charte.jungle,
+				Material = Mat.LeafyGrass,
+				CanCollide = false,
+			}, true)
+		end
+		local caisses = {
+			{ -9, 2.6, 8 }, { 9.5, 2.2, -14 },
+		}
+		for _, c in ipairs(caisses) do
+			local t = c[2]
+			part(Outils.bloc, decor, {
+				Name = "Caisse",
+				Size = Vector3.new(t, t, t),
+				CFrame = ici(c[1], H + t / 2, zFond + 0.5 + t / 2 + 0.3, CFrame.Angles(0, math.rad(c[3]), 0)),
+				Color = Charte.bois,
+				Material = Mat.WoodPlanks,
+			}, true)
 		end
 
 		-- ===== volume de la base (détection, invisible) =====

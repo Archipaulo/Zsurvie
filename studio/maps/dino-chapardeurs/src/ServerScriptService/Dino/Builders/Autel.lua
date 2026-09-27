@@ -1,23 +1,25 @@
--- Constructeur Autel : l'Autel des Renaissances, à l'est de la Place.
--- Une dalle ronde cerclée de Neon violet, un autel de pierre ancienne en trois gradins,
--- un œuf fossile doré géant qui flotte et pulse au-dessus, six colonnes gravées de runes,
--- deux braseros et un fronton « RENAISSANCE » tourné vers la Place (-X).
+-- Constructeur Autel : l'Autel des Renaissances, à l'est de la Place (version 2, rendu soigné).
+-- Un temple ancien : parvis rond en ardoise cerclé de Neon violet et de runes, trois gradins de marbre
+-- à plinthes d'ardoise, un tapis violet qui monte vers la table de l'autel, un œuf fossile en or
+-- (métal réfléchissant) qui flotte dans un halo au milieu de cristaux en orbite, six colonnes
+-- de marbre aux arêtes arrondies gravées de runes Neon, un fronton « RENAISSANCE » à pignon
+-- tourné vers la Place (-X), des bannières et deux braseros à flammes violettes.
 -- L'invite « Renaissance » est posée sans rappel : le client ouvre le panneau (Client.client.lua)
 -- et Systemes/Renaissance traite la demande réseau.
 -- Emprise (CONTRAT §10) : disque r11 autour de Plan.autel.centre.
 local M = {}
 
-local BUDGET = 180 -- parts au maximum pour ce constructeur
+local BUDGET = 220 -- parts au maximum pour ce constructeur
 
 -- valeurs par défaut, remplaçables par Equilibrage.autel
 local DEFAUTS = {
-	rayon = 11,              -- rayon de la dalle (emprise)
+	rayon = 11,              -- rayon du parvis (emprise)
 	hauteurGradin = 0.9,     -- hauteur d'une marche de l'autel
 	hauteurOeuf = 10.3,      -- hauteur du centre de l'œuf
 	vitesseFlotte = 1.2,     -- vitesse du va-et-vient de l'œuf
 	vitessePulse = 2,        -- vitesse de pulsation des Neon
 	distanceInvite = 12,     -- portée de l'invite « Renaissance »
-	graine = 1104,           -- graine du hasard (pierres éboulées)
+	graine = 1104,           -- graine du hasard (légères variations des runes)
 }
 
 local function lireReglages(ctx)
@@ -75,11 +77,23 @@ function M.construire(ctx)
 	-- repère local : -Z local = vers la Place (-X monde), Y vers le haut
 	local repere = CFrame.lookAt(C, C + Vector3.new(-1, 0, 0))
 
-	local PIERRE = Charte.pierre
-	local PIERRE_OMBRE = Charte.ombre(Charte.pierre)
-	local PIERRE_CLAIRE = Charte.lumiere(Charte.pierre)
-	local NEON = Enum.Material.Neon
 	local Style = ctx.Style
+	local M_NEON = Enum.Material.Neon
+	local M_MARBRE = Enum.Material.Marble
+	local M_ARDOISE = Enum.Material.Slate
+	local M_METAL = Enum.Material.Metal
+	local M_TISSU = Enum.Material.Fabric
+	local M_BASALTE = Enum.Material.Basalt
+
+	-- trois teintes de pierre : marbre crème (structure), ardoise (plinthes, socles), ardoise sombre
+	local MARBRE = Charte.creme
+	local MARBRE_OMBRE = Charte.ombre(Charte.creme)
+	local ARDOISE = Charte.pierre
+	local ARDOISE_OMBRE = Charte.ombre(Charte.pierre)
+	local ARDOISE_CLAIRE = Charte.lumiere(Charte.pierre)
+	local OR = Charte.dore
+	local OR_CLAIR = Charte.lumiere(Charte.dore)
+	local OR_OMBRE = Charte.ombre(Charte.dore)
 	-- violet « renaissance » vif du style simulateur (bouton violet de Style), sinon Charte
 	local VIOLET_VIF = Charte.violet
 	local VIOLET_CLAIR = Charte.lumiere(Charte.violet)
@@ -87,25 +101,29 @@ function M.construire(ctx)
 		VIOLET_CLAIR = Style.boutons.violet[1]
 		VIOLET_VIF = Style.boutons.violet[2]
 	end
+	local VIOLET_SOMBRE = Charte.ombre(Charte.ombre(Charte.violet))
 
 	local modele = Outils.modele(ctx.dossier, "AutelDesRenaissances")
 
-	-- ===== création avec respect du budget =====
+	-- ===== création avec respect du budget (les formes composées comptent toutes leurs parts) =====
 	local compte = 0
-	local function creer(fabrique, parent, props)
-		if compte >= BUDGET then
+	local function creer(fabrique, cout, parent, props, extra)
+		if compte + cout > BUDGET then
 			return nil
 		end
-		local ok, part = pcall(fabrique, parent, props)
-		if ok and part then
-			compte = compte + 1
-			return part
+		local ok, res, res2 = pcall(fabrique, parent, props, extra)
+		if ok and res then
+			compte = compte + cout
+			return res, res2
 		end
 		return nil
 	end
-	local function bloc(parent, props) return creer(Outils.bloc, parent, props) end
-	local function cylindre(parent, props) return creer(Outils.cylindre, parent, props) end
-	local function boule(parent, props) return creer(Outils.boule, parent, props) end
+	local function bloc(parent, props) return creer(Outils.bloc, 1, parent, props) end
+	local function coin(parent, props) return creer(Outils.coin, 1, parent, props) end
+	local function cylindre(parent, props) return creer(Outils.cylindre, 1, parent, props) end
+	local function boule(parent, props) return creer(Outils.boule, 1, parent, props) end
+	-- bloc aux arêtes verticales arrondies : 6 parts
+	local function arrondi(parent, props, rayon) return creer(Outils.blocArrondi, 6, parent, props, rayon) end
 
 	-- CFrame dans le repère de l'autel
 	local function loc(x, y, z)
@@ -115,149 +133,236 @@ function M.construire(ctx)
 	local function vertical(cf)
 		return cf * CFrame.Angles(0, 0, math.rad(90))
 	end
+	-- dalle de marbre sur plinthe d'ardoise (2 parts, cf. Outils.dalleBordee)
+	local function dalle(parent, props, bord, couleurBord)
+		if compte + 2 > BUDGET then
+			return nil
+		end
+		local ok, d = pcall(Outils.dalleBordee, parent, props, bord, couleurBord)
+		if ok and d then
+			compte = compte + 2
+			return d
+		end
+		return nil
+	end
 
-	-- ===== 1. dalle ronde cerclée de Neon =====
+	-- positions des colonnes : { x, z, hauteur du fût, porte le fronton }
+	local COLONNES = {
+		{ -5, 7.8, 12.2, true },
+		{ 5, 7.8, 12.2, true },
+		{ -8.6, 1.5, 8, false },
+		{ 8.6, 1.5, 8, false },
+		{ -7.9, -4.2, 8, false },
+		{ 7.9, -4.2, 8, false },
+	}
+	local Y_PARVIS = 0.4 -- dessus du parvis
+
+	-- ===== 1. parvis rond en ardoise, cerclé de Neon et de runes =====
 	pcall(function()
 		local diametre = R.rayon * 2
 		local cercle = cylindre(modele, {
 			Name = "Cercle",
-			Size = Vector3.new(0.24, diametre, diametre),
-			CFrame = vertical(loc(0, 0.12, 0)),
+			Size = Vector3.new(0.2, diametre, diametre),
+			CFrame = vertical(loc(0, 0.1, 0)),
 			Color = VIOLET_VIF,
-			Material = NEON,
+			Material = M_NEON,
+			CastShadow = false,
 		})
 		if cercle then
 			Outils.animer(cercle, "pulse", R.vitessePulse * 0.5)
 		end
 		cylindre(modele, {
 			Name = "Dalle",
-			Size = Vector3.new(0.3, diametre - 1, diametre - 1),
-			CFrame = vertical(loc(0, 0.15, 0)),
-			Color = PIERRE_OMBRE,
+			Size = Vector3.new(Y_PARVIS, diametre - 0.9, diametre - 0.9),
+			CFrame = vertical(loc(0, Y_PARVIS / 2, 0)),
+			Color = ARDOISE_OMBRE,
+			Material = M_ARDOISE,
 		})
-		-- runes gravées dans la dalle, sur le chemin qui vient de la Place
+		cylindre(modele, {
+			Name = "Rosace",
+			Size = Vector3.new(0.06, diametre - 3.4, diametre - 3.4),
+			CFrame = vertical(loc(0, Y_PARVIS + 0.03, 0)),
+			Color = ARDOISE,
+			Material = M_MARBRE,
+			CanCollide = false,
+		})
+		-- couronne de runes incrustées, hors du chemin d'accès et des socles de colonnes
 		local runes = Outils.modele(modele, "RunesDalle")
-		for i = 1, 3 do
-			local z = -6.2 - (i - 1) * 1.4
-			local couleur = Charte.gemme
-			if i == 2 then
-				couleur = Charte.violet
+		local rayonRunes = R.rayon - 1.1
+		local hasard = Outils.aleatoire(R.graine)
+		for i = 0, 11 do
+			local a = math.rad(i * 30 + 15)
+			local x, z = math.cos(a) * rayonRunes, math.sin(a) * rayonRunes
+			local libre = not (z < 0 and math.abs(x) < 5.8)
+			for _, c in ipairs(COLONNES) do
+				if math.abs(x - c[1]) < 2 and math.abs(z - c[2]) < 2 then
+					libre = false
+				end
 			end
-			bloc(runes, {
-				Name = "Rune" .. i,
-				Size = Vector3.new(0.8, 0.06, 0.8),
-				CFrame = loc(0, 0.32, z) * CFrame.Angles(0, math.rad(45), 0),
-				Color = couleur,
-				Material = NEON,
-				CanCollide = false,
-			})
-		end
-		for _, cote in ipairs({ -1, 1 }) do
-			for i = 1, 2 do
+			if libre then
+				local couleur = VIOLET_CLAIR
+				if hasard:NextNumber() < 0.35 then
+					couleur = Charte.gemme
+				end
 				bloc(runes, {
-					Name = "Trait",
-					Size = Vector3.new(0.2, 0.06, 1.6),
-					CFrame = loc(cote * 1.4, 0.32, -6.6 - (i - 1) * 2),
-					Color = Charte.violet,
-					Material = NEON,
+					Name = "Rune",
+					Size = Vector3.new(0.7, 0.05, 0.7),
+					CFrame = loc(x, Y_PARVIS + 0.06, z) * CFrame.Angles(0, -a + math.rad(45), 0),
+					Color = couleur,
+					Material = M_NEON,
 					CanCollide = false,
+					CastShadow = false,
 				})
 			end
 		end
 		Outils.animer(runes, "pulse", R.vitessePulse * 0.5)
 	end)
 
-	-- ===== 2. autel en escalier de pierre ancienne =====
-	local hautAutel = 0.3
+	-- ===== 2. trois gradins de marbre à plinthes d'ardoise =====
+	local hautAutel = Y_PARVIS
 	local partAutel = nil
+	local cotes = { 12, 9, 6 }
 	pcall(function()
-		local cotes = { 12, 9, 6 }
-		local couleurs = { PIERRE_OMBRE, PIERRE, PIERRE_CLAIRE }
+		local teintes = { MARBRE_OMBRE, MARBRE, Charte.lumiere(MARBRE) }
 		for i, cote in ipairs(cotes) do
-			local y = hautAutel + R.hauteurGradin / 2
-			bloc(modele, {
+			local h = R.hauteurGradin
+			local yc = hautAutel + h / 2
+			dalle(modele, {
 				Name = "Gradin" .. i,
-				Size = Vector3.new(cote, R.hauteurGradin, cote),
-				CFrame = loc(0, y, 0),
-				Color = couleurs[i],
-			})
-			hautAutel = hautAutel + R.hauteurGradin
-			-- liseré Neon violet sur le nez de chaque marche, côté Place (bien visible de loin)
+				Size = Vector3.new(cote, h, cote),
+				CFrame = loc(0, yc, 0),
+				Color = teintes[i],
+				Material = M_MARBRE,
+				MaterialBord = M_ARDOISE,
+			}, 0.3, ARDOISE)
+			-- rainure Neon violette sur la contremarche, côté Place (visible de loin)
 			local nez = bloc(modele, {
 				Name = "Nez" .. i,
-				Size = Vector3.new(cote - 0.4, 0.16, 0.34),
-				CFrame = loc(0, hautAutel + 0.08, -cote / 2 + 0.17),
+				Size = Vector3.new(cote - 0.8, 0.12, 0.08),
+				CFrame = loc(0, yc + h * 0.33, -cote / 2 - 0.03),
 				Color = VIOLET_CLAIR,
-				Material = NEON,
+				Material = M_NEON,
 				CanCollide = false,
+				CastShadow = false,
 			})
 			if nez then
 				Outils.animer(nez, "pulse", R.vitessePulse)
 			end
+			hautAutel = hautAutel + h
 		end
 
-		-- pierres usées sur les angles des gradins (aspect ancien)
-		local hasard = Outils.aleatoire(R.graine)
-		for i = 1, 2 do
-			local cote = cotes[i]
-			local y = 0.3 + (i - 0.5) * R.hauteurGradin
-			for _, coin in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
-				local t = hasard:NextNumber(0.5, 0.8)
-				bloc(modele, {
-					Name = "PierreUsee",
-					Size = Vector3.new(t, R.hauteurGradin + 0.1, t),
-					CFrame = loc(coin[1] * (cote / 2 - t / 2 + 0.05), y + 0.05, coin[2] * (cote / 2 - t / 2 + 0.05)),
-					Color = Charte.ombre(PIERRE_OMBRE),
+		-- tapis violet qui monte du parvis jusqu'à l'autel
+		local tapis = Outils.modele(modele, "Tapis")
+		local troncons = {
+			{ Y_PARVIS, -R.rayon + 0.9, -cotes[1] / 2 - 0.3 },
+			{ Y_PARVIS + R.hauteurGradin, -cotes[1] / 2, -cotes[2] / 2 },
+			{ Y_PARVIS + 2 * R.hauteurGradin, -cotes[2] / 2, -cotes[3] / 2 },
+			{ Y_PARVIS + 3 * R.hauteurGradin, -cotes[3] / 2, -2.5 },
+		}
+		for i, t in ipairs(troncons) do
+			local longueur = t[3] - t[2]
+			if longueur > 0.1 then
+				bloc(tapis, {
+					Name = "Tapis" .. i,
+					Size = Vector3.new(3.2, 0.06, longueur),
+					CFrame = loc(0, t[1] + 0.03, (t[2] + t[3]) / 2),
+					Color = VIOLET_SOMBRE,
+					Material = M_TISSU,
+					CanCollide = false,
 				})
 			end
 		end
 
-		-- la table de l'autel, qui porte l'invite
-		partAutel = bloc(modele, {
-			Name = "Autel",
-			Size = Vector3.new(4.4, 1.6, 4.4),
-			CFrame = loc(0, hautAutel + 0.8, 0),
-			Color = PIERRE,
-		})
-		bloc(modele, {
-			Name = "Plateau",
-			Size = Vector3.new(4.8, 0.2, 4.8),
-			CFrame = loc(0, hautAutel + 1.7, 0),
-			Color = Charte.dore,
-		})
-		-- ceinture Neon violet autour de la table (l'autel « s'allume »)
-		local ceinture = bloc(modele, {
-			Name = "Ceinture",
-			Size = Vector3.new(4.6, 0.3, 4.6),
-			CFrame = loc(0, hautAutel + 1.1, 0),
-			Color = VIOLET_VIF,
-			Material = NEON,
-			CanCollide = false,
-		})
-		if ceinture then
-			Outils.animer(ceinture, "pulse", R.vitessePulse)
+		-- bornes d'ardoise coiffées d'or aux quatre angles du premier gradin
+		local yBorne = Y_PARVIS + R.hauteurGradin
+		for _, sx in ipairs({ -1, 1 }) do
+			for _, sz in ipairs({ -1, 1 }) do
+				local x, z = sx * (cotes[1] / 2 - 0.6), sz * (cotes[1] / 2 - 0.6)
+				bloc(modele, {
+					Name = "Borne",
+					Size = Vector3.new(0.9, 0.8, 0.9),
+					CFrame = loc(x, yBorne + 0.4, z),
+					Color = ARDOISE,
+					Material = M_ARDOISE,
+				})
+				bloc(modele, {
+					Name = "BorneOr",
+					Size = Vector3.new(1.05, 0.18, 1.05),
+					CFrame = loc(x, yBorne + 0.89, z),
+					Color = OR,
+					Material = M_METAL,
+					Reflectance = 0.2,
+				})
+			end
 		end
-		local socle = cylindre(modele, {
-			Name = "Sceau",
-			Size = Vector3.new(0.15, 3.6, 3.6),
-			CFrame = vertical(loc(0, hautAutel + 1.875, 0)),
-			Color = VIOLET_CLAIR,
-			Material = NEON,
-			CanCollide = false,
+
+		-- la table de l'autel : socle d'ardoise, bloc de marbre arrondi (porte l'invite), plateau d'or
+		bloc(modele, {
+			Name = "SocleAutel",
+			Size = Vector3.new(5, 0.4, 5),
+			CFrame = loc(0, hautAutel + 0.2, 0),
+			Color = ARDOISE_OMBRE,
+			Material = M_ARDOISE,
 		})
-		if socle then
-			Outils.animer(socle, "pulse", R.vitessePulse)
-			Outils.lumiere(socle, { Range = 20, Brightness = 3, Color = VIOLET_VIF })
+		local table_ = arrondi(modele, {
+			Name = "TableAutel",
+			Size = Vector3.new(4.4, 1.6, 4.4),
+			CFrame = loc(0, hautAutel + 0.4 + 0.8, 0),
+			Color = MARBRE,
+			Material = M_MARBRE,
+		}, 0.6)
+		if table_ then
+			partAutel = table_:FindFirstChild("CoeurX")
+			if partAutel then
+				partAutel.Name = "Autel"
+			end
+		end
+		arrondi(modele, {
+			Name = "Plateau",
+			Size = Vector3.new(4.9, 0.3, 4.9),
+			CFrame = loc(0, hautAutel + 2.15, 0),
+			Color = OR,
+			Material = M_METAL,
+			Reflectance = 0.25,
+		}, 0.7)
+		-- runes gravées sur les trois faces non tournées vers la Place
+		local runesAutel = Outils.modele(modele, "RunesAutel")
+		for _, a in ipairs({ 90, 180, 270 }) do
+			bloc(runesAutel, {
+				Name = "Rune",
+				Size = Vector3.new(0.8, 0.8, 0.08),
+				CFrame = loc(0, hautAutel + 1.2, 0) * CFrame.Angles(0, math.rad(a), 0)
+					* CFrame.new(0, 0, -2.22) * CFrame.Angles(0, 0, math.rad(45)),
+				Color = VIOLET_CLAIR,
+				Material = M_NEON,
+				CanCollide = false,
+				CastShadow = false,
+			})
+		end
+		Outils.animer(runesAutel, "pulse", R.vitessePulse)
+		local sceau = cylindre(modele, {
+			Name = "Sceau",
+			Size = Vector3.new(0.12, 3.4, 3.4),
+			CFrame = vertical(loc(0, hautAutel + 2.35, 0)),
+			Color = VIOLET_CLAIR,
+			Material = M_NEON,
+			CanCollide = false,
+			CastShadow = false,
+		})
+		if sceau then
+			Outils.animer(sceau, "pulse", R.vitessePulse)
+			Outils.lumiere(sceau, { Range = 20, Brightness = 3, Color = VIOLET_VIF })
 		end
 		-- griffes fossiles qui montent vers l'œuf
 		for i = 0, 3 do
 			local a = math.rad(45 + i * 90)
 			bloc(modele, {
 				Name = "Griffe",
-				Size = Vector3.new(0.4, 2, 0.4),
-				CFrame = loc(math.cos(a) * 1.9, hautAutel + 2.6, math.sin(a) * 1.9)
-					* CFrame.Angles(0, -a, 0) * CFrame.Angles(0, 0, math.rad(20)),
-				Color = Charte.creme,
+				Size = Vector3.new(0.35, 2.2, 0.35),
+				CFrame = loc(math.cos(a) * 1.9, hautAutel + 3.3, math.sin(a) * 1.9)
+					* CFrame.Angles(0, -a, 0) * CFrame.Angles(0, 0, math.rad(22)),
+				Color = Charte.lumiere(MARBRE),
+				Material = Enum.Material.Sandstone,
 				CanCollide = false,
 			})
 		end
@@ -265,7 +370,7 @@ function M.construire(ctx)
 			-- bonus affiché sur la face de l'autel tournée vers la Place
 			local bonus = texteBonus(ctx.Equilibrage)
 			if bonus ~= "" then
-				local etiquetteBonus = Outils.texte(partAutel, "Front", bonus, { couleur = Charte.dore, pixelsParStud = 30 })
+				local etiquetteBonus = Outils.texte(partAutel, "Front", bonus, { couleur = OR, pixelsParStud = 30 })
 				if etiquetteBonus and Style then
 					pcall(function()
 						etiquetteBonus.Font = Style.police
@@ -277,60 +382,50 @@ function M.construire(ctx)
 		end
 	end)
 
-	-- ===== 3. l'œuf fossile doré, qui flotte et pulse =====
+	-- ===== 3. l'œuf fossile en or, qui flotte dans son halo =====
+	local yOeuf = math.max(R.hauteurOeuf, hautAutel + 6.5)
 	pcall(function()
 		local oeuf = Outils.modele(modele, "OeufFossile")
-		local yc = R.hauteurOeuf
-		local bas = boule(oeuf, {
-			Name = "Coque",
-			Size = Vector3.new(5, 5, 5),
-			CFrame = loc(0, yc - 1.3, 0),
-			Color = Charte.dore,
-			Reflectance = 0.15,
-			CanCollide = false,
-		})
-		local milieu = boule(oeuf, {
-			Name = "Ventre",
-			Size = Vector3.new(4.4, 4.4, 4.4),
-			CFrame = loc(0, yc, 0),
-			Color = Charte.dore,
-			Reflectance = 0.15,
-			CanCollide = false,
-		})
-		boule(oeuf, {
-			Name = "Pointe",
-			Size = Vector3.new(3.2, 3.2, 3.2),
-			CFrame = loc(0, yc + 1.4, 0),
-			Color = Charte.lumiere(Charte.dore),
-			Reflectance = 0.15,
-			CanCollide = false,
-		})
+		local yc = yOeuf
+		local proprietesOr = function(nom, taille, dy, couleur)
+			return {
+				Name = nom,
+				Size = Vector3.new(taille, taille, taille),
+				CFrame = loc(0, yc + dy, 0),
+				Color = couleur,
+				Material = M_METAL,
+				Reflectance = 0.35,
+				CanCollide = false,
+			}
+		end
+		local bas = boule(oeuf, proprietesOr("Coque", 5, -1.3, OR))
+		local milieu = boule(oeuf, proprietesOr("Ventre", 4.4, 0, OR))
+		boule(oeuf, proprietesOr("Pointe", 3.2, 1.4, OR_CLAIR))
 		-- fissures lumineuses du fossile
 		local fissures = Outils.modele(oeuf, "Fissures")
 		for i = 0, 5 do
 			local a = math.rad(i * 60 + 15)
 			local dy = 0.35
-			if i % 2 == 1 then
-				dy = -0.25
-			end
-			local dir = Vector3.new(math.cos(a), dy, math.sin(a)).Unit
-			local pos = (repere * CFrame.new(dir * 2.12)).Position + Vector3.new(0, yc, 0)
 			local sens = 1
 			if i % 2 == 1 then
+				dy = -0.25
 				sens = -1
 			end
-			local couleur = Charte.gemme
+			local dir = Vector3.new(math.cos(a), dy, math.sin(a)).Unit
+			local pos = (repere * CFrame.new(dir * 2.14)).Position + Vector3.new(0, yc, 0)
+			local couleur = VIOLET_CLAIR
 			if i % 3 == 0 then
-				couleur = Charte.violet
+				couleur = Charte.gemme
 			end
 			bloc(fissures, {
 				Name = "Fissure",
-				Size = Vector3.new(0.22, 1.5, 0.2),
+				Size = Vector3.new(0.2, 1.6, 0.2),
 				CFrame = CFrame.lookAt(pos, pos + (pos - Vector3.new(C.X, yc, C.Z)))
 					* CFrame.Angles(0, 0, math.rad(25 * sens)),
 				Color = couleur,
-				Material = NEON,
+				Material = M_NEON,
 				CanCollide = false,
+				CastShadow = false,
 			})
 		end
 		Outils.animer(fissures, "pulse", R.vitessePulse)
@@ -340,9 +435,9 @@ function M.construire(ctx)
 			Name = "Halo",
 			Size = Vector3.new(7, 7, 7),
 			CFrame = loc(0, yc, 0),
-			Color = Charte.lumiere(Charte.dore),
-			Material = NEON,
-			Transparency = 0.82,
+			Color = OR_CLAIR,
+			Material = Enum.Material.ForceField,
+			Transparency = 0.2,
 			CanCollide = false,
 			CanQuery = false,
 			CanTouch = false,
@@ -353,86 +448,142 @@ function M.construire(ctx)
 			pcall(function()
 				local etincelles = Instance.new("ParticleEmitter")
 				etincelles.Name = "Etincelles"
-				etincelles.Color = ColorSequence.new(Charte.dore, Charte.violet)
+				etincelles.Color = ColorSequence.new(OR, Charte.violet)
 				etincelles.LightEmission = 1
 				etincelles.Size = NumberSequence.new(0.35, 0)
 				etincelles.Transparency = NumberSequence.new(0.1, 1)
 				etincelles.Lifetime = NumberRange.new(1.5, 2.5)
-				etincelles.Rate = 8
+				etincelles.Rate = 10
 				etincelles.Speed = NumberRange.new(0.8, 1.6)
 				etincelles.SpreadAngle = Vector2.new(180, 180)
 				etincelles.Parent = halo
 			end)
 		end
 		if milieu then
-			Outils.lumiere(milieu, { Range = 18, Brightness = 2, Color = Charte.dore })
+			Outils.lumiere(milieu, { Range = 18, Brightness = 2, Color = OR })
 			oeuf.PrimaryPart = milieu
 		elseif bas then
 			oeuf.PrimaryPart = bas
 		end
 		Outils.animer(oeuf, "flotte", R.vitesseFlotte)
+
+		-- cristaux de gemme en orbite autour de l'œuf (modèle à part : il tourne pendant que l'œuf flotte)
+		local orbite = Outils.modele(modele, "Orbite")
+		for i = 0, 5 do
+			local a = math.rad(i * 60)
+			local dy = 0.6
+			if i % 2 == 1 then
+				dy = -0.6
+			end
+			local couleur = Charte.gemme
+			if i % 2 == 1 then
+				couleur = VIOLET_CLAIR
+			end
+			bloc(orbite, {
+				Name = "Eclat",
+				Size = Vector3.new(0.5, 1.1, 0.5),
+				CFrame = loc(math.cos(a) * 4.4, yc + dy, math.sin(a) * 4.4)
+					* CFrame.Angles(0, -a, 0) * CFrame.Angles(math.rad(45), 0, math.rad(45)),
+				Color = couleur,
+				Material = M_NEON,
+				CanCollide = false,
+				CanQuery = false,
+				CastShadow = false,
+			})
+		end
+		pcall(function()
+			orbite.WorldPivot = loc(0, yc, 0)
+		end)
+		Outils.animer(orbite, "tourne", 0.5)
 	end)
 
-	-- ===== 4. colonnes gravées de runes =====
-	-- { x, z, hauteur du fût, porte le fronton }
-	local COLONNES = {
-		{ -5, 7.8, 12.2, true },
-		{ 5, 7.8, 12.2, true },
-		{ -8.6, 1.5, 8, false },
-		{ 8.6, 1.5, 8, false },
-		{ -7.8, -4.6, 8, false },
-		{ 7.8, -4.6, 8, false },
-	}
+	-- ===== 4. colonnes de marbre arrondies, gravées de runes =====
 	local hautFronton = 0
 	for n, c in ipairs(COLONNES) do
 		pcall(function()
 			local colonne = Outils.modele(modele, "Colonne" .. n)
 			local p = (repere * CFrame.new(c[1], 0, c[2])).Position
-			-- chaque colonne regarde le centre de l'autel
+			-- chaque colonne regarde le centre de l'autel (-Z local vers le centre)
 			local base = CFrame.lookAt(Vector3.new(p.X, 0, p.Z), C)
-			local y = 0.3
+			local y = Y_PARVIS
 			bloc(colonne, {
 				Name = "Socle",
-				Size = Vector3.new(2.2, 0.8, 2.2),
-				CFrame = base * CFrame.new(0, y + 0.4, 0),
-				Color = PIERRE_OMBRE,
+				Size = Vector3.new(2.5, 0.5, 2.5),
+				CFrame = base * CFrame.new(0, y + 0.25, 0),
+				Color = ARDOISE,
+				Material = M_ARDOISE,
 			})
-			y = y + 0.8
-			bloc(colonne, {
+			y = y + 0.5
+			cylindre(colonne, {
+				Name = "Tore",
+				Size = Vector3.new(0.4, 2.2, 2.2),
+				CFrame = vertical(base * CFrame.new(0, y + 0.2, 0)),
+				Color = MARBRE_OMBRE,
+				Material = M_MARBRE,
+			})
+			y = y + 0.4
+			cylindre(colonne, {
+				Name = "BagueBas",
+				Size = Vector3.new(0.25, 2.05, 2.05),
+				CFrame = vertical(base * CFrame.new(0, y + 0.125, 0)),
+				Color = OR,
+				Material = M_METAL,
+				Reflectance = 0.2,
+			})
+			arrondi(colonne, {
 				Name = "Fut",
-				Size = Vector3.new(1.6, c[3], 1.6),
+				Size = Vector3.new(1.7, c[3], 1.7),
 				CFrame = base * CFrame.new(0, y + c[3] / 2, 0),
-				Color = PIERRE,
-			})
-			-- runes Neon sur la face tournée vers l'autel
+				Color = MARBRE,
+				Material = M_MARBRE,
+			}, 0.5)
+			-- runes Neon gravées sur la face tournée vers l'autel
 			local runes = Outils.modele(colonne, "Runes")
 			local nb = 3
 			if c[4] then
 				nb = 4
 			end
 			for i = 1, nb do
-				local couleur = Charte.violet
-				if (i + n) % 2 == 0 then
+				local couleur = VIOLET_CLAIR
+				if (i + n) % 3 == 0 then
 					couleur = Charte.gemme
 				end
 				bloc(runes, {
 					Name = "Rune" .. i,
-					Size = Vector3.new(0.7, 0.7, 0.1),
-					CFrame = base * CFrame.new(0, y + i * (c[3] / (nb + 1)), -0.82) * CFrame.Angles(0, 0, math.rad(45)),
+					Size = Vector3.new(0.5, 0.5, 0.08),
+					CFrame = base * CFrame.new(0, y + i * (c[3] / (nb + 1)), -0.86) * CFrame.Angles(0, 0, math.rad(45)),
 					Color = couleur,
-					Material = NEON,
+					Material = M_NEON,
 					CanCollide = false,
+					CastShadow = false,
 				})
 			end
 			Outils.animer(runes, "pulse", R.vitessePulse * 0.8)
 			y = y + c[3]
-			bloc(colonne, {
-				Name = "Chapiteau",
-				Size = Vector3.new(2.4, 0.8, 2.4),
-				CFrame = base * CFrame.new(0, y + 0.4, 0),
-				Color = PIERRE_CLAIRE,
+			cylindre(colonne, {
+				Name = "BagueHaut",
+				Size = Vector3.new(0.25, 2.05, 2.05),
+				CFrame = vertical(base * CFrame.new(0, y - 0.3, 0)),
+				Color = OR,
+				Material = M_METAL,
+				Reflectance = 0.2,
 			})
-			y = y + 0.8
+			cylindre(colonne, {
+				Name = "Chapiteau",
+				Size = Vector3.new(0.5, 2.3, 2.3),
+				CFrame = vertical(base * CFrame.new(0, y + 0.25, 0)),
+				Color = MARBRE_OMBRE,
+				Material = M_MARBRE,
+			})
+			y = y + 0.5
+			bloc(colonne, {
+				Name = "Abaque",
+				Size = Vector3.new(2.6, 0.4, 2.6),
+				CFrame = base * CFrame.new(0, y + 0.2, 0),
+				Color = ARDOISE,
+				Material = M_ARDOISE,
+			})
+			y = y + 0.4
 			if c[4] then
 				hautFronton = math.max(hautFronton, y)
 			else
@@ -442,8 +593,9 @@ function M.construire(ctx)
 					Size = Vector3.new(0.9, 1.6, 0.9),
 					CFrame = base * CFrame.new(0, y + 1.3, 0) * CFrame.Angles(0, math.rad(45), 0),
 					Color = Charte.gemme,
-					Material = NEON,
+					Material = M_NEON,
 					CanCollide = false,
+					CastShadow = false,
 				})
 				if cristal then
 					Outils.animer(cristal, "tourne", 0.8)
@@ -453,33 +605,70 @@ function M.construire(ctx)
 		end)
 	end
 
-	-- ===== 5. fronton « RENAISSANCE » tourné vers la Place =====
+	-- ===== 5. fronton « RENAISSANCE » à pignon, tourné vers la Place =====
 	pcall(function()
 		if hautFronton <= 0 then
-			hautFronton = 14.1
+			hautFronton = 14.4
+		end
+		local zF = COLONNES[1][2]
+		local architrave = bloc(modele, {
+			Name = "Architrave",
+			Size = Vector3.new(12.6, 0.35, 1.3),
+			CFrame = loc(0, hautFronton + 0.175, zF),
+			Color = OR,
+			Material = M_METAL,
+			Reflectance = 0.2,
+		})
+		if architrave then
+			-- projecteur doux qui tombe du fronton sur l'œuf
+			pcall(function()
+				local spot = Outils.lumiere(architrave, { genre = "Spot", Range = 18, Brightness = 2, Color = OR_CLAIR })
+				spot.Face = Enum.NormalId.Front
+				spot.Angle = 70
+			end)
 		end
 		local fronton = bloc(modele, {
 			Name = "Fronton",
-			Size = Vector3.new(12, 3, 0.8),
-			CFrame = loc(0, hautFronton + 1.5, 7.8),
-			Color = Charte.ombre(Charte.violet),
+			Size = Vector3.new(12, 3, 0.9),
+			CFrame = loc(0, hautFronton + 0.35 + 1.5, zF),
+			Color = ARDOISE_OMBRE,
+			Material = M_ARDOISE,
 		})
+		local yCorniche = hautFronton + 0.35 + 3
 		bloc(modele, {
 			Name = "Corniche",
-			Size = Vector3.new(12.4, 0.4, 1),
-			CFrame = loc(0, hautFronton + 3.2, 7.8),
-			Color = Charte.dore,
+			Size = Vector3.new(13, 0.4, 1.5),
+			CFrame = loc(0, yCorniche + 0.2, zF),
+			Color = OR,
+			Material = M_METAL,
+			Reflectance = 0.2,
 		})
-		bloc(modele, {
-			Name = "Architrave",
-			Size = Vector3.new(12.4, 0.3, 1),
-			CFrame = loc(0, hautFronton - 0.15 + 0.3, 7.8),
-			Color = Charte.dore,
+		-- pignon triangulaire en marbre (deux coins qui montent vers le centre)
+		for _, cote in ipairs({ -1, 1 }) do
+			coin(modele, {
+				Name = "Pignon",
+				Size = Vector3.new(1.1, 2.2, 6.4),
+				CFrame = loc(cote * 3.2, yCorniche + 0.4 + 1.1, zF) * CFrame.Angles(0, math.rad(-90 * cote), 0),
+				Color = MARBRE,
+				Material = M_MARBRE,
+			})
+		end
+		-- gemme au sommet du pignon
+		local acrotere = bloc(modele, {
+			Name = "Acrotere",
+			Size = Vector3.new(0.9, 0.9, 0.9),
+			CFrame = loc(0, yCorniche + 0.4 + 2.6, zF) * CFrame.Angles(math.rad(45), 0, math.rad(45)),
+			Color = VIOLET_CLAIR,
+			Material = M_NEON,
 			CanCollide = false,
+			CastShadow = false,
 		})
+		if acrotere then
+			Outils.animer(acrotere, "pulse", R.vitessePulse)
+		end
 		if fronton then
 			for _, face in ipairs({ "Front", "Back" }) do
-				local etiquette = Outils.texte(fronton, face, "RENAISSANCE", { couleur = Charte.dore, pixelsParStud = 40 })
+				local etiquette = Outils.texte(fronton, face, "RENAISSANCE", { couleur = OR, pixelsParStud = 40 })
 				if etiquette then
 					pcall(function()
 						etiquette.Parent.Name = "Affiche"
@@ -499,42 +688,105 @@ function M.construire(ctx)
 						local marge = Instance.new("UIPadding")
 						marge.PaddingLeft = UDim.new(0.04, 0)
 						marge.PaddingRight = UDim.new(0.04, 0)
-						marge.PaddingTop = UDim.new(0.1, 0)
-						marge.PaddingBottom = UDim.new(0.1, 0)
+						marge.PaddingTop = UDim.new(0.12, 0)
+						marge.PaddingBottom = UDim.new(0.12, 0)
 						marge.Parent = etiquette
 					end)
 				end
 			end
 		end
+
+		-- bannières violettes suspendues sous l'architrave, de part et d'autre de l'œuf
+		for _, cote in ipairs({ -1, 1 }) do
+			local banniere = Outils.modele(modele, "Banniere")
+			local x = cote * 2.9
+			local hB = 5.5
+			bloc(banniere, {
+				Name = "Toile",
+				Size = Vector3.new(2, hB, 0.12),
+				CFrame = loc(x, hautFronton - hB / 2, zF),
+				Color = VIOLET_VIF,
+				Material = M_TISSU,
+				CanCollide = false,
+			})
+			bloc(banniere, {
+				Name = "Frange",
+				Size = Vector3.new(2.1, 0.3, 0.2),
+				CFrame = loc(x, hautFronton - hB, zF),
+				Color = OR_OMBRE,
+				Material = M_METAL,
+				CanCollide = false,
+			})
+			local embleme = bloc(banniere, {
+				Name = "Embleme",
+				Size = Vector3.new(0.8, 0.8, 0.06),
+				CFrame = loc(x, hautFronton - hB * 0.4, zF - 0.1) * CFrame.Angles(0, 0, math.rad(45)),
+				Color = OR_CLAIR,
+				Material = M_NEON,
+				CanCollide = false,
+				CastShadow = false,
+			})
+			if embleme then
+				Outils.animer(embleme, "pulse", R.vitessePulse * 0.7)
+			end
+		end
 	end)
 
-	-- ===== 6. braseros de part et d'autre de l'escalier =====
+	-- ===== 6. braseros de part et d'autre du tapis =====
 	for _, cote in ipairs({ -1, 1 }) do
 		pcall(function()
 			local brasero = Outils.modele(modele, "Brasero")
+			local x, z = cote * 5.2, -8
 			bloc(brasero, {
-				Name = "Pied",
-				Size = Vector3.new(0.8, 2.6, 0.8),
-				CFrame = loc(cote * 4.6, 0.3 + 1.3, -8.4),
-				Color = PIERRE_OMBRE,
+				Name = "Socle",
+				Size = Vector3.new(1.5, 0.4, 1.5),
+				CFrame = loc(x, Y_PARVIS + 0.2, z),
+				Color = ARDOISE,
+				Material = M_ARDOISE,
 			})
-			bloc(brasero, {
+			cylindre(brasero, {
+				Name = "Pied",
+				Size = Vector3.new(2, 0.8, 0.8),
+				CFrame = vertical(loc(x, Y_PARVIS + 0.4 + 1, z)),
+				Color = MARBRE,
+				Material = M_MARBRE,
+			})
+			cylindre(brasero, {
+				Name = "Col",
+				Size = Vector3.new(0.35, 1.3, 1.3),
+				CFrame = vertical(loc(x, Y_PARVIS + 2.55, z)),
+				Color = OR_OMBRE,
+				Material = M_METAL,
+				Reflectance = 0.2,
+			})
+			cylindre(brasero, {
 				Name = "Coupe",
-				Size = Vector3.new(1.8, 0.6, 1.8),
-				CFrame = loc(cote * 4.6, 0.3 + 2.9, -8.4),
-				Color = Charte.dore,
+				Size = Vector3.new(0.55, 2, 2),
+				CFrame = vertical(loc(x, Y_PARVIS + 2.95, z)),
+				Color = OR,
+				Material = M_METAL,
+				Reflectance = 0.25,
+			})
+			cylindre(brasero, {
+				Name = "Braises",
+				Size = Vector3.new(0.12, 1.6, 1.6),
+				CFrame = vertical(loc(x, Y_PARVIS + 3.25, z)),
+				Color = Charte.encre,
+				Material = M_BASALTE,
+				CanCollide = false,
 			})
 			local flamme = bloc(brasero, {
 				Name = "Flamme",
-				Size = Vector3.new(1, 1, 1),
-				CFrame = loc(cote * 4.6, 0.3 + 3.8, -8.4) * CFrame.Angles(math.rad(45), 0, math.rad(45)),
-				Color = Charte.violet,
-				Material = NEON,
+				Size = Vector3.new(0.9, 0.9, 0.9),
+				CFrame = loc(x, Y_PARVIS + 3.9, z) * CFrame.Angles(math.rad(45), 0, math.rad(45)),
+				Color = VIOLET_CLAIR,
+				Material = M_NEON,
 				CanCollide = false,
+				CastShadow = false,
 			})
 			if flamme then
 				Outils.animer(flamme, "pulse", R.vitessePulse * 1.5)
-				Outils.lumiere(flamme, { Range = 12, Brightness = 1.5, Color = Charte.violet })
+				Outils.lumiere(flamme, { Range = 14, Brightness = 2, Color = Charte.violet })
 				pcall(function()
 					local feu = Instance.new("Fire")
 					feu.Color = Charte.violet
@@ -552,13 +804,13 @@ function M.construire(ctx)
 		pcall(function()
 			local hautTitre = hautFronton
 			if hautTitre <= 0 then
-				hautTitre = 14.1
+				hautTitre = 14.4
 			end
-			-- ancre invisible au-dessus du fronton : le titre se voit depuis toute la Place
+			-- ancre invisible au-dessus du pignon : le titre se voit depuis toute la Place
 			local ancre = bloc(modele, {
 				Name = "AncreTitre",
 				Size = Vector3.new(1, 1, 1),
-				CFrame = loc(0, hautTitre + 4, 3),
+				CFrame = loc(0, hautTitre + 7, 4),
 				Transparency = 1,
 				CanCollide = false,
 				CanQuery = false,

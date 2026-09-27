@@ -190,11 +190,119 @@ function M.demarrer(ctx)
 		enVente[dino] = nil
 	end
 
+	-- ===== étiquette du dino : compacte en enclos, taille d'origine ailleurs =====
+	-- En base, les podiums ne sont espacés que de 9 studs : l'étiquette du tapis (10 studs, 5 lignes,
+	-- ~6,5 studs de haut) chevauchait ses voisines. En enclos : 7 studs de large, 1 stud par unité de
+	-- ligne, sans le prix (inutile une fois acheté), visible à 50 studs. Tout est recalculé depuis les
+	-- mesures d'origine (relevées une fois), donc les passages Enclos <-> Porte se composent sans dérive ;
+	-- une ligne ajoutée par un autre système (« VOLÉ ! ») garde sa hauteur et pousse vers le haut.
+	local LARGEUR_COMPACTE = 7
+	local ECHELLE_COMPACTE = 1 / 1.3 -- hauteur de ligne 1.3 -> 1.0 stud par unité
+	local DISTANCE_COMPACTE = 50
+	local origines = setmetatable({}, { __mode = "k" }) -- [BillboardGui] = mesures d'origine
+	local suivisEtat = {} -- [dino] = connexion Etat
+
+	local function etiquetteDe(dino)
+		local corps = corpsDe(dino)
+		local gui = corps and corps:FindFirstChild("Etiquette")
+		if not gui then gui = dino:FindFirstChild("Etiquette", true) end
+		if gui and gui:IsA("BillboardGui") then return gui end
+		return nil
+	end
+
+	local function origineDe(gui)
+		local o = origines[gui]
+		if o then return o end
+		if gui.Size.Y.Scale <= 0 then return nil end
+		o = { taille = gui.Size, decalage = gui.StudsOffset, distance = gui.MaxDistance, lignes = {} }
+		for _, enfant in ipairs(gui:GetChildren()) do
+			if enfant:IsA("GuiObject") and enfant.Name ~= "Vole" and enfant.Name ~= "Acheteur" then
+				o.lignes[enfant] = enfant.Size
+			end
+		end
+		origines[gui] = o
+		return o
+	end
+
+	-- compact = true : format enclos ; false : format d'origine (tapis, porté par un voleur)
+	local function formerEtiquette(dino, compact)
+		local gui = etiquetteDe(dino)
+		if not gui then return end
+		if not compact and not origines[gui] then return end -- jamais compactée : rien à rendre
+		local o = origineDe(gui)
+		if not o then return end
+		local hauteurActuelle = gui.Size.Y.Scale
+		local hauteur0 = o.taille.Y.Scale
+		-- hauteurs en studs : lignes d'origine (mises à l'échelle) et lignes ajoutées (inchangées)
+		local hauteurs = {}
+		local somme = 0
+		local ajout = 0
+		for _, enfant in ipairs(gui:GetChildren()) do
+			if enfant:IsA("GuiObject") then
+				local s = o.lignes[enfant]
+				if s then
+					local visible = not (compact and enfant.Name == "Prix")
+					if enfant.Visible ~= visible then enfant.Visible = visible end
+					if visible then
+						local h = s.Y.Scale * hauteur0
+						if compact then h = h * ECHELLE_COMPACTE end
+						hauteurs[enfant] = h
+						somme = somme + h
+					end
+				elseif enfant.Size.Y.Scale > 0 and hauteurActuelle > 0 then
+					local h = enfant.Size.Y.Scale * hauteurActuelle
+					hauteurs[enfant] = h
+					somme = somme + h
+					ajout = ajout + h
+				end
+			end
+		end
+		if somme <= 0 then return end
+		for enfant, h in pairs(hauteurs) do
+			local s = enfant.Size
+			enfant.Size = UDim2.new(s.X.Scale, s.X.Offset, h / somme, s.Y.Offset)
+		end
+		-- le bas de l'étiquette reste où il était : elle rétrécit / grandit vers le haut
+		local bas = o.decalage.Y - hauteur0 / 2
+		local largeur = o.taille.X.Scale
+		if compact then largeur = LARGEUR_COMPACTE end
+		gui.Size = UDim2.new(largeur, o.taille.X.Offset, somme, o.taille.Y.Offset)
+		gui.StudsOffset = Vector3.new(o.decalage.X, bas + somme / 2, o.decalage.Z)
+		if compact then
+			gui.MaxDistance = DISTANCE_COMPACTE
+		else
+			gui.MaxDistance = o.distance
+		end
+		gui:SetAttribute("Compacte", compact)
+	end
+
+	-- suit l'état : compacte en « Enclos », taille d'origine dès qu'il repasse « Porte » ou « Tapis »
+	local function suivreEtat(dino)
+		if suivisEtat[dino] then return end
+		local ok, connexion = pcall(function()
+			return dino:GetAttributeChangedSignal("Etat"):Connect(function()
+				local etat = dino:GetAttribute("Etat")
+				if etat == "Enclos" then
+					pcall(formerEtiquette, dino, true)
+				elseif etat == "Porte" or etat == "Tapis" or etat == "EnRoute" then
+					pcall(formerEtiquette, dino, false)
+				end
+			end)
+		end)
+		if ok and connexion then suivisEtat[dino] = connexion end
+	end
+
 	local function surveiller(dino)
+		suivreEtat(dino)
 		if surveilles[dino] then return end
 		local ok, connexion = pcall(function()
 			return dino.Destroying:Connect(function()
 				oublier(dino)
+				local c = suivisEtat[dino]
+				if c then
+					pcall(function() c:Disconnect() end)
+					suivisEtat[dino] = nil
+				end
 			end)
 		end)
 		if ok and connexion then surveilles[dino] = connexion end
@@ -260,6 +368,7 @@ function M.demarrer(ctx)
 		end
 		local ok = pcall(function() dino:PivotTo(cf) end)
 		if not ok then return false end
+		pcall(formerEtiquette, dino, true)
 
 		t[numero] = dino
 		placeDe[dino] = { uid = uid, numero = numero }
@@ -352,54 +461,222 @@ function M.demarrer(ctx)
 		end
 	end)
 
-	-- ===== étiquettes flottantes (style simulateur) =====
-	local tailles = {}  -- [BillboardGui] = taille de repos (pour la pulsation)
-	local PULSATION = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	-- ===== étiquettes flottantes (style simulateur soigné) =====
+	-- pastilles sombres en dégradé, liseré vert, reflet brillant, médaillon doré « 💰 » ;
+	-- elles rebondissent quand le montant grossit (au plus une fois toutes les ECART_ANIMATION secondes)
+	local VERT = Style.couleurs.argent
+	local VERT_CLAIR = Charte.lumiere(VERT)
+	local VERT_FONCE = Charte.ombre(Charte.ombre(VERT))
+	local OR = Style.boutons.jaune
+	local ECART_ANIMATION = 2.5
+	local HALO_REPOS = 0.5  -- halo de la dalle de collecte quand il n'y a rien à encaisser
+	local HALO_PLEIN = 1.2  -- quand de l'argent attend
+	local SAUT = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	local RETOUR = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local FONDU_HALO = TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
-	-- petit gonflement puis retour à la taille de repos (répliqué aux clients)
-	local function pulser(gui, force)
-		local base = tailles[gui]
-		if not base then return end
-		local f = force or 1.18
+	local animations = {} -- [BillboardGui] = { echelle, trait, medaillon, texte, dernier }
+
+	local function arrondir(gui)
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0.5, 0)
+		c.Parent = gui
+		return c
+	end
+
+	-- construit dans `gui` un conteneur (props.Position, props.Size, props.AnchorPoint) avec la pastille ;
+	-- props.icone : médaillon doré 💰 à gauche ; props.nom : nom du TextLabel du montant. Renvoie la fiche d'animation.
+	local function pastille(gui, props)
+		local conteneur = Instance.new("Frame")
+		conteneur.Name = "Contenu"
+		conteneur.BackgroundTransparency = 1
+		conteneur.AnchorPoint = props.AnchorPoint or Vector2.new(0.5, 0.5)
+		conteneur.Position = props.Position or UDim2.fromScale(0.5, 0.5)
+		conteneur.Size = props.Size or UDim2.fromScale(1, 1)
+		local echelle = Instance.new("UIScale")
+		echelle.Name = "Echelle"
+		echelle.Parent = conteneur
+
+		local gauche = 0
+		if props.icone then gauche = 0.13 end
+		local fond = Instance.new("Frame")
+		fond.Name = "Pastille"
+		fond.AnchorPoint = Vector2.new(1, 0.5)
+		fond.Position = UDim2.fromScale(1, 0.5)
+		fond.Size = UDim2.fromScale(1 - gauche, 0.8)
+		fond.BackgroundColor3 = Color3.new(1, 1, 1)
+		fond.BorderSizePixel = 0
+		arrondir(fond)
+		Style.degrade(fond, Style.couleurs.fondHaut, Style.couleurs.fond).Name = "Fond"
+		local trait = Style.bordure(fond, 3, VERT_FONCE)
+
+		-- reflet brillant sur la moitié haute
+		local reflet = Instance.new("Frame")
+		reflet.Name = "Reflet"
+		reflet.AnchorPoint = Vector2.new(0.5, 0)
+		reflet.Position = UDim2.fromScale(0.5, 0.08)
+		reflet.Size = UDim2.fromScale(0.9, 0.42)
+		reflet.BackgroundColor3 = Color3.new(1, 1, 1)
+		reflet.BackgroundTransparency = 0.8
+		reflet.BorderSizePixel = 0
+		arrondir(reflet)
+		local fonduReflet = Instance.new("UIGradient")
+		fonduReflet.Rotation = 90
+		fonduReflet.Transparency = NumberSequence.new(0.15, 1)
+		fonduReflet.Parent = reflet
+		reflet.Parent = fond
+
+		-- montant : vert vif, léger dégradé clair -> vert, cerné de noir
+		local debut = 0.05
+		if props.icone then debut = 0.25 end
+		local texte = Style.texte(fond, {
+			Name = props.nom or "Texte",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.fromScale(debut, 0.5),
+			Size = UDim2.fromScale(0.95 - debut, 0.84),
+			Text = Charte.argent(0),
+			TextColor3 = Color3.new(1, 1, 1),
+			ZIndex = 2,
+			contour = 3,
+		})
+		Style.degrade(texte, VERT_CLAIR, VERT).Name = "Teinte"
+
+		local medaillon = nil
+		if props.icone then
+			medaillon = Instance.new("Frame")
+			medaillon.Name = "Medaillon"
+			medaillon.AnchorPoint = Vector2.new(0.5, 0.5)
+			medaillon.Position = UDim2.fromScale(0.155, 0.5)
+			medaillon.Size = UDim2.fromScale(1, 1)
+			medaillon.SizeConstraint = Enum.SizeConstraint.RelativeYY
+			medaillon.BackgroundColor3 = Color3.new(1, 1, 1)
+			medaillon.BorderSizePixel = 0
+			medaillon.ZIndex = 3
+			arrondir(medaillon)
+			Style.degrade(medaillon, OR[1], OR[2]).Name = "Fond"
+			Style.bordure(medaillon, 3)
+			Style.texte(medaillon, {
+				Name = "Icone",
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.52),
+				Size = UDim2.fromScale(0.72, 0.72),
+				Text = "💰",
+				ZIndex = 4,
+				contour = 1.5,
+			})
+			medaillon.Parent = conteneur
+		end
+		-- la pastille passe sous le médaillon (ZIndex), mais après lui dans l'arbre : icône lue en premier
+		fond.Parent = conteneur
+
+		conteneur.Parent = gui
+		local fiche = { echelle = echelle, trait = trait, medaillon = medaillon, texte = texte, dernier = 0 }
+		animations[gui] = fiche
+		return fiche
+	end
+
+	-- rebond de la pastille, éclair vert du liseré, médaillon qui bascule (répliqué aux clients)
+	local function animer(fiche, force, toujours)
+		if not fiche then return end
+		local maintenant = os.clock()
+		if not toujours and maintenant - fiche.dernier < ECART_ANIMATION then return end
+		fiche.dernier = maintenant
 		pcall(function()
-			gui.Size = UDim2.new(base.X.Scale * f, base.X.Offset, base.Y.Scale * f, base.Y.Offset)
-			TweenService:Create(gui, PULSATION, { Size = base }):Play()
+			fiche.echelle.Scale = force or 1.15
+			TweenService:Create(fiche.echelle, SAUT, { Scale = 1 }):Play()
+			fiche.trait.Color = VERT_CLAIR
+			TweenService:Create(fiche.trait, RETOUR, { Color = VERT_FONCE }):Play()
+			if fiche.medaillon then
+				fiche.medaillon.Rotation = -16
+				TweenService:Create(fiche.medaillon, SAUT, { Rotation = 0 }):Play()
+			end
 		end)
 	end
 
-	-- au-dessus de la dalle Collecte : « 💰 COLLECTER » + total à encaisser
-	local etiquettesCollecte = {} -- [index de Base] = { gui = BillboardGui, total = TextLabel, valeur = n }
+	-- au-dessus de la dalle Collecte : « 💰 COLLECTER » + total à encaisser dans une pastille ; halo vert sur la dalle
+	local etiquettesCollecte = {} -- [index de Base] = { gui, total = TextLabel, fiche, halo = PointLight, valeur = n }
 
 	local function etiquetterCollecte(index, dalle)
-		local ancienne = dalle:FindFirstChild("EtiquetteCollecte")
-		if ancienne then pcall(function() ancienne:Destroy() end) end
-		local gui, textes = Style.etiquette(dalle, {
-			{ texte = "💰 COLLECTER", couleur = Style.couleurs.argent, titre = true, taille = 1.2, nom = "Titre", contour = 4 },
-			{ texte = Charte.argent(0), couleur = Style.couleurs.argent, taille = 1, nom = "Total", contour = 3.5 },
-		}, {
-			Name = "EtiquetteCollecte",
-			largeur = 9,
-			hauteurLigne = 1.6,
-			StudsOffset = Vector3.new(0, 4.5, 0),
-			MaxDistance = 110,
+		for _, nom in ipairs({ "EtiquetteCollecte", "Halo" }) do
+			local ancien = dalle:FindFirstChild(nom)
+			if ancien then pcall(function() ancien:Destroy() end) end
+		end
+		local gui = Instance.new("BillboardGui")
+		gui.Name = "EtiquetteCollecte"
+		gui.Size = UDim2.new(9, 0, 3.6, 0)
+		gui.StudsOffset = Vector3.new(0, 4.5, 0)
+		gui.MaxDistance = 110
+		gui.LightInfluence = 0
+		gui.ClipsDescendants = false
+		local titre = Style.texte(gui, {
+			Name = "Titre",
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.fromScale(0.5, 0),
+			Size = UDim2.fromScale(1, 0.48),
+			Text = "💰 COLLECTER",
+			TextColor3 = Color3.new(1, 1, 1),
+			titre = true,
+			contour = 4,
 		})
-		tailles[gui] = gui.Size
-		etiquettesCollecte[index] = { gui = gui, total = textes[2], valeur = 0 }
+		Style.degrade(titre, VERT_CLAIR, VERT).Name = "Teinte"
+		local fiche = pastille(gui, {
+			nom = "Total",
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.fromScale(0.5, 1),
+			Size = UDim2.fromScale(0.62, 0.5),
+		})
+		gui.Adornee = dalle
+		gui.Parent = dalle
+
+		-- halo discret : plus vif quand de l'argent attend, éclair à la collecte
+		local halo = Instance.new("PointLight")
+		halo.Name = "Halo"
+		halo.Color = VERT
+		halo.Range = 10
+		halo.Brightness = HALO_REPOS
+		halo.Shadows = false
+		halo.Parent = dalle
+
+		etiquettesCollecte[index] = { gui = gui, total = fiche.texte, fiche = fiche, halo = halo, valeur = 0 }
+	end
+
+	local function regleHalo(e, cible)
+		if not e.halo or not e.halo.Parent or e.cibleHalo == cible then return end
+		e.cibleHalo = cible
+		pcall(function()
+			TweenService:Create(e.halo, FONDU_HALO, { Brightness = cible }):Play()
+		end)
 	end
 
 	local function afficherTotaux(totaux)
 		for index, e in pairs(etiquettesCollecte) do
 			if not e.gui.Parent then
 				etiquettesCollecte[index] = nil
+				animations[e.gui] = nil
 			else
 				local entier = math.floor(totaux[index] or 0)
 				if entier ~= e.valeur then
 					local precedent = e.valeur
 					e.valeur = entier
 					e.total.Text = Charte.argent(entier)
-					if entier > precedent then pulser(e.gui, 1.1) end
+					if entier > precedent then animer(e.fiche, 1.12) end
 				end
+				if entier > 0 then regleHalo(e, HALO_PLEIN) else regleHalo(e, HALO_REPOS) end
 			end
+		end
+	end
+
+	-- juste après une collecte : total remis à zéro tout de suite, rebond et éclair du halo
+	local function saluerCollecte(index)
+		local e = etiquettesCollecte[index]
+		if not e or not e.gui.Parent then return end
+		e.valeur = 0
+		e.total.Text = Charte.argent(0)
+		animer(e.fiche, 1.22, true)
+		if e.halo and e.halo.Parent then
+			e.cibleHalo = HALO_REPOS
+			e.halo.Brightness = 3
+			TweenService:Create(e.halo, FONDU_HALO, { Brightness = HALO_REPOS }):Play()
 		end
 	end
 
@@ -443,6 +720,8 @@ function M.demarrer(ctx)
 			if racine then position = racine.Position end
 		end
 		effet("Collecte", position, { montant = montant })
+		local index = Bus.demander("BaseDe", joueur)
+		if type(index) == "number" then pcall(saluerCollecte, index) end
 	end
 
 	local function joueurDuContact(partie)
@@ -459,6 +738,25 @@ function M.demarrer(ctx)
 		local dalle = modele:FindFirstChild("Collecte")
 		if not dalle or not dalle:IsA("BasePart") then return false end
 		pcall(etiquetterCollecte, index, dalle)
+		-- une base libre n'affiche que son statut : ni « COLLECTER », ni « VERROUILLER », ni halo
+		local function majOccupation()
+			local occupee = nombre(modele:GetAttribute("Proprietaire"), 0) ~= 0
+			local e = etiquettesCollecte[index]
+			if e then
+				if e.gui.Parent and e.gui.Enabled ~= occupee then e.gui.Enabled = occupee end
+				if e.halo and e.halo.Parent and e.halo.Enabled ~= occupee then e.halo.Enabled = occupee end
+			end
+			local bouton = modele:FindFirstChild("BoutonVerrou")
+			local verrou = bouton and bouton:FindFirstChild("EtiquetteVerrou")
+			if not verrou then verrou = modele:FindFirstChild("EtiquetteVerrou", true) end
+			if verrou and verrou:IsA("BillboardGui") and verrou.Enabled ~= occupee then
+				verrou.Enabled = occupee
+			end
+		end
+		pcall(majOccupation)
+		modele:GetAttributeChangedSignal("Proprietaire"):Connect(function()
+			pcall(majOccupation)
+		end)
 		dalle.Touched:Connect(function(partie)
 			local joueur = joueurDuContact(partie)
 			if not joueur then return end
@@ -557,23 +855,31 @@ function M.demarrer(ctx)
 		enVente[dino] = nil
 	end)
 
-	-- ===== affichage du stock au-dessus des podiums (style simulateur : gros « $1,2K » vert cerné) =====
+	-- ===== stock au-dessus des podiums : pastille « 💰 $1,2K » (médaillon doré + montant vert cerné) =====
 	local function panneauDe(podium)
 		local gui = panneaux[podium]
-		if gui and gui.Parent == podium then return gui end
-		local textes
-		gui, textes = Style.etiquette(podium, {
-			{ texte = "", couleur = Style.couleurs.argent, nom = "Texte", contour = 4 },
-		}, {
-			Name = "Stock",
-			largeur = 6,
-			hauteurLigne = 1.7,
-			StudsOffset = Vector3.new(0, 0, 0),
-			MaxDistance = 60,
-			AlwaysOnTop = true,
-		})
-		textes[1]:SetAttribute("Valeur", 0)
-		tailles[gui] = gui.Size
+		if gui and gui.Parent == podium and animations[gui] then return gui end
+		if gui then
+			animations[gui] = nil
+			pcall(function() gui:Destroy() end)
+		end
+		local ancien = podium:FindFirstChild("Stock")
+		if ancien then pcall(function() ancien:Destroy() end) end
+		-- petite pastille posée devant le plateau (pas à travers les murs : AlwaysOnTop = false)
+		gui = Instance.new("BillboardGui")
+		gui.Name = "Stock"
+		gui.Size = UDim2.new(4.2, 0, 1.3, 0)
+		gui.StudsOffset = Vector3.new(0, 0, 0)
+		gui.MaxDistance = 40
+		gui.AlwaysOnTop = false
+		gui.LightInfluence = 0
+		gui.ClipsDescendants = false
+		gui.Enabled = false
+		local fiche = pastille(gui, { icone = true, nom = "Texte" })
+		fiche.texte.Text = ""
+		fiche.texte:SetAttribute("Valeur", 0)
+		gui.Adornee = podium
+		gui.Parent = podium
 		panneaux[podium] = gui
 		return gui
 	end
@@ -592,7 +898,7 @@ function M.demarrer(ctx)
 		local podium = dossier and dossier:FindFirstChild("E" .. numero)
 		if not podium or not podium:IsA("BasePart") then return nil end
 		local gui = panneauDe(podium)
-		-- au bord avant du podium (côté regard du dino), au-dessus du dessus
+		-- devant le podium (côté regard du dino), à hauteur du plateau : ne masque jamais le dino exposé
 		local cf = pivotDe(dino)
 		local avant = Vector3.new(0, 0, 0)
 		if cf then
@@ -601,9 +907,10 @@ function M.demarrer(ctx)
 				avant = regard.Unit * (math.max(podium.Size.X, podium.Size.Z) / 2)
 			end
 		end
-		gui.StudsOffsetWorldSpace = avant + Vector3.new(0, podium.Size.Y / 2 + 1.2, 0)
+		gui.StudsOffsetWorldSpace = avant * 1.15 + Vector3.new(0, podium.Size.Y / 2 + 0.2, 0)
 		gui.Enabled = true
-		local texte = gui:FindFirstChild("Texte")
+		local fiche = animations[gui]
+		local texte = fiche and fiche.texte
 		if texte then
 			local entier = math.floor(stock)
 			local valeur = Charte.argent(entier)
@@ -611,7 +918,7 @@ function M.demarrer(ctx)
 				local precedent = nombre(texte:GetAttribute("Valeur"), 0)
 				texte.Text = valeur
 				texte:SetAttribute("Valeur", entier)
-				if entier > precedent then pulser(gui, 1.15) end
+				if entier > precedent then animer(fiche, 1.15) end
 			end
 		end
 		return podium
@@ -657,7 +964,7 @@ function M.demarrer(ctx)
 		for podium, gui in pairs(panneaux) do
 			if not podium.Parent or gui.Parent ~= podium then
 				panneaux[podium] = nil
-				tailles[gui] = nil
+				animations[gui] = nil
 			elseif not actifs[podium] and gui.Enabled then
 				gui.Enabled = false
 			end

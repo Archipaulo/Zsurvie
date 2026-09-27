@@ -1,9 +1,35 @@
 -- Système Achat : achat des dinos sur le Tapis (invite « Acheter »), puis marche du dino jusqu'à la Base de son acheteur.
+-- Version 2 : pendant la marche, le dino s'anime comme sur le Tapis (pattes en diagonale, queue,
+-- ailes, petit sautillement), se tourne en douceur dans les virages, et laisse derrière lui
+-- de petites empreintes et un nuage de poussière (ParticleEmitter, retirés à l'arrivée).
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ProximityPromptService = game:GetService("ProximityPromptService")
+local Debris = game:GetService("Debris")
 
 local M = {}
+
+-- même grammaire de marche que Systemes/Tapis
+local MARCHE_ANGLE = 0.42          -- radians de balancement des pattes
+local QUEUE_ANGLE = 0.2            -- radians de balancement de la queue
+local QUEUE_RETARD = 0.9           -- la queue suit le pas avec un léger retard
+local AILE_ANGLE = 0.3             -- radians de battement des ailes
+local AILE_RYTHME = 1.5            -- battements plus rapides que les pas
+local DANDINEMENT_ANGLE = 0.07     -- radians de roulis
+local DANDINEMENT_HAUTEUR = 0.15   -- studs de sautillement (pour une patte de 2 studs)
+local FREQUENCE_MIN = 8            -- radians par seconde (grands dinos : pas lents)
+local FREQUENCE_MAX = 15           -- radians par seconde (petits dinos : pas rapides)
+local VIRAGE = 9                   -- vitesse de rotation dans les virages (plus grand = plus sec)
+local PATTES = {
+	PatteAvG = { cote = "G", decal = 0 },
+	PatteArD = { cote = "D", decal = 0 },
+	PatteAvD = { cote = "D", decal = math.pi },
+	PatteArG = { cote = "G", decal = math.pi },
+}
+-- parts rattachées à la patte la plus proche du même côté (nom terminé par G ou D)
+local ACCESSOIRES = { "Pied", "Main", "Griffe", "Pouce", "Cuisse", "Sabot", "Orteil", "Ongle" }
+local TEXTURE_POUSSIERE = "rbxasset://textures/particles/smoke_main.dds"
+local DUREE_TRACES = 2             -- secondes laissées aux dernières particules pour s'effacer
 
 function M.demarrer(ctx)
 	local Bus = ctx.Bus
@@ -133,9 +159,397 @@ function M.demarrer(ctx)
 		gui.StudsOffset = gui.StudsOffset - Vector3.new(0, retrait / 2, 0)
 	end
 
+	-- ===== animation de marche (repère du pivot : sol sous le dino, regard vers -Z) =====
+	local Charte = ctx.Charte
+	local reposGabarits = {} -- espece -> { [chemin] = { CFrame, ... } } ou false
+
+	local function commencePar(nom, prefixe)
+		return string.sub(nom, 1, #prefixe) == prefixe
+	end
+
+	local function coteDe(nom)
+		local c = string.sub(nom, -1)
+		if c == "G" or c == "D" then return c end
+		return nil
+	end
+
+	local function partsDe(modele)
+		local liste = {}
+		for _, d in ipairs(modele:GetDescendants()) do
+			if d:IsA("BasePart") then table.insert(liste, d) end
+		end
+		return liste
+	end
+
+	local function cheminDans(modele, inst)
+		local noms = {}
+		local courant = inst
+		while courant and courant ~= modele do
+			table.insert(noms, 1, courant.Name)
+			courant = courant.Parent
+		end
+		return table.concat(noms, "/")
+	end
+
+	-- pivot calculé comme GetPivot() d'un dino vivant (PrimaryPart = Corps)
+	local function pivotModele(modele)
+		local pp = modele.PrimaryPart or modele:FindFirstChild("Corps")
+		if pp and pp:IsA("BasePart") then
+			return pp.CFrame * pp.PivotOffset
+		end
+		return nil
+	end
+
+	-- poses de repos lues sur le gabarit de l'espèce (le dino acheté peut être en plein pas)
+	local function reposGabarit(espece)
+		if type(espece) ~= "string" then return nil end
+		local connu = reposGabarits[espece]
+		if connu ~= nil then
+			if connu == false then return nil end
+			return connu
+		end
+		local resultat = false
+		local dossier = ctx.stockage and ctx.stockage:FindFirstChild("Dinos")
+		local gabarit = dossier and dossier:FindFirstChild(espece)
+		local pivot = gabarit and gabarit:IsA("Model") and pivotModele(gabarit)
+		if pivot then
+			resultat = {}
+			for _, p in ipairs(partsDe(gabarit)) do
+				local cle = cheminDans(gabarit, p)
+				resultat[cle] = resultat[cle] or {}
+				table.insert(resultat[cle], pivot:ToObjectSpace(p.CFrame))
+			end
+		end
+		reposGabarits[espece] = resultat
+		if resultat == false then return nil end
+		return resultat
+	end
+
+	-- part -> pose de repos dans le repère du pivot
+	local function posesDeRepos(dino, pivot, parts)
+		local poses = {}
+		for _, p in ipairs(parts) do
+			poses[p] = pivot:ToObjectSpace(p.CFrame)
+		end
+		local gabarit = reposGabarit(dino:GetAttribute("Espece"))
+		if not gabarit then return poses end
+		local rangs = {}
+		local depuisGabarit = {}
+		for _, p in ipairs(parts) do
+			local cle = cheminDans(dino, p)
+			local liste = gabarit[cle]
+			local rang = (rangs[cle] or 0) + 1
+			rangs[cle] = rang
+			if not liste or not liste[rang] then return poses end
+			depuisGabarit[p] = liste[rang]
+		end
+		-- contrôle : les parts non animées doivent coïncider (sinon le modèle a été retouché)
+		for _, p in ipairs(parts) do
+			local nom = p.Name
+			if not PATTES[nom] and not coteDe(nom) and not string.find(nom, "Queue", 1, true) and not commencePar(nom, "Massue") then
+				if (depuisGabarit[p].Position - poses[p].Position).Magnitude > 0.05 then
+					return poses
+				end
+			end
+		end
+		return depuisGabarit
+	end
+
+	-- deux bouts d'une part allongée le long de son plus grand axe (le centre deux fois sinon)
+	local function extremites(repos, taille)
+		local axes = {
+			{ repos.RightVector, taille.X },
+			{ repos.UpVector, taille.Y },
+			{ -repos.LookVector, taille.Z },
+		}
+		table.sort(axes, function(a, b) return a[2] > b[2] end)
+		if axes[1][2] > axes[2][2] * 1.3 then
+			local demi = axes[1][1] * (axes[1][2] / 2)
+			return repos.Position + demi, repos.Position - demi
+		end
+		return repos.Position, repos.Position
+	end
+
+	local function distanceSegment(p, a, b)
+		local ab = b - a
+		local l2 = ab:Dot(ab)
+		if l2 < 0.000001 then return (p - a).Magnitude end
+		local u = math.max(0, math.min(1, (p - a):Dot(ab) / l2))
+		return (p - (a + ab * u)).Magnitude
+	end
+
+	local function nouveauGroupe(genre, point, decal, cote)
+		return {
+			genre = genre,
+			avant = CFrame.new(point),
+			apres = CFrame.new(-point),
+			decal = decal or 0,
+			cote = cote,
+			membres = {},
+		}
+	end
+
+	-- repère pattes (+ accessoires), queue et ailes ; renvoie la fiche d'animation ou nil
+	local function analyserMembres(dino)
+		local pivot = pivotDe(dino)
+		if not pivot then return nil end
+		local parts = partsDe(dino)
+		local poses = posesDeRepos(dino, pivot, parts)
+		local groupes = {}
+		local pattes = {}
+		local queue = {}
+		local ailes = { G = {}, D = {} }
+		local hauteurPatte = 0
+		local ecartPattes = 0
+		local nombrePattes = 0
+		for _, p in ipairs(parts) do
+			local nom = p.Name
+			local repos = poses[p]
+			local infoPatte = PATTES[nom]
+			if infoPatte and not pattes[nom] then
+				local a, b = extremites(repos, p.Size)
+				local haut, bas = a, b
+				if b.Y > a.Y then haut, bas = b, a end
+				local g = nouveauGroupe("patte", haut, infoPatte.decal, infoPatte.cote)
+				g.haut = haut
+				g.bas = bas
+				g.portee = math.max(p.Size.X, p.Size.Y, p.Size.Z) * 0.8 + 0.8
+				table.insert(g.membres, { part = p, repos = repos })
+				pattes[nom] = g
+				table.insert(groupes, g)
+				hauteurPatte = math.max(hauteurPatte, haut.Y)
+				ecartPattes = ecartPattes + math.abs(repos.Position.X)
+				nombrePattes = nombrePattes + 1
+			elseif string.find(nom, "Queue", 1, true) or commencePar(nom, "Massue") then
+				table.insert(queue, { part = p, repos = repos })
+			elseif commencePar(nom, "Aile") and coteDe(nom) then
+				table.insert(ailes[coteDe(nom)], { part = p, repos = repos })
+			end
+		end
+
+		for _, p in ipairs(parts) do
+			local cote = coteDe(p.Name)
+			if cote and not PATTES[p.Name] then
+				local accessoire = false
+				for _, prefixe in ipairs(ACCESSOIRES) do
+					if commencePar(p.Name, prefixe) then
+						accessoire = true
+						break
+					end
+				end
+				if accessoire then
+					local repos = poses[p]
+					local meilleur, meilleureDistance = nil, math.huge
+					for _, g in pairs(pattes) do
+						if g.cote == cote then
+							local d = distanceSegment(repos.Position, g.haut, g.bas)
+							if d <= g.portee and d < meilleureDistance then
+								meilleur, meilleureDistance = g, d
+							end
+						end
+					end
+					if meilleur then
+						table.insert(meilleur.membres, { part = p, repos = repos })
+					end
+				end
+			end
+		end
+
+		if #queue > 0 then
+			local racine = queue[1]
+			for _, q in ipairs(queue) do
+				if q.part.Name == "Queue" then
+					racine = q
+					break
+				end
+				if q.repos.Position.Z < racine.repos.Position.Z then racine = q end
+			end
+			local a, b = extremites(racine.repos, racine.part.Size)
+			local point = a
+			if b.Z < a.Z then point = b end
+			local g = nouveauGroupe("queue", point)
+			g.membres = queue
+			table.insert(groupes, g)
+		end
+
+		for _, cote in ipairs({ "G", "D" }) do
+			local liste = ailes[cote]
+			if #liste > 0 then
+				local racine = liste[1]
+				for _, a in ipairs(liste) do
+					if a.part.Name == "Aile" .. cote then
+						racine = a
+						break
+					end
+				end
+				local a, b = extremites(racine.repos, racine.part.Size)
+				local point = a
+				if math.abs(b.X) < math.abs(a.X) then point = b end
+				local g = nouveauGroupe("aile", point, 0, cote)
+				g.membres = liste
+				table.insert(groupes, g)
+			end
+		end
+
+		-- cadence : les grands dinos font de grands pas lents, les petits trottinent
+		local corps = dino.PrimaryPart or dino:FindFirstChild("Corps")
+		if hauteurPatte <= 0 then
+			hauteurPatte = (corps and corps:IsA("BasePart") and corps.Size.Y) or 2
+		end
+		hauteurPatte = math.max(0.8, hauteurPatte)
+		local frequence = math.max(FREQUENCE_MIN, math.min(FREQUENCE_MAX, VITESSE / (hauteurPatte * 0.55)))
+		local ecart = 0
+		if nombrePattes > 0 then
+			ecart = ecartPattes / nombrePattes
+		elseif corps and corps:IsA("BasePart") then
+			ecart = corps.Size.X / 4
+		end
+		return {
+			groupes = groupes,
+			frequence = frequence,
+			echelle = math.max(0.6, math.min(2.5, hauteurPatte / 2)),
+			ecart = math.max(0.35, ecart),
+			phase = 0,
+		}
+	end
+
+	-- pose les membres autour du pivot cf
+	local function animerMembres(cf, anim)
+		local base = anim.phase
+		for _, g in ipairs(anim.groupes) do
+			local rotation
+			if g.genre == "patte" then
+				rotation = CFrame.Angles(math.sin(base + g.decal) * MARCHE_ANGLE, 0, 0)
+			elseif g.genre == "queue" then
+				rotation = CFrame.Angles(0, math.sin(base - QUEUE_RETARD) * QUEUE_ANGLE, 0)
+			else
+				local battement = math.sin(base * AILE_RYTHME) * AILE_ANGLE
+				if g.cote == "G" then battement = -battement end
+				rotation = CFrame.Angles(0, 0, battement)
+			end
+			local m = cf * g.avant * rotation * g.apres
+			for _, membre in ipairs(g.membres) do
+				membre.part.CFrame = m * membre.repos
+			end
+		end
+	end
+
+	-- remet les membres au repos autour du pivot actuel
+	local function reposerMembres(dino, anim)
+		if not anim or not anim.groupes or not vivant(dino) then return end
+		local cf = pivotDe(dino)
+		if not cf then return end
+		for _, g in ipairs(anim.groupes) do
+			for _, membre in ipairs(g.membres) do
+				if membre.part.Parent then
+					membre.part.CFrame = cf * membre.repos
+				end
+			end
+		end
+	end
+
+	-- ===== traces de pas : empreintes au sol et poussière =====
+	local function sequence(points)
+		local cles = {}
+		for _, pt in ipairs(points) do
+			table.insert(cles, NumberSequenceKeypoint.new(pt[1], pt[2]))
+		end
+		return NumberSequence.new(cles)
+	end
+
+	local function nouvelleAttache(corps, nom, cfLocal)
+		local a = Instance.new("Attachment")
+		a.Name = nom
+		a.CFrame = cfLocal
+		a.Parent = corps
+		return a
+	end
+
+	local function poserTraces(dino, anim)
+		local corps = dino.PrimaryPart or dino:FindFirstChild("Corps")
+		local pivot = pivotDe(dino)
+		if not corps or not corps:IsA("BasePart") or not pivot then return nil end
+		local k = anim.echelle
+		local attaches = {}
+
+		-- poussière : petits nuages sable qui montent derrière le dino
+		local sol = nouvelleAttache(corps, "PoussiereMarche", corps.CFrame:ToObjectSpace(pivot * CFrame.new(0, 0.15, 0)))
+		table.insert(attaches, sol)
+		local poussiere = Instance.new("ParticleEmitter")
+		poussiere.Name = "Poussiere"
+		poussiere.Texture = TEXTURE_POUSSIERE
+		poussiere.Color = ColorSequence.new(Charte.sable, Charte.creme)
+		poussiere.LightInfluence = 0.8
+		poussiere.LightEmission = 0
+		poussiere.Size = sequence({ { 0, 0.35 * k }, { 0.3, 0.95 * k }, { 1, 1.6 * k } })
+		poussiere.Transparency = sequence({ { 0, 0.55 }, { 0.25, 0.45 }, { 1, 1 } })
+		poussiere.Lifetime = NumberRange.new(0.45, 0.8)
+		poussiere.Rate = 7 + 3 * k
+		poussiere.Speed = NumberRange.new(1.2, 2.8)
+		poussiere.SpreadAngle = Vector2.new(70, 70)
+		poussiere.Acceleration = Vector3.new(0, 1.5, 0)
+		poussiere.Drag = 3
+		poussiere.Rotation = NumberRange.new(0, 360)
+		poussiere.RotSpeed = NumberRange.new(-40, 40)
+		poussiere.Parent = sol
+
+		-- empreintes : taches sombres posées à plat, une ligne par côté, qui s'effacent
+		local pasParSeconde = anim.frequence / math.pi
+		for _, sx in ipairs({ -1, 1 }) do
+			local cote = "G"
+			if sx > 0 then cote = "D" end
+			local pied = nouvelleAttache(corps, "EmpreintesMarche" .. cote, corps.CFrame:ToObjectSpace(pivot * CFrame.new(sx * anim.ecart, 0.06, 0)))
+			table.insert(attaches, pied)
+			local e = Instance.new("ParticleEmitter")
+			e.Name = "Empreintes"
+			e.Texture = TEXTURE_POUSSIERE
+			e.Color = ColorSequence.new(Charte.ombre(Charte.terre))
+			e.LightInfluence = 1
+			e.LightEmission = 0
+			e.Size = NumberSequence.new(0.5 * k)
+			e.Transparency = sequence({ { 0, 0.3 }, { 0.6, 0.45 }, { 1, 1 } })
+			e.Lifetime = NumberRange.new(1.3, 1.7)
+			e.Rate = pasParSeconde / 2
+			e.Speed = NumberRange.new(0.01)
+			e.EmissionDirection = Enum.NormalId.Bottom
+			e.SpreadAngle = Vector2.new(0, 0)
+			e.Rotation = NumberRange.new(0, 360)
+			pcall(function()
+				-- perpendiculaire à la vitesse (vers le bas) : la tache reste couchée sur le sol
+				e.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+			end)
+			e.Parent = pied
+		end
+		return attaches
+	end
+
+	-- coupe l'émission et laisse les dernières particules s'effacer
+	local function retirerTraces(anim)
+		if not anim or not anim.traces then return end
+		for _, a in ipairs(anim.traces) do
+			for _, e in ipairs(a:GetChildren()) do
+				if e:IsA("ParticleEmitter") then e.Enabled = false end
+			end
+			Debris:AddItem(a, DUREE_TRACES)
+		end
+		anim.traces = nil
+	end
+
+	local function preparerAnimation(dino)
+		local ok, anim = pcall(analyserMembres, dino)
+		if not ok or not anim then return nil end
+		local okTraces, traces = pcall(poserTraces, dino, anim)
+		if okTraces then anim.traces = traces end		return anim
+	end
+
 	-- ===== la marche vers la Base =====
 	local function arreterMarche(m)
 		m.fini = true
+		if m.anim then
+			pcall(reposerMembres, m.dino, m.anim)
+			pcall(retirerTraces, m.anim)
+			m.anim = nil
+		end
 		pcall(demarquerAcheteur, m.dino)
 	end
 
@@ -187,12 +601,41 @@ function M.demarrer(ctx)
 			etapes = { entree, cfFin.Position },
 			etape = 1,
 			cfFin = cfFin,
-			regard = depart.LookVector,
+			regard = Vector3.new(depart.LookVector.X, 0, depart.LookVector.Z),
 			fini = false,
 		}
+		if m.regard.Magnitude < 0.05 then
+			m.regard = Vector3.new(0, 0, -1)
+		else
+			m.regard = m.regard.Unit
+		end
+		m.anim = preparerAnimation(dino)
 		table.insert(marcheurs, m)
 		pcall(marquerAcheteur, dino, joueur)
 		return true
+	end
+
+	-- oriente le regard vers le cap en douceur (virage à l'entrée de la Base)
+	local function tourner(m, cap, dt)
+		local t = math.min(1, dt * VIRAGE)
+		local r = m.regard + (cap - m.regard) * t
+		if r.Magnitude < 0.05 then
+			-- demi-tour exact : on pivote d'un quart vers la droite pour ne pas s'arrêter
+			r = m.regard:Cross(Vector3.new(0, 1, 0))
+		end
+		m.regard = r.Unit
+	end
+
+	-- cadre du pivot pendant la marche : sautillement et roulis au rythme des pas
+	local function cadreMarche(m)
+		local anim = m.anim
+		if not anim then
+			return CFrame.lookAt(m.position, m.position + m.regard)
+		end
+		local oscillation = math.sin(anim.phase)
+		local hauteur = math.abs(oscillation) * DANDINEMENT_HAUTEUR * anim.echelle
+		local p = m.position + Vector3.new(0, hauteur, 0)
+		return CFrame.lookAt(p, p + m.regard) * CFrame.Angles(0, 0, oscillation * DANDINEMENT_ANGLE)
 	end
 
 	local function avancer(m, dt)
@@ -207,13 +650,14 @@ function M.demarrer(ctx)
 			return
 		end
 		local reste = VITESSE * dt
+		local cap = nil
 		while reste > 0 and not m.fini do
 			local cible = m.etapes[m.etape]
 			local ecart = cible - m.position
 			local distance = ecart.Magnitude
 			local plat = Vector3.new(ecart.X, 0, ecart.Z)
 			if plat.Magnitude > 0.05 then
-				m.regard = plat.Unit
+				cap = plat.Unit
 			end
 			if distance <= reste then
 				m.position = cible
@@ -229,8 +673,20 @@ function M.demarrer(ctx)
 				reste = 0
 			end
 		end
-		local cf = CFrame.lookAt(m.position, m.position + m.regard)
+		if cap then tourner(m, cap, dt) end
+		if m.anim then
+			m.anim.phase = (m.anim.phase + dt * m.anim.frequence) % (math.pi * 4)
+		end
+		local cf = cadreMarche(m)
 		pcall(function() m.dino:PivotTo(cf) end)
+		if m.anim and #m.anim.groupes > 0 then
+			local ok = pcall(animerMembres, cf, m.anim)
+			if not ok then
+				-- animation impossible : le dino finit sa route sans bouger les membres
+				pcall(reposerMembres, m.dino, m.anim)
+				m.anim.groupes = {}
+			end
+		end
 	end
 
 	RunService.Heartbeat:Connect(function(dt)

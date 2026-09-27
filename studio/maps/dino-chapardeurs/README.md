@@ -6,7 +6,18 @@ un contrat commun ([`CONTRAT.md`](CONTRAT.md)). Tout le monde est construit par
 script au lancement : aucun modèle à importer.
 
 ![Le Tapis et les bases](captures/tapis-et-bases.png)
+![Monde avant / après le rendu pro](captures/avant-apres-monde.png)
+![Les dinos sur le Tapis](captures/dinos.png)
 ![Interface avant / après le restylage](captures/avant-apres-interface.png)
+
+## ✨ Rendu professionnel (v2)
+
+Terrain Roblox pour la nature (herbe, falaises, rivière, volcan), vrais
+matériaux sur les constructions (bois, tissu, métal, béton, pierre), éclairage
+`Future` avec ombres, reflets, atmosphère et halo, dinos aux formes organiques
+avec animation de marche. Chaque agent a photographié son travail
+(`outils/photo.mjs`), puis 5 directeurs artistiques ont critiqué l'ensemble
+sur photos et les auteurs ont retouché (40 défauts corrigés).
 
 ## 🎨 Style « simulateur Roblox »
 

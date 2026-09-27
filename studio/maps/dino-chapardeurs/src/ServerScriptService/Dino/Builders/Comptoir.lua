@@ -1,13 +1,13 @@
--- Constructeur Comptoir : la cabane-boutique d'explorateur, au sud-ouest de la Place.
--- Plancher de bois, mur du fond en rondins, toit de palmes en pente vers la Place, enseigne « BOUTIQUE »,
--- comptoir portant l'invite « Boutique » (ouverte côté client), vitrines des objets de Equilibrage.boutique
--- en maquettes de blocs, et un marchand jouet en casque colonial.
--- Look « simulateur » (STYLE.md) : cabane cartoon orange et jaune vif, auvent rayé, titre flottant géant
--- « 🛒 BOUTIQUE » cerné de noir (Style.etiquette), nom et prix de chaque vitrine en étiquette flottante.
+-- Constructeur Comptoir : la cabane-boutique d'explorateur, au sud-ouest de la Place (version 2, rendu « pro »).
+-- Cabane en rondins (Wood) sur un plancher de WoodPlanks posé sur un socle de pierre, toit de palmes à deux
+-- pentes en couches superposées (pignon et enseigne « BOUTIQUE » tournés vers la Place), fenêtres à volets,
+-- véranda couverte d'un auvent en Fabric rayé orange et crème à lambrequin festonné, comptoir en bois verni
+-- portant l'invite « Boutique » (ouverte côté client), étagères garnies, lanternes à vraie lumière, vitrines
+-- rondes des objets de Equilibrage.boutique et un marchand jouet en casque colonial.
 -- Emprise (CONTRAT §10) : 26 x 18 autour de Plan.comptoir.centre, ouverte vers +X (la Place).
 local M = {}
 
-local BUDGET = 250 -- parts au maximum pour ce constructeur
+local BUDGET = 260 -- parts au maximum pour ce constructeur
 
 function M.construire(ctx)
 	local Charte = ctx.Charte
@@ -15,19 +15,34 @@ function M.construire(ctx)
 	local Plan = ctx.Plan
 	local E = ctx.Equilibrage or {}
 	local dossier = ctx.dossier
+	local Style = ctx.Style
 
 	-- emprise
 	local infoComptoir = Plan.comptoir or {}
 	local CENTRE = infoComptoir.centre or Vector3.new(-50, 0, 104)
 	local CX, CZ = CENTRE.X, CENTRE.Z
-	local DEMI_X = 13 -- 26 / 2
-	local DEMI_Z = 9  -- 18 / 2
-	local SOL = 0.6    -- dessus du plancher
+	local SOL = 0.8 -- dessus du plancher
 
-	-- couleurs (toutes dérivées de la Charte)
+	-- matériaux
+	local M_BOIS = Enum.Material.Wood
+	local M_PLANCHES = Enum.Material.WoodPlanks
+	local M_TISSU = Enum.Material.Fabric
+	local M_PALMES = Enum.Material.LeafyGrass
+	local M_METAL = Enum.Material.Metal
+	local M_VERRE = Enum.Material.Glass
+	local M_NEON = Enum.Material.Neon
+
+	-- couleurs (toutes dérivées de la Charte) : trois teintes par couleur
 	local BOIS = Charte.bois
 	local BOIS_OMBRE = Charte.ombre(Charte.bois)
 	local BOIS_CLAIR = Charte.lumiere(Charte.bois)
+	local RONDIN_A = Charte.bois:Lerp(Charte.terre, 0.3)
+	local RONDIN_B = Charte.bois:Lerp(Charte.terre, 0.1)
+	local PLANCHER = Charte.terre:Lerp(Charte.bois, 0.35)
+	local VERNIS = Charte.ombre(Charte.bois:Lerp(Charte.lave, 0.18))
+	local VERNIS_CLAIR = Charte.bois:Lerp(Charte.lave, 0.22)
+	local PIERRE = Charte.lumiere(Charte.pierre)
+	local METAL = Charte.encre:Lerp(Charte.pierre, 0.45)
 	local SABLE = Charte.sable
 	local KAKI = Charte.sable:Lerp(Charte.terre, 0.45)
 	local PEAU = Charte.creme:Lerp(Charte.terre, 0.35)
@@ -35,15 +50,11 @@ function M.construire(ctx)
 	local ENCRE = Charte.encre
 	local DORE = Charte.dore
 	local PALME = Charte.jungle
-	local PALME_CLAIRE = Charte.herbe
+	local PALME_CLAIRE = Charte.jungle:Lerp(Charte.herbe, 0.55)
 	local PALME_OMBRE = Charte.ombre(Charte.jungle)
-	-- couleurs cartoon de la boutique (orange = boutique, jaune = argent)
 	local ORANGE = Charte.lave
 	local ORANGE_OMBRE = Charte.ombre(Charte.lave)
-	local JAUNE = Charte.dore
-	local JAUNE_CLAIR = Charte.lumiere(Charte.dore)
-
-	local Style = ctx.Style
+	local TERRE_CUITE = Charte.terre:Lerp(Charte.lave, 0.3)
 
 	-- ===== outils locaux =====
 	local compte = 0
@@ -73,10 +84,14 @@ function M.construire(ctx)
 		return p
 	end
 
-	-- décor sans collision (petits objets)
-	local LEGER = { CanCollide = false, CanQuery = false, CanTouch = false }
-	local function leger(extra)
-		local t = { CanCollide = false, CanQuery = false, CanTouch = false }
+	-- propriétés : matériau, sans collision si leger vaut true, plus des extras
+	local function mat(materiau, leger, extra)
+		local t = { Material = materiau }
+		if leger then
+			t.CanCollide = false
+			t.CanQuery = false
+			t.CanTouch = false
+		end
 		if extra then
 			for cle, valeur in pairs(extra) do
 				t[cle] = valeur
@@ -105,6 +120,9 @@ function M.construire(ctx)
 		local etiquette = ecrire(part, face, texte, { couleur = couleur, pixelsParStud = pixelsParStud })
 		if etiquette and Style then
 			Style.contour(etiquette, epaisseur or 4)
+			if Style.policeTitre then
+				etiquette.Font = Style.policeTitre
+			end
 		end
 		return etiquette
 	end
@@ -121,278 +139,291 @@ function M.construire(ctx)
 		return nil, {}
 	end
 
-	local VERTICAL = CFrame.Angles(0, 0, math.rad(90)) -- oriente l'axe d'un cylindre à la verticale
+	local function lumiere(part, portee, eclat)
+		if not part then
+			return
+		end
+		pcall(function()
+			local l = Outils.lumiere(part, { Range = portee, Brightness = eclat, Color = Charte.lumiere(DORE) })
+			l.Shadows = true
+		end)
+	end
+
+	local VERTICAL = CFrame.Angles(0, 0, math.rad(90)) -- axe d'un cylindre à la verticale
+	local LE_LONG_DE_Z = CFrame.Angles(0, math.rad(90), 0) -- axe d'un cylindre le long de Z
+
+	-- rondins (cylindres Wood)
+	local function rondinX(parent, nom, x0, x1, y, z, diametre, couleur)
+		return piece(parent, "cylindre", nom, Vector3.new(x1 - x0, diametre, diametre),
+			CFrame.new(CX + (x0 + x1) / 2, y, CZ + z), couleur, mat(M_BOIS))
+	end
+	local function rondinZ(parent, nom, z0, z1, y, x, diametre, couleur)
+		return piece(parent, "cylindre", nom, Vector3.new(z1 - z0, diametre, diametre),
+			CFrame.new(CX + x, y, CZ + (z0 + z1) / 2) * LE_LONG_DE_Z, couleur, mat(M_BOIS))
+	end
+	local function rondinV(parent, nom, x, z, y0, y1, diametre, couleur)
+		return piece(parent, "cylindre", nom, Vector3.new(y1 - y0, diametre, diametre),
+			CFrame.new(CX + x, (y0 + y1) / 2, CZ + z) * VERTICAL, couleur, mat(M_BOIS))
+	end
+
+	-- lanterne suspendue : chaînette, chapeau, verre, flamme lumineuse, culot (5 parts)
+	local function lanterne(parent, x, yAccroche, z, longueurChaine)
+		local px, pz = CX + x, CZ + z
+		local yChapeau = yAccroche - longueurChaine
+		piece(parent, "bloc", "Chainette", Vector3.new(0.1, longueurChaine, 0.1),
+			CFrame.new(px, yAccroche - longueurChaine / 2, pz), METAL, mat(M_METAL, true))
+		piece(parent, "cylindre", "ChapeauLanterne", Vector3.new(0.3, 0.9, 0.9),
+			CFrame.new(px, yChapeau - 0.15, pz) * VERTICAL, METAL, mat(M_METAL, true))
+		piece(parent, "bloc", "VerreLanterne", Vector3.new(0.7, 0.9, 0.7),
+			CFrame.new(px, yChapeau - 0.75, pz), Charte.lumiere(DORE), mat(M_VERRE, true, { Transparency = 0.45 }))
+		local flamme = piece(parent, "boule", "Flamme", Vector3.new(0.38, 0.38, 0.38),
+			CFrame.new(px, yChapeau - 0.75, pz), DORE, mat(M_NEON, true))
+		piece(parent, "cylindre", "CulotLanterne", Vector3.new(0.2, 0.8, 0.8),
+			CFrame.new(px, yChapeau - 1.3, pz) * VERTICAL, METAL, mat(M_METAL, true))
+		lumiere(flamme, 16, 1.4)
+	end
 
 	local cabane = Outils.modele(dossier, "Cabane")
 	local modeleComptoir = Outils.modele(dossier, "Comptoir")
 	local vitrines = Outils.modele(dossier, "Vitrines")
 	local marchand = Outils.modele(dossier, "Marchand")
 
-	-- ===== 1. plancher =====
-	local xFondPlancher = CX - DEMI_X
-	local xAvantPlancher = CX + 11
-	local longueurPlancher = xAvantPlancher - xFondPlancher
-	piece(cabane, "bloc", "Plancher", Vector3.new(longueurPlancher, SOL, 16),
-		CFrame.new((xFondPlancher + xAvantPlancher) / 2, SOL / 2, CZ), BOIS_CLAIR)
-	-- lattes
-	for i = 1, 5 do
-		local x = xFondPlancher + i * longueurPlancher / 6
-		piece(cabane, "bloc", "Latte", Vector3.new(0.15, 0.05, 16), CFrame.new(x, SOL + 0.02, CZ), BOIS, LEGER)
+	-- ===== 1. plancher de planches sur socle de pierre, marches, tapis =====
+	local xFondPlancher = -12.6
+	local xAvantPlancher = 11
+	if compte + 2 <= BUDGET then
+		Outils.dalleBordee(cabane, {
+			Name = "Plancher",
+			Size = Vector3.new(xAvantPlancher - xFondPlancher, SOL, 16.6),
+			CFrame = CFrame.new(CX + (xFondPlancher + xAvantPlancher) / 2, SOL / 2, CZ),
+			Color = PLANCHER,
+			Material = M_PLANCHES,
+			MaterialBord = Enum.Material.Cobblestone,
+		}, 0.35, PIERRE)
+		compte = compte + 2
 	end
-	-- marche d'accès face à la Place
-	piece(cabane, "bloc", "Marche", Vector3.new(1, 0.3, 7), CFrame.new(xAvantPlancher + 0.5, 0.15, CZ), BOIS)
+	-- deux marches face à la Place
+	piece(cabane, "bloc", "Marche", Vector3.new(0.8, 0.55, 8), CFrame.new(CX + 11.75, 0.275, CZ), BOIS_CLAIR, mat(M_PLANCHES))
+	piece(cabane, "bloc", "Marche", Vector3.new(0.8, 0.3, 8), CFrame.new(CX + 12.55, 0.15, CZ), PLANCHER, mat(M_PLANCHES))
+	-- tapis d'accueil devant le comptoir
+	piece(cabane, "bloc", "TapisBord", Vector3.new(3.2, 0.06, 6.4), CFrame.new(CX + 9.3, SOL + 0.03, CZ), CREME, mat(M_TISSU, true))
+	piece(cabane, "bloc", "Tapis", Vector3.new(2.7, 0.08, 5.9), CFrame.new(CX + 9.3, SOL + 0.05, CZ), ORANGE, mat(M_TISSU, true))
 
 	-- ===== 2. murs de rondins =====
-	-- mur du fond : rondins verticaux
-	local xFond = CX - 12.4
-	local hauteurFond = 12
-	local nbRondins = 13
-	for i = 0, nbRondins - 1 do
-		local z = CZ - 7.2 + i * 1.2
-		local couleur = BOIS
-		if i % 2 == 1 then
-			couleur = BOIS_OMBRE
-		end
-		piece(cabane, "cylindre", "RondinFond", Vector3.new(hauteurFond, 1.2, 1.2),
-			CFrame.new(xFond, SOL + hauteurFond / 2, z) * VERTICAL, couleur)
+	local D = 1.2 -- diamètre des rondins
+	local NIVEAUX = 7
+	local xMurFond = -12
+	local zMur = 7.6
+	local xFacade = -1.8
+	local function yNiveau(k)
+		return SOL + D / 2 + k * D
 	end
-	-- murs latéraux : rondins couchés (axe X), à mi-hauteur pour laisser voir l'intérieur
-	local xDebutCote = CX - 12
-	local xFinCote = CX - 3.6
-	local longueurCote = xFinCote - xDebutCote
+	local yHautMur = SOL + NIVEAUX * D -- 9.2
+	-- mur du fond : rondins couchés le long de Z, qui dépassent aux angles
+	for k = 0, NIVEAUX - 1 do
+		local couleur = RONDIN_A
+		if k % 2 == 1 then
+			couleur = RONDIN_B
+		end
+		rondinZ(cabane, "RondinFond", -8.6, 8.6, yNiveau(k), xMurFond, D, couleur)
+	end
+	-- murs latéraux : rondins le long de X, avec une fenêtre au milieu (niveaux 3 à 5)
+	local xFenetre0, xFenetre1 = -9.2, -5.6
 	for _, signe in ipairs({ -1, 1 }) do
-		local z = CZ + signe * 7.4
-		for k = 0, 4 do
-			local couleur = BOIS
+		local z = signe * zMur
+		for k = 0, NIVEAUX - 1 do
+			local couleur = RONDIN_B
 			if k % 2 == 1 then
-				couleur = BOIS_OMBRE
+				couleur = RONDIN_A
 			end
-			piece(cabane, "cylindre", "RondinCote", Vector3.new(longueurCote, 1.2, 1.2),
-				CFrame.new((xDebutCote + xFinCote) / 2, SOL + 0.6 + k * 1.2, z), couleur)
+			if k >= 3 and k <= 5 then
+				rondinX(cabane, "RondinCote", -13, xFenetre0, yNiveau(k), z, D, couleur)
+				rondinX(cabane, "RondinCote", xFenetre1, xFacade + 0.3, yNiveau(k), z, D, couleur)
+			else
+				rondinX(cabane, "RondinCote", -13, xFacade + 0.3, yNiveau(k), z, D, couleur)
+			end
+		end
+		-- appui de fenêtre et volets orange ouverts contre le mur
+		local ySeuil = yNiveau(3) - D / 2
+		piece(cabane, "bloc", "Appui", Vector3.new(xFenetre1 - xFenetre0 + 0.6, 0.25, 1.7),
+			CFrame.new(CX + (xFenetre0 + xFenetre1) / 2, ySeuil + 0.12, CZ + z), BOIS_CLAIR, mat(M_PLANCHES))
+		local hFenetre = 3 * D
+		for _, cote in ipairs({ -1, 1 }) do
+			local xBord = xFenetre0
+			if cote == 1 then
+				xBord = xFenetre1
+			end
+			piece(cabane, "bloc", "Volet", Vector3.new(1.4, hFenetre - 0.2, 0.15),
+				CFrame.new(CX + xBord + cote * 0.8, ySeuil + hFenetre / 2, CZ + signe * (zMur + D / 2 + 0.2))
+					* CFrame.Angles(0, math.rad(12 * cote * signe), 0),
+				ORANGE_OMBRE, mat(M_PLANCHES, true))
 		end
 	end
-
-	-- ===== 3. toit de palmes en pente vers la Place =====
-	local xToitFond = CX - 12.8
-	local xToitAvant = CX + 12.8
-	local yToitFond = 13.2
-	local yToitAvant = 9.2
-	local chute = yToitFond - yToitAvant
-	local portee = xToitAvant - xToitFond
-	local angle = math.atan(chute / portee)
-	local pente = CFrame.Angles(0, 0, -angle)
-	local function yToit(x)
-		return yToitFond - chute * (x - xToitFond) / portee
-	end
-
-	-- poteaux : deux à l'avant (sur le sol), deux au bout des murs latéraux
-	local xPoteauAvant = CX + 12
+	-- jardinière fleurie sous la fenêtre sud
+	local yJardiniere = yNiveau(3) - D / 2 - 0.45
+	piece(cabane, "bloc", "Jardiniere", Vector3.new(3.4, 0.7, 0.7),
+		CFrame.new(CX + (xFenetre0 + xFenetre1) / 2, yJardiniere, CZ + zMur + D / 2 + 0.35), BOIS_OMBRE, mat(M_PLANCHES, true))
+	piece(cabane, "boule", "Fleurs", Vector3.new(1, 1, 1),
+		CFrame.new(CX + xFenetre0 + 1, yJardiniere + 0.45, CZ + zMur + D / 2 + 0.35), Charte.alerte, mat(Enum.Material.Grass, true))
+	piece(cabane, "boule", "Fleurs", Vector3.new(1, 1, 1),
+		CFrame.new(CX + xFenetre1 - 1, yJardiniere + 0.45, CZ + zMur + D / 2 + 0.35), DORE, mat(Enum.Material.Grass, true))
+	-- façade : deux poteaux d'angle et une poutre de linteau
 	for _, signe in ipairs({ -1, 1 }) do
-		local z = CZ + signe * 8.3
-		local h = yToit(xPoteauAvant) - 0.2
-		piece(cabane, "bloc", "PoteauAvant", Vector3.new(0.8, h, 0.8), CFrame.new(xPoteauAvant, h / 2, z), ORANGE)
-		local hc = yToit(xFinCote) - 0.2 - SOL
-		piece(cabane, "bloc", "PoteauCote", Vector3.new(0.8, hc, 0.8), CFrame.new(xFinCote, SOL + hc / 2, CZ + signe * 7.4), ORANGE)
+		rondinV(cabane, "PoteauFacade", xFacade, signe * zMur, SOL, yHautMur, D, RONDIN_B)
 	end
-	-- poutre avant
-	local yPoutre = yToit(xPoteauAvant) - 0.5
-	piece(cabane, "bloc", "PoutreAvant", Vector3.new(0.8, 0.6, 17.2), CFrame.new(xPoteauAvant, yPoutre, CZ), JAUNE)
-	-- chevrons sous le toit
-	for _, dz in ipairs({ -7.4, 0, 7.4 }) do
-		piece(cabane, "bloc", "Chevron", Vector3.new(portee, 0.4, 0.5),
-			CFrame.new((xToitFond + xToitAvant) / 2, (yToitFond + yToitAvant) / 2 - 0.45, CZ + dz) * pente, BOIS_OMBRE, LEGER)
-	end
-	-- auvent rayé orange et jaune (bandes qui se chevauchent)
-	local nbBandes = 6
-	local longueurPente = math.sqrt(portee * portee + chute * chute)
-	local longueurBande = longueurPente / nbBandes * 1.08
-	for i = 1, nbBandes do
-		local t = (i - 0.5) / nbBandes
-		local x = xToitFond + portee * t
-		local decalage = 0
-		local couleur = ORANGE
-		if i % 2 == 0 then
-			decalage = 0.15
-			couleur = JAUNE_CLAIR
+	rondinZ(cabane, "Linteau", -8.6, 8.6, yNiveau(NIVEAUX - 1), xFacade, D, RONDIN_A)
+
+	-- ===== 3. toit de palmes à deux pentes, en couches =====
+	local PENTE = math.rad(35)
+	local tanPente = math.tan(PENTE)
+	local yFaitage = yHautMur + 0.05 + zMur * tanPente -- ligne de faîtage (dessous des palmes)
+	local DEBORD = 8.9 -- demi-largeur du toit (bord de l'emprise)
+	local longueurPente = DEBORD / math.cos(PENTE)
+	local xToit0, xToit1 = -13, -0.6
+	local longueurToit = xToit1 - xToit0
+	local xToit = CX + (xToit0 + xToit1) / 2
+	local ORIGINE_TOIT = CFrame.new(xToit, yFaitage, CZ)
+	local COUCHES = 4
+	local couleursCouches = { PALME_CLAIRE, PALME, PALME_CLAIRE:Lerp(PALME, 0.5), PALME_OMBRE }
+	for _, signe in ipairs({ -1, 1 }) do
+		local incline = ORIGINE_TOIT * CFrame.Angles(signe * PENTE, 0, 0)
+		for i = 1, COUCHES do
+			-- les couches du haut recouvrent celles du bas (comme des bardeaux)
+			local bas = i * longueurPente / COUCHES - 0.3
+			local hautCouche = (i - 1) * longueurPente / COUCHES - 0.9
+			local s = (bas + hautCouche) / 2
+			local h = 0.35 + (COUCHES - i) * 0.16
+			piece(cabane, "bloc", "Palmes", Vector3.new(longueurToit, 0.7, bas - hautCouche),
+				incline * CFrame.new(0, h, signe * s), couleursCouches[i], mat(M_PALMES))
+			-- frange effilée qui retombe sous le bord de la couche
+			piece(cabane, "bloc", "Frange", Vector3.new(longueurToit + 0.1, 0.16, 0.9),
+				incline * CFrame.new(0, h - 0.12, signe * (bas - 0.25)) * CFrame.Angles(signe * math.rad(32), 0, 0) * CFrame.new(0, 0, signe * 0.4),
+				Charte.ombre(couleursCouches[i]), mat(M_PALMES, true))
 		end
-		piece(cabane, "bloc", "Palmes", Vector3.new(longueurBande, 0.6, 2 * DEMI_Z),
-			CFrame.new(x, yToit(x) + decalage, CZ) * pente, couleur)
+		-- planche de rive le long du pignon avant
+		piece(cabane, "bloc", "Rive", Vector3.new(0.3, 0.7, longueurPente),
+			incline * CFrame.new(longueurToit / 2 + 0.1, 0.1, signe * (longueurPente / 2 - 0.2)), BOIS_OMBRE, mat(M_BOIS, true))
 	end
-	-- frange festonnée qui pend à l'avant, orange et jaune
-	for i = 0, 9 do
-		local z = CZ - 8.1 + i * 1.8
-		local couleur = JAUNE
-		if i % 2 == 1 then
-			couleur = ORANGE
+	-- faîtage en rondin et palmes croisées en crête
+	local yCrete = yFaitage + 1.05
+	rondinX(cabane, "Faitage", xToit0, xToit1 + 0.2, yCrete, 0, 0.9, BOIS_OMBRE)
+	for _, dx in ipairs({ xToit0 + 1.4, xToit1 - 1.4 }) do
+		for _, signe in ipairs({ -1, 1 }) do
+			piece(cabane, "bloc", "Crete", Vector3.new(1.6, 0.14, 3.2),
+				CFrame.new(CX + dx, yCrete + 0.55, CZ) * CFrame.Angles(signe * math.rad(55), 0, 0) * CFrame.new(0, 0, signe * 0.9),
+				PALME_OMBRE, mat(M_PALMES, true))
 		end
-		piece(cabane, "bloc", "Frange", Vector3.new(0.2, 1.4, 1.6),
-			CFrame.new(xToitAvant - 0.3, yToitAvant - 0.6, z) * CFrame.Angles(0, 0, math.rad(-12)), couleur, LEGER)
 	end
-	-- palmes en éventail sur le haut du toit
-	for i = 0, 3 do
-		local z = CZ - 5.4 + i * 3.6
-		local sens = 1
-		if i % 2 == 1 then
-			sens = -1
-		end
-		piece(cabane, "bloc", "Eventail", Vector3.new(4, 0.25, 1.2),
-			CFrame.new(xToitFond + 2.4, yToitFond + 0.7, z) * CFrame.Angles(math.rad(12 * sens), math.rad(25 * sens), math.rad(18)), PALME_CLAIRE, LEGER)
-		piece(cabane, "bloc", "Eventail", Vector3.new(3.4, 0.25, 1),
-			CFrame.new(xToitFond + 2.2, yToitFond + 0.9, z + 0.6 * sens) * CFrame.Angles(0, math.rad(-35 * sens), math.rad(28)), PALME, LEGER)
+	-- pignons en planches (avant et arrière)
+	local hPignon = yFaitage - yHautMur - 0.1
+	local demiPignon = hPignon / tanPente
+	for _, x in ipairs({ xFacade, xMurFond }) do
+		piece(cabane, "coin", "Pignon", Vector3.new(0.4, hPignon, demiPignon),
+			CFrame.new(CX + x, yHautMur + hPignon / 2, CZ - demiPignon / 2), BOIS_CLAIR, mat(M_PLANCHES))
+		piece(cabane, "coin", "Pignon", Vector3.new(0.4, hPignon, demiPignon),
+			CFrame.new(CX + x, yHautMur + hPignon / 2, CZ + demiPignon / 2) * CFrame.Angles(0, math.pi, 0), BOIS_CLAIR, mat(M_PLANCHES))
 	end
 
-	-- ===== 4. enseigne « BOUTIQUE » tournée vers la Place =====
-	local ySigne = yToitAvant + 2
-	local xSigne = CX + 12.1
-	piece(cabane, "bloc", "SupportEnseigne", Vector3.new(0.4, 3.4, 12.6), CFrame.new(xSigne, ySigne, CZ), ORANGE_OMBRE)
-	local planche = piece(cabane, "bloc", "Enseigne", Vector3.new(0.15, 2.6, 11.6), CFrame.new(xSigne + 0.27, ySigne, CZ), ORANGE)
+	-- ===== 4. véranda : auvent rayé orange et crème =====
+	local xA0, yA0 = -1.2, yHautMur
+	local xA1, yA1 = 10.9, 7.6
+	local portee = xA1 - xA0
+	local chute = yA0 - yA1
+	local angle = math.atan(chute / portee)
+	local longueurAuvent = math.sqrt(portee * portee + chute * chute)
+	local BANDES = 10
+	local largeurBande = 17 / BANDES
+	for j = 1, BANDES do
+		local z = CZ - 8.5 + (j - 0.5) * largeurBande
+		local couleur = ORANGE
+		if j % 2 == 0 then
+			couleur = CREME
+		end
+		piece(cabane, "bloc", "Auvent", Vector3.new(longueurAuvent + 0.1, 0.2, largeurBande + 0.02),
+			CFrame.new(CX + (xA0 + xA1) / 2, (yA0 + yA1) / 2 + 0.1, z) * CFrame.Angles(0, 0, -angle), couleur, mat(M_TISSU, true))
+		-- lambrequin festonné : bande droite et feston arrondi de la même couleur
+		piece(cabane, "bloc", "Lambrequin", Vector3.new(0.12, 0.85, largeurBande),
+			CFrame.new(CX + xA1 + 0.05, yA1 - 0.42, z), couleur, mat(M_TISSU, true))
+		piece(cabane, "cylindre", "Feston", Vector3.new(0.1, largeurBande, largeurBande),
+			CFrame.new(CX + xA1 + 0.04, yA1 - 0.85, z), couleur, mat(M_TISSU, true))
+	end
+	-- poteaux, poutre avant et jambes de force
+	local xPoteau = 10.5
+	local yPoutre = yA1 - 0.35
+	rondinZ(cabane, "PoutreAvant", -8.7, 8.7, yPoutre, xPoteau + 0.1, 0.6, RONDIN_A)
+	for _, signe in ipairs({ -1, 1 }) do
+		rondinV(cabane, "PoteauAvant", xPoteau, signe * 8.15, SOL, yPoutre, 0.7, RONDIN_B)
+		piece(cabane, "cylindre", "JambeDeForce", Vector3.new(1.9, 0.35, 0.35),
+			CFrame.new(CX + xPoteau, yPoutre - 0.65, CZ + signe * 7.5) * CFrame.Angles(signe * math.rad(45), 0, 0) * LE_LONG_DE_Z,
+			BOIS_OMBRE, mat(M_BOIS, true))
+	end
+
+	-- ===== 5. enseigne « BOUTIQUE » sur le pignon, tournée vers la Place =====
+	local ySigne = yHautMur + 1.35
+	piece(cabane, "bloc", "CadreEnseigne", Vector3.new(0.3, 2.6, 8.6), CFrame.new(CX + xFacade + 0.55, ySigne, CZ), BOIS_OMBRE, mat(M_BOIS))
+	local planche = piece(cabane, "bloc", "Enseigne", Vector3.new(0.15, 2.1, 8), CFrame.new(CX + xFacade + 0.77, ySigne, CZ), ORANGE, mat(M_PLANCHES))
 	ecrireCerne(planche, "Right", "🛒 BOUTIQUE", 40, 5)
 	-- titre flottant géant, lisible depuis toute la Place
 	local _, titres = flottante(planche, {
 		{ texte = "🛒 BOUTIQUE", titre = true, taille = 1.7, contour = 4, nom = "Titre" },
-		{ texte = "Objets d'explorateur", taille = 0.8, contour = 3, nom = "SousTitre", couleur = Style and Style.couleurs.revenu or JAUNE },
+		{ texte = "Objets d'explorateur", taille = 0.8, contour = 3, nom = "SousTitre", couleur = Style and Style.couleurs.revenu or DORE },
 	}, {
 		Name = "TitreBoutique",
 		largeur = 24,
 		hauteurLigne = 2.6,
-		StudsOffset = Vector3.new(0, 6.5, 0),
+		StudsOffset = Vector3.new(0, 7, 0),
 		MaxDistance = 260,
 	})
 	if titres[1] and Style then
 		-- dégradé jaune -> orange sur le titre blanc
 		Style.degrade(titres[1], Style.boutons.jaune[1], Style.boutons.orange[2])
 	end
-	-- petits os croisés décoratifs aux coins de l'enseigne
+	-- os croisés aux coins de l'enseigne
 	for _, signe in ipairs({ -1, 1 }) do
-		piece(cabane, "bloc", "Os", Vector3.new(0.2, 0.5, 1.8),
-			CFrame.new(xSigne + 0.3, ySigne + 1.55, CZ + signe * 6.6) * CFrame.Angles(math.rad(35 * signe), 0, 0), CREME, LEGER)
+		piece(cabane, "bloc", "Os", Vector3.new(0.2, 0.45, 1.8),
+			CFrame.new(CX + xFacade + 0.85, ySigne + 1.2, CZ + signe * 4.2) * CFrame.Angles(math.rad(35 * signe), 0, 0), CREME, mat(Enum.Material.SmoothPlastic, true))
 	end
 
-	-- lanternes suspendues à la poutre avant
-	for _, signe in ipairs({ -1, 1 }) do
-		local z = CZ + signe * 6
-		piece(cabane, "bloc", "Chainette", Vector3.new(0.15, 0.9, 0.15), CFrame.new(xPoteauAvant, yPoutre - 0.75, z), ENCRE, LEGER)
-		local lanterne = piece(cabane, "boule", "Lanterne", Vector3.new(0.9, 0.9, 0.9),
-			CFrame.new(xPoteauAvant, yPoutre - 1.6, z), DORE, leger({ Material = Enum.Material.Neon }))
-		if lanterne then
-			pcall(Outils.lumiere, lanterne, { Range = 14, Brightness = 1.2, Color = Charte.lumiere(DORE) })
-		end
+	-- ===== 6. le comptoir en bois verni et son invite =====
+	local xComptoir = 5.8
+	local hCaisson = 3.05
+	piece(modeleComptoir, "bloc", "Plinthe", Vector3.new(2.5, 0.35, 8.8), CFrame.new(CX + xComptoir, SOL + 0.175, CZ), BOIS_OMBRE, mat(M_PLANCHES))
+	if compte + 6 <= BUDGET then
+		Outils.blocArrondi(modeleComptoir, {
+			Name = "Caisson",
+			Size = Vector3.new(2.2, hCaisson, 8.4),
+			CFrame = CFrame.new(CX + xComptoir, SOL + 0.35 + hCaisson / 2, CZ),
+			Color = VERNIS,
+			Material = M_PLANCHES,
+			Reflectance = 0.04,
+		}, 0.45)
+		compte = compte + 6
 	end
-
-	-- guirlande de fanions aux couleurs des raretés
-	local couleursFanions = {}
-	local raretes = Charte.raretes or {}
-	for _, cle in ipairs({ "Commun", "Rare", "Epique", "Legendaire", "Mythique", "Divin" }) do
-		if raretes[cle] then
-			table.insert(couleursFanions, raretes[cle])
-		end
-	end
-	if #couleursFanions == 0 then
-		couleursFanions = { DORE, Charte.lave, Charte.gemme }
-	end
-	for i = 0, 8 do
-		local z = CZ - 6 + i * 1.5
-		local couleur = couleursFanions[(i % #couleursFanions) + 1]
-		piece(cabane, "bloc", "Fanion", Vector3.new(0.1, 0.7, 0.7),
-			CFrame.new(xPoteauAvant + 0.2, yPoutre - 0.55, z) * CFrame.Angles(math.rad(45), 0, 0), couleur, LEGER)
-	end
-
-	-- ===== 5. étagères du fond et marchandises =====
-	local xEtagere = xFond + 1.3
-	local couleursBocaux = { Charte.gemme, Charte.violet, DORE, Charte.lave, PALME_CLAIRE }
-	for n, yEtagere in ipairs({ 5, 8.2 }) do
-		piece(cabane, "bloc", "Etagere", Vector3.new(1.4, 0.25, 12), CFrame.new(xEtagere, yEtagere, CZ), BOIS_CLAIR)
-		for k = 0, 4 do
-			local z = CZ - 4.8 + k * 2.4
-			local couleur = couleursBocaux[((k + n) % #couleursBocaux) + 1]
-			if (k + n) % 2 == 0 then
-				-- bocal lumineux
-				piece(cabane, "cylindre", "Bocal", Vector3.new(1.1, 0.9, 0.9),
-					CFrame.new(xEtagere, yEtagere + 0.68, z) * VERTICAL, couleur,
-					leger({ Material = Enum.Material.Neon, Transparency = 0.25 }))
-			else
-				-- boîte
-				piece(cabane, "bloc", "Boite", Vector3.new(0.9, 0.8, 1.1),
-					CFrame.new(xEtagere, yEtagere + 0.53, z) * CFrame.Angles(0, math.rad(8 * k), 0), couleur, LEGER)
-			end
-		end
-	end
-
-	-- caisses et tonneaux dans les coins
-	local xCoin = CX - 8.5
-	piece(cabane, "bloc", "Caisse", Vector3.new(2.2, 2.2, 2.2), CFrame.new(xCoin, SOL + 1.1, CZ - 5.2), BOIS)
-	piece(cabane, "bloc", "Caisse", Vector3.new(1.6, 1.6, 1.6),
-		CFrame.new(xCoin, SOL + 3, CZ - 5.2) * CFrame.Angles(0, math.rad(20), 0), BOIS_CLAIR)
-	piece(cabane, "bloc", "Caisse", Vector3.new(1.8, 1.8, 1.8),
-		CFrame.new(xCoin + 2.4, SOL + 0.9, CZ - 5.8) * CFrame.Angles(0, math.rad(-12), 0), BOIS_OMBRE)
-	for _, dx in ipairs({ 0, 2.2 }) do
-		piece(cabane, "cylindre", "Tonneau", Vector3.new(2.4, 1.9, 1.9),
-			CFrame.new(xCoin + dx, SOL + 1.2, CZ + 5.4) * VERTICAL, BOIS)
-		piece(cabane, "cylindre", "Cerclage", Vector3.new(0.25, 2, 2),
-			CFrame.new(xCoin + dx, SOL + 1.6, CZ + 5.4) * VERTICAL, Charte.pierre, LEGER)
-	end
-
-	-- ===== 6. le comptoir et son invite =====
-	local xComptoir = CX + 6
-	local hComptoir = 3.4
-	piece(modeleComptoir, "bloc", "Caisson", Vector3.new(2, hComptoir, 7), CFrame.new(xComptoir, SOL + hComptoir / 2, CZ), ORANGE)
-	local partComptoir = piece(modeleComptoir, "bloc", "Plateau", Vector3.new(2.8, 0.4, 7.8),
-		CFrame.new(xComptoir, SOL + hComptoir + 0.2, CZ), JAUNE)
-	local yPlateau = SOL + hComptoir + 0.4
-	for _, signe in ipairs({ -1, 1 }) do
-		piece(modeleComptoir, "bloc", "Montant", Vector3.new(0.3, hComptoir, 0.5),
-			CFrame.new(xComptoir + 1.05, SOL + hComptoir / 2, CZ + signe * 3.25), JAUNE, LEGER)
-	end
-	local plaque = piece(modeleComptoir, "bloc", "Plaque", Vector3.new(0.15, 1.3, 5.2),
-		CFrame.new(xComptoir + 1.05, SOL + hComptoir / 2 + 0.3, CZ), ORANGE_OMBRE, LEGER)
+	local yPlateau = SOL + 0.35 + hCaisson + 0.35
+	local partComptoir = piece(modeleComptoir, "bloc", "Plateau", Vector3.new(3, 0.35, 9.2),
+		CFrame.new(CX + xComptoir, yPlateau - 0.175, CZ), VERNIS_CLAIR, mat(M_BOIS, false, { Reflectance = 0.12 }))
+	local plaque = piece(modeleComptoir, "bloc", "Plaque", Vector3.new(0.14, 1.3, 5.6),
+		CFrame.new(CX + xComptoir + 1.17, SOL + 2.1, CZ), ORANGE_OMBRE, mat(M_PLANCHES, true))
 	ecrireCerne(plaque, "Right", "OBJETS D'EXPLORATEUR", 30, 3)
-	-- caisse enregistreuse et clochette
-	piece(modeleComptoir, "bloc", "CaisseEnregistreuse", Vector3.new(1.2, 0.8, 1.4), CFrame.new(xComptoir - 0.2, yPlateau + 0.4, CZ + 2.2), DORE, LEGER)
+	-- caisse enregistreuse en laiton, clochette, grand livre et pépite
+	piece(modeleComptoir, "bloc", "CaisseEnregistreuse", Vector3.new(1.2, 0.8, 1.4),
+		CFrame.new(CX + xComptoir - 0.3, yPlateau + 0.4, CZ + 2.8), DORE, mat(M_METAL, true, { Reflectance = 0.15 }))
 	piece(modeleComptoir, "coin", "Clavier", Vector3.new(1.2, 0.4, 0.9),
-		CFrame.new(xComptoir - 0.2, yPlateau + 1, CZ + 2.2) * CFrame.Angles(0, math.rad(-90), 0), CREME, LEGER)
-	piece(modeleComptoir, "boule", "Clochette", Vector3.new(0.6, 0.6, 0.6), CFrame.new(xComptoir + 0.5, yPlateau + 0.3, CZ - 2.3), DORE, LEGER)
-	piece(modeleComptoir, "boule", "Pepite", Vector3.new(0.5, 0.5, 0.5), CFrame.new(xComptoir + 0.2, yPlateau + 0.25, CZ - 0.8), Charte.gemme,
-		leger({ Material = Enum.Material.Neon }))
+		CFrame.new(CX + xComptoir - 0.3, yPlateau + 1, CZ + 2.8) * CFrame.Angles(0, math.rad(-90), 0), CREME, mat(Enum.Material.SmoothPlastic, true))
+	piece(modeleComptoir, "cylindre", "SocleClochette", Vector3.new(0.12, 0.7, 0.7),
+		CFrame.new(CX + xComptoir + 0.6, yPlateau + 0.06, CZ - 2.6) * VERTICAL, BOIS_OMBRE, mat(M_BOIS, true))
+	piece(modeleComptoir, "boule", "Clochette", Vector3.new(0.6, 0.6, 0.6),
+		CFrame.new(CX + xComptoir + 0.6, yPlateau + 0.3, CZ - 2.6), DORE, mat(M_METAL, true, { Reflectance = 0.2 }))
+	piece(modeleComptoir, "bloc", "GrandLivre", Vector3.new(1.1, 0.18, 1.6),
+		CFrame.new(CX + xComptoir + 0.2, yPlateau + 0.09, CZ - 0.6) * CFrame.Angles(0, math.rad(-10), 0), CREME, mat(Enum.Material.SmoothPlastic, true))
+	piece(modeleComptoir, "boule", "Pepite", Vector3.new(0.5, 0.5, 0.5),
+		CFrame.new(CX + xComptoir + 0.3, yPlateau + 0.25, CZ + 0.9), Charte.gemme, mat(M_VERRE, true, { Transparency = 0.15 }))
 	if partComptoir then
 		partComptoir.Name = "Comptoir"
 		Outils.invite(partComptoir, { nom = "Boutique", action = "Acheter", objet = "Boutique", distance = 12 })
 	end
 
-	-- ===== 7. le marchand jouet (regard vers +X) =====
-	local xM = CX + 3
-	local zM = CZ
-	local yJambes = SOL
-	for _, signe in ipairs({ -1, 1 }) do
-		piece(marchand, "bloc", "Jambe", Vector3.new(0.8, 1.8, 0.8), CFrame.new(xM, yJambes + 0.9, zM + signe * 0.5), KAKI, LEGER)
-		piece(marchand, "bloc", "Botte", Vector3.new(1.1, 0.5, 0.9), CFrame.new(xM + 0.15, yJambes + 0.25, zM + signe * 0.5), BOIS_OMBRE, LEGER)
-	end
-	local yTorse = yJambes + 1.8
-	piece(marchand, "bloc", "Torse", Vector3.new(1.2, 2.2, 2.2), CFrame.new(xM, yTorse + 1.1, zM), SABLE, LEGER)
-	piece(marchand, "bloc", "Ceinture", Vector3.new(1.3, 0.3, 2.3), CFrame.new(xM, yTorse + 0.25, zM), BOIS, LEGER)
-	piece(marchand, "bloc", "Foulard", Vector3.new(1.3, 0.4, 1.5), CFrame.new(xM + 0.05, yTorse + 2.05, zM), Charte.lave, LEGER)
-	-- bras posés sur le comptoir
-	local xMain = xComptoir - 0.5
-	local longueurBras = xMain - xM
-	for _, signe in ipairs({ -1, 1 }) do
-		piece(marchand, "bloc", "Bras", Vector3.new(longueurBras, 0.6, 0.6),
-			CFrame.new(xM + longueurBras / 2, yPlateau + 0.25, zM + signe * 1.4), SABLE, LEGER)
-		piece(marchand, "bloc", "Main", Vector3.new(0.6, 0.6, 0.6), CFrame.new(xMain + 0.1, yPlateau + 0.3, zM + signe * 1.4), PEAU, LEGER)
-	end
-	-- tête
-	local yTete = yTorse + 2.2 + 0.8
-	piece(marchand, "bloc", "Tete", Vector3.new(1.6, 1.6, 1.6), CFrame.new(xM, yTete, zM), PEAU, LEGER)
-	for _, signe in ipairs({ -1, 1 }) do
-		piece(marchand, "bloc", "Oeil", Vector3.new(0.1, 0.35, 0.25), CFrame.new(xM + 0.81, yTete + 0.2, zM + signe * 0.35), ENCRE, LEGER)
-	end
-	piece(marchand, "bloc", "Moustache", Vector3.new(0.15, 0.25, 1), CFrame.new(xM + 0.82, yTete - 0.3, zM), BOIS_OMBRE, LEGER)
-	-- casque colonial
-	local yCasque = yTete + 0.8
-	piece(marchand, "cylindre", "Bord", Vector3.new(0.15, 2.8, 2.8), CFrame.new(xM, yCasque + 0.05, zM) * VERTICAL, Charte.lumiere(SABLE), LEGER)
-	piece(marchand, "cylindre", "Bandeau", Vector3.new(0.35, 1.82, 1.82), CFrame.new(xM, yCasque + 0.3, zM) * VERTICAL, BOIS, LEGER)
-	piece(marchand, "boule", "Calotte", Vector3.new(1.8, 1.8, 1.8), CFrame.new(xM, yCasque + 0.35, zM), SABLE, LEGER)
-	piece(marchand, "boule", "Bouton", Vector3.new(0.35, 0.35, 0.35), CFrame.new(xM, yCasque + 1.25, zM), CREME, LEGER)
-
-	-- ===== 8. vitrines des objets de la boutique =====
+	-- ===== 7. vitrines rondes des objets de la boutique =====
 	local boutique = E.boutique or {}
 	local ORDRE = { "Bottes", "BatteOr", "Aimant", "Radar" }
 	local NOMS_DEFAUT = { Bottes = "Bottes de course", BatteOr = "Batte dorée", Aimant = "Aimant à billets", Radar = "Radar à dinos" }
@@ -416,38 +447,38 @@ function M.construire(ctx)
 
 	-- maquette d'un objet, centrée en `centre` (CFrame regardant vers +X)
 	local function maquette(parent, cle, centre)
-		local function morceau(genre, nom, taille, decalage, couleur, extra)
-			return piece(parent, genre, nom, taille, centre * decalage, couleur, leger(extra))
+		local function morceau(genre, nom, taille, decalage, couleur, materiau, extra)
+			return piece(parent, genre, nom, taille, centre * decalage, couleur, mat(materiau or Enum.Material.SmoothPlastic, true, extra))
 		end
 		if cle == "Bottes" then
 			for _, dz in ipairs({ -0.35, 0.35 }) do
-				morceau("bloc", "Tige", Vector3.new(0.5, 0.9, 0.5), CFrame.new(-0.15, 0.15, dz), Charte.lave)
+				morceau("bloc", "Tige", Vector3.new(0.5, 0.9, 0.5), CFrame.new(-0.15, 0.15, dz), Charte.lave, M_TISSU)
 				morceau("bloc", "Pied", Vector3.new(1, 0.4, 0.5), CFrame.new(0.1, -0.45, dz), BOIS_OMBRE)
-				morceau("bloc", "Aile", Vector3.new(0.4, 0.35, 0.1), CFrame.new(-0.35, 0.35, dz * 1.9) * CFrame.Angles(0, 0, math.rad(25)), DORE)
+				morceau("bloc", "Aile", Vector3.new(0.4, 0.35, 0.1), CFrame.new(-0.35, 0.35, dz * 1.9) * CFrame.Angles(0, 0, math.rad(25)), DORE, M_METAL)
 			end
 		elseif cle == "BatteOr" then
 			local incline = CFrame.Angles(0, 0, math.rad(65))
-			morceau("cylindre", "Manche", Vector3.new(1, 0.25, 0.25), incline * CFrame.new(-0.8, 0, 0), BOIS_OMBRE)
-			morceau("cylindre", "Batte", Vector3.new(1.4, 0.5, 0.5), incline * CFrame.new(0.35, 0, 0), DORE, { Material = Enum.Material.Neon })
-			morceau("boule", "Pommeau", Vector3.new(0.35, 0.35, 0.35), incline * CFrame.new(-1.3, 0, 0), BOIS_OMBRE)
+			morceau("cylindre", "Manche", Vector3.new(1, 0.25, 0.25), incline * CFrame.new(-0.8, 0, 0), BOIS_OMBRE, M_BOIS)
+			morceau("cylindre", "Batte", Vector3.new(1.4, 0.5, 0.5), incline * CFrame.new(0.35, 0, 0), DORE, M_METAL, { Reflectance = 0.25 })
+			morceau("boule", "Pommeau", Vector3.new(0.35, 0.35, 0.35), incline * CFrame.new(-1.3, 0, 0), BOIS_OMBRE, M_BOIS)
 		elseif cle == "Aimant" then
 			for _, dz in ipairs({ -0.45, 0.45 }) do
 				morceau("bloc", "Branche", Vector3.new(0.4, 1, 0.4), CFrame.new(0, 0.05, dz), Charte.alerte)
-				morceau("bloc", "Pointe", Vector3.new(0.42, 0.3, 0.42), CFrame.new(0, 0.7, dz), CREME)
+				morceau("bloc", "Pointe", Vector3.new(0.42, 0.3, 0.42), CFrame.new(0, 0.7, dz), CREME, M_METAL)
 			end
 			morceau("bloc", "Arc", Vector3.new(0.4, 0.4, 1.3), CFrame.new(0, -0.6, 0), Charte.alerte)
 		elseif cle == "Radar" then
-			morceau("bloc", "Socle", Vector3.new(0.9, 0.3, 0.9), CFrame.new(0, -0.75, 0), Charte.pierre)
-			morceau("bloc", "Mat", Vector3.new(0.2, 0.7, 0.2), CFrame.new(0, -0.3, 0), Charte.pierre)
+			morceau("bloc", "Socle", Vector3.new(0.9, 0.3, 0.9), CFrame.new(0, -0.75, 0), METAL, M_METAL)
+			morceau("bloc", "Mat", Vector3.new(0.2, 0.7, 0.2), CFrame.new(0, -0.3, 0), METAL, M_METAL)
 			morceau("cylindre", "Parabole", Vector3.new(0.15, 1.3, 1.3), CFrame.new(0.1, 0.25, 0) * CFrame.Angles(0, 0, math.rad(40)), CREME)
-			morceau("boule", "Capteur", Vector3.new(0.35, 0.35, 0.35), CFrame.new(0.4, 0.55, 0), Charte.gemme, { Material = Enum.Material.Neon })
+			morceau("boule", "Capteur", Vector3.new(0.35, 0.35, 0.35), CFrame.new(0.4, 0.55, 0), Charte.gemme, M_NEON)
 		else
-			morceau("boule", "Gemme", Vector3.new(0.9, 0.9, 0.9), CFrame.new(0, 0, 0), Charte.gemme, { Material = Enum.Material.Neon })
+			morceau("boule", "Gemme", Vector3.new(0.9, 0.9, 0.9), CFrame.new(0, 0, 0), Charte.gemme, M_VERRE)
 		end
 	end
 
-	local xVitrine = CX + 9.5
-	local positionsZ = { CZ - 7, CZ - 4.6, CZ + 4.6, CZ + 7 }
+	local xVitrine = CX + 8.6
+	local positionsZ = { CZ - 7.4, CZ - 4.4, CZ + 4.4, CZ + 7.4 } -- 3 studs entre deux vitrines
 	for i, cle in ipairs(liste) do
 		local z = positionsZ[i]
 		if z == nil then
@@ -459,15 +490,16 @@ function M.construire(ctx)
 		end
 		local vitrine = Outils.modele(vitrines, "Vitrine_" .. tostring(cle))
 		vitrine:SetAttribute("Objet", tostring(cle))
-		local hSocle = 2.6
-		piece(vitrine, "bloc", "Socle", Vector3.new(2.2, hSocle, 2.2), CFrame.new(xVitrine, SOL + hSocle / 2, z), ORANGE)
-		piece(vitrine, "bloc", "Lisere", Vector3.new(2.4, 0.2, 2.4), CFrame.new(xVitrine, SOL + hSocle + 0.1, z), JAUNE)
-		local yVerre = SOL + hSocle + 0.2
-		piece(vitrine, "bloc", "Verre", Vector3.new(2.2, 2.4, 2.2), CFrame.new(xVitrine, yVerre + 1.2, z),
-			Charte.lumiere(Charte.gemme), { Material = Enum.Material.Glass, Transparency = 0.7 })
-		local chapeau = piece(vitrine, "bloc", "Chapeau", Vector3.new(2.4, 0.2, 2.4), CFrame.new(xVitrine, yVerre + 2.5, z), JAUNE)
+		local hSocle = 2.4
+		piece(vitrine, "cylindre", "Socle", Vector3.new(hSocle, 2, 2), CFrame.new(xVitrine, SOL + hSocle / 2, z) * VERTICAL, VERNIS, mat(M_PLANCHES))
+		piece(vitrine, "cylindre", "Lisere", Vector3.new(0.25, 2.3, 2.3), CFrame.new(xVitrine, SOL + hSocle + 0.12, z) * VERTICAL, DORE, mat(M_METAL, false, { Reflectance = 0.15 }))
+		local yVerre = SOL + hSocle + 0.25
+		piece(vitrine, "cylindre", "Verre", Vector3.new(2.1, 1.9, 1.9), CFrame.new(xVitrine, yVerre + 1.05, z) * VERTICAL,
+			Charte.lumiere(Charte.gemme), mat(M_VERRE, false, { Transparency = 0.7 }))
+		local chapeau = piece(vitrine, "cylindre", "Chapeau", Vector3.new(0.25, 2.2, 2.2), CFrame.new(xVitrine, yVerre + 2.2, z) * VERTICAL,
+			DORE, mat(M_METAL, false, { Reflectance = 0.15 }))
 		-- étiquette : nom et prix, lisible depuis la Place
-		local etiquette = piece(vitrine, "bloc", "Etiquette", Vector3.new(0.12, 1.4, 2), CFrame.new(xVitrine + 1.16, SOL + hSocle / 2 + 0.2, z), ORANGE_OMBRE, LEGER)
+		local etiquette = piece(vitrine, "bloc", "Etiquette", Vector3.new(0.12, 1.1, 1.5), CFrame.new(xVitrine + 1.02, SOL + 1.3, z), ORANGE_OMBRE, mat(M_PLANCHES, true))
 		local nom = infos.nom
 		if type(nom) ~= "string" then
 			nom = NOMS_DEFAUT[cle] or tostring(cle)
@@ -476,30 +508,148 @@ function M.construire(ctx)
 		local lignes = { { texte = nom, taille = 1, nom = "Nom" } }
 		if type(infos.prix) == "number" then
 			texte = nom .. "\n" .. Charte.argent(infos.prix)
-			local vert = JAUNE
+			local vert = DORE
 			if Style then
 				vert = Style.couleurs.argent
 			end
 			table.insert(lignes, { texte = Charte.argent(infos.prix), taille = 1.1, nom = "Prix", couleur = vert })
 		end
 		ecrireCerne(etiquette, "Right", texte, 40, 3)
-		-- nom blanc et prix vert flottant au-dessus de la vitrine
+		-- petite étiquette (nom blanc, prix vert) juste au-dessus du chapeau, sous la toile de l'auvent :
+		-- 2,3 studs de large pour 3 studs entre vitrines, donc jamais de chevauchement
 		flottante(chapeau, lignes, {
 			Name = "EtiquetteObjet",
-			largeur = 7,
-			hauteurLigne = 1.1,
-			StudsOffset = Vector3.new(0, 2, 0),
-			MaxDistance = 80,
+			largeur = 2.3,
+			hauteurLigne = 0.55,
+			StudsOffset = Vector3.new(0, 1.0, 0),
+			MaxDistance = 40,
 		})
 		-- la maquette, qui tourne doucement dans son verre
 		local objet = Outils.modele(vitrine, "Maquette")
-		local centre = CFrame.new(xVitrine, yVerre + 1.1, z)
+		local centre = CFrame.new(xVitrine, yVerre + 1.05, z)
 		maquette(objet, cle, centre)
 		pcall(function()
 			objet.WorldPivot = centre
 		end)
 		Outils.animer(objet, "tourne", 0.6)
 	end
+
+	-- ===== 8. le marchand jouet (regard vers +X) =====
+	local xM = CX + 3
+	local zM = CZ
+	local yJambes = SOL
+	local TISSU = mat(M_TISSU, true)
+	local LISSE = mat(Enum.Material.SmoothPlastic, true)
+	for _, signe in ipairs({ -1, 1 }) do
+		piece(marchand, "bloc", "Jambe", Vector3.new(0.8, 1.8, 0.8), CFrame.new(xM, yJambes + 0.9, zM + signe * 0.5), KAKI, TISSU)
+		piece(marchand, "bloc", "Botte", Vector3.new(1.1, 0.5, 0.9), CFrame.new(xM + 0.15, yJambes + 0.25, zM + signe * 0.5), BOIS_OMBRE, LISSE)
+	end
+	local yTorse = yJambes + 1.8
+	piece(marchand, "bloc", "Torse", Vector3.new(1.2, 2.2, 2.2), CFrame.new(xM, yTorse + 1.1, zM), SABLE, TISSU)
+	piece(marchand, "bloc", "Ceinture", Vector3.new(1.3, 0.3, 2.3), CFrame.new(xM, yTorse + 0.25, zM), BOIS, LISSE)
+	piece(marchand, "bloc", "Foulard", Vector3.new(1.3, 0.4, 1.5), CFrame.new(xM + 0.05, yTorse + 2.05, zM), Charte.lave, TISSU)
+	-- bras posés sur le comptoir
+	local xMain = CX + xComptoir - 0.6
+	local longueurBras = xMain - xM
+	for _, signe in ipairs({ -1, 1 }) do
+		piece(marchand, "bloc", "Bras", Vector3.new(longueurBras, 0.6, 0.6),
+			CFrame.new(xM + longueurBras / 2, yPlateau + 0.25, zM + signe * 1.4), SABLE, TISSU)
+		piece(marchand, "bloc", "Main", Vector3.new(0.6, 0.6, 0.6), CFrame.new(xMain + 0.1, yPlateau + 0.3, zM + signe * 1.4), PEAU, LISSE)
+	end
+	-- tête
+	local yTete = yTorse + 2.2 + 0.8
+	piece(marchand, "bloc", "Tete", Vector3.new(1.6, 1.6, 1.6), CFrame.new(xM, yTete, zM), PEAU, LISSE)
+	for _, signe in ipairs({ -1, 1 }) do
+		piece(marchand, "bloc", "Oeil", Vector3.new(0.1, 0.35, 0.25), CFrame.new(xM + 0.81, yTete + 0.2, zM + signe * 0.35), ENCRE, LISSE)
+	end
+	piece(marchand, "bloc", "Moustache", Vector3.new(0.15, 0.25, 1), CFrame.new(xM + 0.82, yTete - 0.3, zM), BOIS_OMBRE, LISSE)
+	-- casque colonial
+	local yCasque = yTete + 0.8
+	piece(marchand, "cylindre", "Bord", Vector3.new(0.15, 2.8, 2.8), CFrame.new(xM, yCasque + 0.05, zM) * VERTICAL, Charte.lumiere(SABLE), LISSE)
+	piece(marchand, "cylindre", "Bandeau", Vector3.new(0.35, 1.82, 1.82), CFrame.new(xM, yCasque + 0.3, zM) * VERTICAL, BOIS, LISSE)
+	piece(marchand, "boule", "Calotte", Vector3.new(1.8, 1.8, 1.8), CFrame.new(xM, yCasque + 0.35, zM), SABLE, LISSE)
+	piece(marchand, "boule", "Bouton", Vector3.new(0.35, 0.35, 0.35), CFrame.new(xM, yCasque + 1.25, zM), CREME, LISSE)
+
+	-- ===== 9. lanternes : deux sous l'auvent, une sous le faîtage =====
+	for _, signe in ipairs({ -1, 1 }) do
+		lanterne(cabane, xPoteau + 0.1, yPoutre - 0.3, signe * 5.3, 0.5)
+	end
+	lanterne(cabane, -7, yFaitage - 0.2, 0, 2.6)
+
+	-- ===== 10. étagères du fond garnies =====
+	local xEtagere = xMurFond + 1.25
+	for _, signe in ipairs({ -1, 1 }) do
+		piece(cabane, "bloc", "Montant", Vector3.new(1.3, 7, 0.3), CFrame.new(CX + xEtagere, SOL + 3.5, CZ + signe * 5.3), BOIS_OMBRE, mat(M_PLANCHES))
+	end
+	local couleursObjets = { Charte.gemme, Charte.violet, DORE, Charte.lave, PALME_CLAIRE, Charte.alerte }
+	for n, hEtagere in ipairs({ 1.1, 3.4, 5.7 }) do
+		local yE = SOL + hEtagere
+		piece(cabane, "bloc", "Etagere", Vector3.new(1.3, 0.22, 10.9), CFrame.new(CX + xEtagere, yE, CZ), BOIS_CLAIR, mat(M_PLANCHES))
+		for k = 0, 3 do
+			local z = CZ - 3.6 + k * 2.4
+			local couleur = couleursObjets[((k + 2 * n) % #couleursObjets) + 1]
+			local genre = (k + n) % 4
+			if genre == 0 then
+				-- bocal de verre coloré
+				piece(cabane, "cylindre", "Bocal", Vector3.new(1.1, 0.9, 0.9),
+					CFrame.new(CX + xEtagere, yE + 0.66, z) * VERTICAL, couleur, mat(M_VERRE, true, { Transparency = 0.3 }))
+			elseif genre == 1 then
+				-- pile de livres
+				piece(cabane, "bloc", "Livres", Vector3.new(0.9, 1.1, 1.3),
+					CFrame.new(CX + xEtagere, yE + 0.66, z), couleur, mat(M_TISSU, true))
+			elseif genre == 2 then
+				-- carte roulée
+				piece(cabane, "cylindre", "Carte", Vector3.new(1.8, 0.5, 0.5),
+					CFrame.new(CX + xEtagere, yE + 0.36, z) * LE_LONG_DE_Z, SABLE, mat(M_TISSU, true))
+			else
+				-- boîte en bois
+				piece(cabane, "bloc", "Boite", Vector3.new(0.9, 0.8, 1.1),
+					CFrame.new(CX + xEtagere, yE + 0.51, z) * CFrame.Angles(0, math.rad(10), 0), BOIS, mat(M_PLANCHES, true))
+			end
+		end
+	end
+
+	-- ===== 11. caisses et tonneaux dans les coins de la cabane =====
+	piece(cabane, "bloc", "Caisse", Vector3.new(2, 2, 2), CFrame.new(CX - 3.7, SOL + 1, CZ - 5.9), BOIS_CLAIR, mat(M_PLANCHES))
+	piece(cabane, "bloc", "Caisse", Vector3.new(1.4, 1.4, 1.4),
+		CFrame.new(CX - 3.7, SOL + 2.7, CZ - 5.9) * CFrame.Angles(0, math.rad(20), 0), BOIS, mat(M_PLANCHES))
+	piece(cabane, "bloc", "Caisse", Vector3.new(1.6, 1.6, 1.6),
+		CFrame.new(CX - 5.9, SOL + 0.8, CZ - 6.1) * CFrame.Angles(0, math.rad(-12), 0), PLANCHER, mat(M_PLANCHES))
+	for _, dx in ipairs({ -3.5, -5.3 }) do
+		piece(cabane, "cylindre", "Tonneau", Vector3.new(2.2, 1.6, 1.6),
+			CFrame.new(CX + dx, SOL + 1.1, CZ + 6.1) * VERTICAL, RONDIN_A, mat(M_BOIS))
+		piece(cabane, "cylindre", "Cerclage", Vector3.new(0.22, 1.7, 1.7),
+			CFrame.new(CX + dx, SOL + 1.55, CZ + 6.1) * VERTICAL, METAL, mat(M_METAL, true))
+	end
+
+	-- ===== 12. palmiers en pot de part et d'autre des marches =====
+	for _, signe in ipairs({ -1, 1 }) do
+		local px, pz = CX + 12.3, CZ + signe * 5.8
+		piece(cabane, "cylindre", "Pot", Vector3.new(1.1, 1.1, 1.1), CFrame.new(px, 0.55, pz) * VERTICAL, TERRE_CUITE, mat(Enum.Material.Concrete, true))
+		piece(cabane, "boule", "Buisson", Vector3.new(1.5, 1.5, 1.5), CFrame.new(px, 1.45, pz), PALME, mat(M_PALMES, true))
+		local haut = CFrame.new(px, 1.8, pz)
+		for f, lacet in ipairs({ 90, -90 }) do
+			local couleur = PALME_CLAIRE
+			if f == 2 then
+				couleur = PALME_CLAIRE:Lerp(PALME, 0.4)
+			end
+			piece(cabane, "bloc", "Fronde", Vector3.new(1.9, 0.12, 0.8),
+				haut * CFrame.Angles(0, math.rad(lacet + 25), 0) * CFrame.Angles(0, 0, math.rad(40)) * CFrame.new(0.7, 0, 0),
+				couleur, mat(M_PALMES, true))
+		end
+	end
+
+	-- ===== 13. pioche et pelle croisées sur le mur sud, près de la façade =====
+	local zTrophee = CZ + zMur + D / 2 + 0.15
+	local centreTrophee = CFrame.new(CX - 2.7, SOL + 5.2, zTrophee)
+	for _, signe in ipairs({ -1, 1 }) do
+		piece(cabane, "cylindre", "Manche", Vector3.new(2.6, 0.22, 0.22),
+			centreTrophee * CFrame.Angles(0, 0, math.rad(45 * signe)), BOIS_CLAIR, mat(M_BOIS, true))
+	end
+	piece(cabane, "bloc", "Pioche", Vector3.new(1.9, 0.3, 0.2),
+		centreTrophee * CFrame.Angles(0, 0, math.rad(45)) * CFrame.new(1.2, 0, 0) * CFrame.Angles(0, 0, math.rad(90)), METAL, mat(M_METAL, true))
+	piece(cabane, "bloc", "Pelle", Vector3.new(0.9, 0.8, 0.15),
+		centreTrophee * CFrame.Angles(0, 0, math.rad(-45)) * CFrame.new(-1.3, 0, 0), METAL, mat(M_METAL, true))
 
 	dossier:SetAttribute("Parts", compte)
 end

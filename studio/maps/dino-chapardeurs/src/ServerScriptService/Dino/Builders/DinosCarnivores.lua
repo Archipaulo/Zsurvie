@@ -1,11 +1,13 @@
 -- Constructeur DinosCarnivores : gabarits des 10 espèces de la famille « Carnivore »
 -- (carnivores, volant et marin), rangés dans ServerStorage.Dino.Dinos.
--- Style « simulateur » chibi : grosse tête, très gros yeux brillants tournés vers l'avant,
--- couleurs saturées, grandes dents blanches rigolotes, pattes courtes, silhouettes lisibles de loin.
--- Chaque gabarit : pivot au sol sous le dino, regard vers -Z local, PrimaryPart = « Corps », au plus 30 parts.
+-- Version 2 « jouet de collection » : formes organiques en boules et cylindres (corps en poire,
+-- grosses cuisses, queue en perles), museau arrondi, mâchoire entrouverte avec dents et crocs,
+-- griffes blanches, gros yeux brillants (pupille, iris, reflet lumineux), motifs (taches, crêtes).
+-- Chaque gabarit : pivot au sol sous le dino, regard vers -Z local, PrimaryPart = « Corps »,
+-- au plus 40 parts, en SmoothPlastic (Neon seulement pour ce qui brille).
 local M = {}
 
-local BUDGET = 30 -- parts maximum par gabarit
+local BUDGET = 40 -- parts maximum par gabarit
 
 function M.construire(ctx)
 	local Charte = ctx.Charte
@@ -24,6 +26,7 @@ function M.construire(ctx)
 	local ombre = Charte.ombre
 	local lumiere = Charte.lumiere
 	local V = Vector3.new
+	local RAD = math.rad
 
 	-- blanc pur et noir d'encre de la boîte à outils visuelle (repli sur la Charte)
 	local Style = ctx.Style
@@ -43,6 +46,10 @@ function M.construire(ctx)
 	local ROSE_JOUE = lumiere(lumiere(Charte.alerte))
 	local INTERIEUR_BOUCHE = ombre(ombre(Charte.alerte))
 
+	local NEON = { Material = Enum.Material.Neon }
+	local SANS_OMBRE = { CastShadow = false }
+	local NEON_SANS_OMBRE = { Material = Enum.Material.Neon, CastShadow = false }
+
 	-- gabarit en cours de construction
 	local courant = { modele = nil, s = 1, compte = 0 }
 
@@ -53,21 +60,20 @@ function M.construire(ctx)
 		cylindre = Outils.cylindre,
 	}
 
-	-- une part du gabarit ; taille et position en unités « taille 1 », rotation en degrés
-	local function piece(forme, nom, taille, pos, couleur, rot, extra)
+	-- ===== primitives (tailles et positions en unités « taille 1 », mises à l'échelle ici) =====
+
+	-- une part du gabarit placée par un CFrame
+	local function poser(forme, nom, taille, cf, couleur, extra)
 		if courant.compte >= BUDGET then
 			return nil
 		end
 		local s = courant.s
-		local cf = CFrame.new(pos * s)
-		if rot then
-			cf = cf * CFrame.Angles(math.rad(rot.X), math.rad(rot.Y), math.rad(rot.Z))
-		end
 		local props = {
 			Name = nom,
 			Size = taille * s,
-			CFrame = cf,
+			CFrame = CFrame.new(cf.Position * s) * cf.Rotation,
 			Color = couleur,
+			Material = Enum.Material.SmoothPlastic,
 			CanCollide = false,
 			CanQuery = true,
 			CanTouch = false,
@@ -84,444 +90,586 @@ function M.construire(ctx)
 		return p
 	end
 
-	-- deux parts symétriques : G du côté -X (gauche du dino qui regarde vers -Z), D du côté +X
-	local function paire(forme, nom, taille, pos, couleur, rot, extra)
-		local x = math.abs(pos.X)
-		local rotG, rotD = nil, nil
+	-- une part placée par position et rotation (degrés)
+	local function piece(forme, nom, taille, pos, couleur, rot, extra)
+		local cf = CFrame.new(pos)
 		if rot then
-			rotG = V(rot.X, -rot.Y, -rot.Z)
-			rotD = rot
+			cf = cf * CFrame.Angles(RAD(rot.X), RAD(rot.Y), RAD(rot.Z))
 		end
-		piece(forme, nom .. "G", taille, V(-x, pos.Y, pos.Z), couleur, rotG, extra)
-		piece(forme, nom .. "D", taille, V(x, pos.Y, pos.Z), couleur, rotD, extra)
+		return poser(forme, nom, taille, cf, couleur, extra)
 	end
 
-	local NEON = { Material = Enum.Material.Neon }
-	local SANS_OMBRE = { CastShadow = false }
+	local function boule(nom, d, pos, couleur, extra)
+		return poser("boule", nom, V(d, d, d), CFrame.new(pos), couleur, extra)
+	end
 
-	-- tête chibi : gros crâne, museau court, bouche ouverte en sourire, grandes dents blanches
-	-- sur l'avant, énormes yeux tournés vers l'avant avec pupille noire et reflet blanc.
-	-- o : pos (centre du crâne), crane, museau, couleur, machoire, dents, oeil (multiplicateur),
-	--     pupille, pupilleNeon, joues (bool)
-	local function tete(o)
-		local P, T, Mu = o.pos, o.crane, o.museau
-		local couleur = o.couleur
-		piece("bloc", "Tete", T, P, couleur)
+	-- repère dont l'axe X (axe des cylindres Roblox) pointe de depart vers cible
+	local function viser(depart, cible)
+		local dir = cible - depart
+		local haut = V(0, 1, 0)
+		if math.abs(dir.Unit.Y) > 0.98 then
+			haut = V(0, 0, -1)
+		end
+		return CFrame.lookAt(depart, cible, haut) * CFrame.Angles(0, RAD(90), 0)
+	end
 
-		-- museau devant le crâne, dans sa moitié basse
-		local yMu = P.Y - T.Y / 2 + Mu.Y / 2 + T.Y * 0.06
-		local zMu = P.Z - T.Z / 2 - Mu.Z / 2 + 0.1
-		piece("bloc", "Museau", Mu, V(0, yMu, zMu), couleur)
+	-- cylindre tendu entre deux points (membres, rayons de voile)
+	local function segment(nom, a, b, d, couleur, extra)
+		return poser("cylindre", nom, V((b - a).Magnitude, d, d), viser((a + b) * 0.5, b), couleur, extra)
+	end
 
-		-- grandes dents : une rangée bien visible sur l'avant du museau
-		local n = o.dents or 0
-		local pasDent = (Mu.X * 0.8) / math.max(n, 1)
-		local d = math.min(0.5, pasDent * 0.75)
-		local hD = d * 1.25
+	-- disque (cylindre plat) centré en centre, face tournée vers normale
+	local function disque(nom, centre, normale, d, ep, couleur, extra)
+		return poser("cylindre", nom, V(ep, d, d), viser(centre, centre + normale), couleur, extra)
+	end
 
-		-- mâchoire inférieure grande ouverte et intérieur de la bouche
-		local basMu = yMu - Mu.Y / 2
-		local ecart = math.max(Mu.Y * 0.45, hD * 0.9)
-		local hJ = Mu.Y * 0.5
-		piece("bloc", "Machoire", V(Mu.X * 0.9, hJ, Mu.Z + T.Z * 0.45), V(0, basMu - ecart - hJ / 2, zMu + T.Z * 0.22), o.machoire or ombre(couleur))
-		piece("bloc", "Bouche", V(Mu.X * 0.8, ecart + 0.1, Mu.Z * 0.9), V(0, basMu - ecart / 2, zMu + 0.1), INTERIEUR_BOUCHE, nil, SANS_OMBRE)
+	-- tache peinte à plat sur une sphère (centre, diamètre), dans la direction dir
+	local function tache(nom, centre, diametre, dir, d, couleur, extra)
+		local n = dir.Unit
+		local r = diametre / 2
+		local fleche = d * d / (8 * r)
+		return disque(nom, centre + n * (r - fleche * 0.6), n, d, 0.07 + fleche, couleur, extra)
+	end
 
-		if n > 0 then
-			local zDent = zMu - Mu.Z / 2 + d * 0.5 + 0.03
-			for i = 1, n do
-				local x = (i - (n + 1) / 2) * pasDent
-				piece("bloc", "Dent", V(d, hD, d), V(x, basMu - hD / 2 + 0.06, zDent), BLANC, nil, SANS_OMBRE)
+	-- appelle fn pour le côté gauche (-X) puis le côté droit (+X) du dino qui regarde vers -Z
+	local function cotes(fn)
+		fn(-1, "G")
+		fn(1, "D")
+	end
+
+	-- membrane triangulaire à plat (aile, nageoire) : angle droit côté corps ; balaye = pointe vers l'arrière
+	local function membrane(sx, centre, envergure, corde, ep, pente, balaye)
+		local vz = V(0, 0, -1)
+		local vx = V(0, sx, 0)
+		if balaye then
+			vz = V(0, 0, 1)
+			vx = V(0, -sx, 0)
+		end
+		local cf = CFrame.new(centre) * CFrame.Angles(0, 0, RAD(sx * pente)) * CFrame.fromMatrix(V(0, 0, 0), vx, V(sx, 0, 0), vz)
+		return cf, V(ep, envergure, corde)
+	end
+
+	-- ===== la tête =====
+
+	-- gros yeux sur l'avant du crâne : blanc, iris éventuel, pupille noire, reflet lumineux
+	local function yeux(H, R, e, o)
+		local centres = {}
+		cotes(function(sx, cote)
+			local c = H + V(sx * R * (o.ecartYeux or 0.47), R * 0.3, -R * 0.74)
+			boule("Oeil" .. cote, e, c, BLANC)
+			local regard = V(sx * 0.16, 0.03, -1).Unit
+			local p = e * 0.6
+			local cp = c + regard * (e / 2 - p / 2 + p * 0.2)
+			if o.iris then
+				local i = e * 0.74
+				local ci = c + regard * (e / 2 - i / 2 + i * 0.1)
+				local ext = SANS_OMBRE
+				if o.irisNeon then
+					ext = NEON_SANS_OMBRE
+				end
+				boule("Iris" .. cote, i, ci, o.iris, ext)
+				p = e * 0.4
+				cp = ci + regard * (i / 2 - p / 2 + p * 0.22)
 			end
+			boule("Pupille" .. cote, p, cp, NOIR, SANS_OMBRE)
+			boule("Reflet" .. cote, e * 0.22, cp + V(0.45, 0.6, -0.66).Unit * (p * 0.45), BLANC, NEON_SANS_OMBRE)
+			centres[cote] = c
+		end)
+		return centres
+	end
+
+	-- tête chibi : crâne rond, museau à bout arrondi, mâchoire entrouverte, dents, crocs, narines
+	-- o : museau { l, h, avance, bas }, machoire, ouverture (degrés), dents (0, 2, 4), crocs, dent,
+	--     oeil, iris, irisNeon, joues, narines (false pour s'en passer)
+	local function tete(o, H, T, c)
+		local R = T / 2
+		boule("Tete", T, H, c)
+
+		-- museau : bloc prolongé d'un cylindre couché (nez rond)
+		local mu = o.museau
+		local wM, hM = mu.l, mu.h
+		local zAr = H.Z - R * 0.15
+		local zNez = H.Z - R - mu.avance
+		local zAv = zNez + hM / 2
+		local LM = zAr - zAv
+		local yMu = H.Y - R * (mu.bas or 0.12) - hM / 2
+		local basMu = yMu - hM / 2
+		piece("bloc", "Museau", V(wM, hM, LM), V(0, yMu, (zAv + zAr) / 2), c)
+		piece("cylindre", "MuseauBout", V(wM, hM, hM), V(0, yMu, zAv), c)
+
+		local e = T * 0.4 * (o.oeil or 1)
+		local centresYeux = yeux(H, R, e, o)
+
+		-- mâchoire inférieure ouverte autour d'une charnière sous l'arrière du museau
+		local ouv = o.ouverture or 15
+		local wJ = wM * 0.9
+		local hJ = hM * 0.72
+		local LJ = LM + (hM - hJ) / 2
+		local charniere = CFrame.new(0, basMu - 0.04, zAr) * CFrame.Angles(RAD(-ouv), 0, 0)
+		local cMach = o.machoire or lumiere(c)
+		poser("bloc", "Machoire", V(wJ, hJ, LJ), charniere * CFrame.new(0, -hJ / 2, -LJ / 2), cMach)
+		poser("cylindre", "Menton", V(wJ, hJ, hJ), charniere * CFrame.new(0, -hJ / 2, -LJ), cMach)
+		local LB = LJ * 0.94
+		local hB = LJ * math.sin(RAD(ouv)) + 0.14
+		poser("bloc", "Bouche", V(wM * 0.84, hB, LB), CFrame.new(0, basMu - 0.03, zAr) * CFrame.Angles(RAD(-ouv / 2), 0, 0) * CFrame.new(0, 0, -LB / 2), INTERIEUR_BOUCHE, SANS_OMBRE)
+
+		-- dents du haut : losanges à moitié enfoncés dans la gencive (pointe vers le bas)
+		local td = o.dent or math.min(0.44, wM * 0.24)
+		local n = o.dents or 2
+		local rangee = {}
+		if n >= 4 then
+			rangee = { V(-wM * 0.16, 0, 0), V(wM * 0.16, 0, 0), V(-wM * 0.35, 0, LM * 0.3), V(wM * 0.35, 0, LM * 0.3) }
+		elseif n > 0 then
+			rangee = { V(-wM * 0.22, 0, 0), V(wM * 0.22, 0, 0) }
+		end
+		for _, d in ipairs(rangee) do
+			piece("bloc", "Dent", V(td, td, td * 0.55), V(d.X, basMu, zAv + 0.03 + d.Z), BLANC, V(0, 0, 45), SANS_OMBRE)
+		end
+		-- crocs du bas, pointe vers le haut, sur le bout de la mâchoire
+		if o.crocs then
+			cotes(function(sx)
+				poser("bloc", "Croc", V(td * 0.9, td * 0.9, td * 0.5), charniere * CFrame.new(sx * wJ * 0.32, 0, -LJ + hJ * 0.2) * CFrame.Angles(0, 0, RAD(45)), BLANC, SANS_OMBRE)
+			end)
 		end
 
-		-- énormes yeux sur l'avant du crâne, au-dessus du museau
-		local e = T.X * 0.48 * (o.oeil or 1)
-		local xO = T.X * 0.27
-		local yO = P.Y + T.Y * 0.22
-		local zO = P.Z - T.Z / 2 + e * 0.15
-		paire("boule", "Oeil", V(e, e, e), V(xO, yO, zO), BLANC)
-		local extraPupille = SANS_OMBRE
-		if o.pupilleNeon then
-			extraPupille = { Material = Enum.Material.Neon, CastShadow = false }
+		-- narines sur le dessus du nez
+		if o.narines ~= false then
+			local dn = hM * 0.22
+			cotes(function(sx, cote)
+				boule("Narine" .. cote, dn, V(sx * wM * 0.2, yMu + hM / 2 - dn * 0.2, zAv - hM * 0.1), ombre(ombre(c)), SANS_OMBRE)
+			end)
 		end
-		local p = e * 0.55
-		local xP = xO - e * 0.05
-		local zP = zO - e * 0.25
-		paire("boule", "Pupille", V(p, p, p), V(xP, yO, zP), o.pupille or NOIR, nil, extraPupille)
-		-- petit reflet blanc qui fait « briller » le regard
-		local rf = e * 0.2
-		paire("boule", "Reflet", V(rf, rf, rf), V(xP + e * 0.1, yO + e * 0.12, zP - e * 0.2), BLANC, nil, SANS_OMBRE)
 
-		-- joues roses (espèces les plus mignonnes)
+		-- joues roses peintes sous les yeux
 		if o.joues then
-			paire("bloc", "Joue", V(0.1, e * 0.3, e * 0.5), V(T.X / 2 + 0.03, yO - e * 0.6, zO + e * 0.2), ROSE_JOUE, nil, SANS_OMBRE)
+			cotes(function(sx, cote)
+				local nj = V(sx * 0.85, -0.2, -0.48).Unit
+				disque("Joue" .. cote, H + nj * (R - 0.03), nj, R * 0.5, 0.08, ROSE_JOUE, SANS_OMBRE)
+			end)
 		end
 
-		return { yMu = yMu, zMu = zMu, basMu = basMu, xO = xO, yO = yO, zO = zO, e = e }
+		return { H = H, R = R, d = T, e = e, yeux = centresYeux, wM = wM, hM = hM, yMu = yMu, zNez = zNez }
 	end
 
-	-- sourcils épais au-dessus des yeux (regard de méchant rigolo)
-	local function sourcils(r, couleur, extra)
-		local y = r.tete
-		paire("bloc", "Sourcil", V(y.e * 0.95, y.e * 0.24, y.e * 0.5), V(y.xO, y.yO + y.e * 0.6, y.zO - y.e * 0.05), couleur, V(0, 0, 15), extra)
+	-- sourcils froncés au-dessus des yeux (regard de méchant rigolo)
+	local function sourcils(t, couleur, extra)
+		cotes(function(sx, cote)
+			local c = t.yeux[cote] + V(-sx * t.e * 0.05, t.e * 0.52, t.e * 0.05)
+			piece("bloc", "Sourcil" .. cote, V(t.e * 0.95, t.e * 0.22, t.e * 0.4), c, couleur, V(0, -20 * sx, 20 * sx), extra)
+		end)
 	end
 
-	-- corps de théropode chibi (bipède trapu) ; renvoie les repères utiles aux détails de l'espèce
-	-- o : corps, jambe, epaisseur, cou, bras, queue, couleur, ventre, crane, museau, dents, oeil...
+	-- ===== le corps =====
+
+	-- pattes arrière : grosse cuisse ronde, pied, deux griffes blanches
+	local function pattesArriere(c, xJ, zTh, dT, cPied, g, ep)
+		local hP = 0.42
+		local yTh = hP + dT * 0.4
+		cotes(function(sx, cote)
+			boule("PatteAr" .. cote, dT, V(sx * xJ, yTh, zTh), c)
+			local lP = dT
+			local zP = zTh - dT * 0.2
+			piece("bloc", "Pied" .. cote, V(dT * 0.62, hP, lP), V(sx * xJ, hP / 2, zP), cPied)
+			for _, dx in ipairs({ -0.2, 0.2 }) do
+				piece("coin", "Griffe" .. cote, V(0.26 * ep, 0.34 * g, 0.4 * g), V(sx * xJ + dx * dT, 0.17 * g, zP - lP / 2 - 0.1 * g), BLANC)
+			end
+		end)
+		return yTh
+	end
+
+	-- théropode chibi (bipède trapu) : corps en poire, grosse tête, petits bras, queue en perles
+	-- o : corps (diamètre), tete (diamètre), epaisseur, bras, epaisseurBras, queue, leveQueue,
+	--     couleur, couleurTete, ventre, extraVentre, couleurBout, extraBout, griffe + options de tête
 	local function theropode(o)
-		local C = o.corps
-		local couleur = o.couleur
-		local jambe = o.jambe or 1.5
+		local D = o.corps
+		local c = o.couleur
 		local ep = o.epaisseur or 1
-		local yCorps = 0.4 + jambe + C.Y / 2 - 0.5
-		local xJ = C.X / 2 - 0.45 * ep
+		local dT = D * 0.55 * ep
+		local yTh = 0.42 + dT * 0.4
+		local yC = yTh + D * 0.3
+		local cCorps = V(0, yC, 0)
+		local cHanche = V(0, yC + D * 0.02, D * 0.34)
 
-		-- pattes arrière courtes et gros pieds
-		paire("bloc", "Pied", V(1.1 * ep, 0.45, 1.5 * ep), V(xJ, 0.225, -0.15), ombre(couleur))
-		paire("bloc", "PatteAr", V(0.95 * ep, jambe, 1.1 * ep), V(xJ, 0.4 + jambe / 2, 0.25), couleur)
+		boule("Corps", D, cCorps, c)
+		boule("Ventre", D * 0.8, V(0, yC - D * 0.1, -D * 0.19), o.ventre or Charte.creme, o.extraVentre)
+		boule("Hanche", D * 0.86, cHanche, c)
 
-		-- corps trapu et plastron clair
-		piece("bloc", "Corps", C, V(0, yCorps, 0), couleur)
-		piece("bloc", "Ventre", V(C.X * 0.8, C.Y * 0.65, 0.2), V(0, yCorps - C.Y * 0.08, -C.Z / 2 - 0.05), o.ventre or Charte.creme, nil, o.extraVentre)
+		local T = o.tete
+		local t = tete(o, V(0, yC + D * 0.4 + T * 0.3, -D * 0.28 - T * 0.16), T, o.couleurTete or c)
 
-		-- cou court et grosse tête posée presque sur le corps
-		local T = o.crane
-		local yT = yCorps + C.Y * 0.5 + (o.cou or 0.2) + T.Y * 0.3
-		local zT = -C.Z / 2 - T.Z * 0.2
-		local hCou = yT - yCorps
-		piece("bloc", "Cou", V(T.X * 0.6, hCou, T.Z * 0.6), V(0, yCorps + hCou / 2, -C.Z / 2 + 0.2 - T.Z * 0.1), couleur)
-		local infosTete = tete({
-			pos = V(0, yT, zT),
-			crane = T,
-			museau = o.museau,
-			couleur = o.couleurTete or couleur,
-			machoire = o.machoire,
-			dents = o.dents,
-			oeil = o.oeil,
-			pupille = o.pupille,
-			pupilleNeon = o.pupilleNeon,
-			joues = o.joues,
-		})
+		pattesArriere(c, D * 0.36, D * 0.12, dT, ombre(c), o.griffe or 1, ep)
 
-		-- petits bras tendus vers l'avant et le bas
-		local bras = o.bras or 0.8
-		local eb = 0.4 * (o.epaisseurBras or 1)
-		paire("bloc", "PatteAv", V(eb, eb, bras), V(C.X / 2 - 0.1, yCorps - C.Y * 0.12, -C.Z / 2 - bras * 0.3), couleur, V(-35, 0, 0))
+		-- petits bras pendants vers l'avant et le bas, sur les flancs (sous la mâchoire)
+		local bras = o.bras or 0.6
+		local eb = 0.3 * (o.epaisseurBras or 1)
+		cotes(function(sx, cote)
+			segment("PatteAv" .. cote, V(sx * D * 0.36, yC - D * 0.06, -D * 0.26), V(sx * D * 0.46, yC - D * 0.3, -D * 0.4 - bras * 0.75), eb, c)
+		end)
 
-		-- queue courte et dodue en deux tronçons
-		local q = o.queue or 2.0
-		local yQ = yCorps - C.Y * 0.05
-		piece("bloc", "Queue", V(C.X * 0.62, C.Y * 0.58, q), V(0, yQ, C.Z / 2 + q / 2 - 0.4), couleur, V(8, 0, 0))
-		piece("bloc", "QueueBout", V(C.X * 0.38, C.Y * 0.36, q * 0.75), V(0, yQ - q * 0.2, C.Z / 2 + q * 1.25 - 0.5), o.couleurBout or couleur, V(14, 0, 0), o.extraBout)
+		-- queue : trois perles de plus en plus petites, bout relevé
+		local q = o.queue or 2.2
+		local a = V(0, yC, D * 0.55)
+		local b = V(0, yC - D * 0.3, D * 0.55 + q)
+		local perles = { { "Queue", 0.25, 0.64 }, { "QueueMilieu", 0.57, 0.5 }, { "QueueBout", 0.86, 0.36 } }
+		for i, pr in ipairs(perles) do
+			local t0 = pr[2]
+			local pos = a + (b - a) * t0 + V(0, (o.leveQueue or 0) * t0 * t0, 0)
+			local col = c
+			local ext = nil
+			if i == 3 then
+				col = o.couleurBout or ombre(c)
+				ext = o.extraBout
+			end
+			boule(pr[1], D * pr[3], pos, col, ext)
+		end
 
-		return {
-			yCorps = yCorps,
-			C = C,
-			yT = yT,
-			zT = zT,
-			T = T,
-			xJ = xJ,
-			ep = ep,
-			tete = infosTete,
-		}
+		return { D = D, yC = yC, corps = { c = cCorps, d = D }, hanche = { c = cHanche, d = D * 0.86 }, t = t }
 	end
 
-	-- rayures sur le dos : n bandes en travers du corps
-	local function rayures(r, n, couleur, extra)
-		local C = r.C
-		for i = 1, n do
-			local z = -C.Z / 2 + C.Z * (i - 0.5) / n
-			piece("bloc", "Rayure", V(C.X + 0.1, 0.3, C.Z / (n * 2.2)), V(0, r.yCorps + C.Y / 2 - 0.1, z), couleur, nil, extra)
+	-- taches peintes sur le dos ; liste de { dir, d (fraction du corps), sur = "corps" ou "hanche" }
+	local function motifs(r, liste, couleur, extra)
+		for _, m in ipairs(liste) do
+			local sph = r.hanche
+			if m.sur == "corps" then
+				sph = r.corps
+			end
+			tache("Tache", sph.c, sph.d, m.dir, m.d * r.D, couleur, extra)
 		end
+	end
+
+	-- point de la surface d'une sphère du dos (pour épines et bosses)
+	local function surDos(r, sur, dir, enfoncement)
+		local sph = r.hanche
+		if sur == "corps" then
+			sph = r.corps
+		end
+		return sph.c + dir.Unit * (sph.d / 2 - (enfoncement or 0))
 	end
 
 	-- ===== les espèces =====
 	local ESPECES = {}
 
-	-- Compy : petit chapardeur vert pomme, énorme tête, joues roses
+	-- Compy : petit chapardeur vert pomme, tête énorme, joues roses, crête dorée
 	ESPECES.Compy = function()
-		local couleur = vif(Charte.herbe)
+		local c = vif(Charte.herbe)
 		local r = theropode({
-			corps = V(1.8, 1.7, 2.4),
-			jambe = 1.3,
+			corps = 2.2,
+			tete = 2.6,
 			epaisseur = 0.9,
-			cou = 0.1,
-			bras = 0.7,
+			bras = 0.45,
 			queue = 1.8,
-			couleur = couleur,
+			leveQueue = 0.5,
+			couleur = c,
 			ventre = Charte.creme,
-			crane = V(2.4, 2.2, 2.2),
-			museau = V(1.4, 0.6, 0.8),
+			museau = { l = 1.25, h = 0.7, avance = 0.4 },
 			dents = 2,
-			oeil = 1.05,
+			oeil = 1.1,
 			joues = true,
 		})
-		rayures(r, 2, vif(Charte.jungle))
-		-- petite crête dorée
-		piece("coin", "Crete", V(0.3, 0.7, 1.3), V(0, r.yT + r.T.Y / 2 + 0.3, r.zT + 0.2), vif(Charte.dore))
+		local t = r.t
+		piece("coin", "Crete", V(0.26, 0.9, 1.3), t.H + V(0, t.R * 0.9, t.R * 0.3), vif(Charte.dore), V(0, 180, 0))
+		motifs(r, {
+			{ dir = V(0.5, 0.8, 0.1), d = 0.26 },
+			{ dir = V(-0.5, 0.8, 0.1), d = 0.26 },
+		}, vif(Charte.jungle))
 	end
 
-	-- Raptor : orange caramel rayé, plumes rouges et griffe en faucille
+	-- Raptor : orange caramel tacheté, plumes rouges, grandes griffes en faucille
 	ESPECES.Raptor = function()
-		local couleur = vif(Charte.terre)
+		local c = vif(Charte.terre)
 		local r = theropode({
-			corps = V(2.0, 1.8, 2.8),
-			jambe = 1.5,
+			corps = 2.3,
+			tete = 2.3,
 			epaisseur = 0.9,
-			cou = 0.2,
-			bras = 1.0,
-			queue = 2.4,
-			couleur = couleur,
+			bras = 0.8,
+			queue = 2.6,
+			leveQueue = 0.6,
+			couleur = c,
 			ventre = Charte.sable,
-			crane = V(2.2, 2.0, 2.2),
-			museau = V(1.3, 0.7, 1.1),
-			dents = 2,
+			couleurBout = ombre(ombre(c)),
+			museau = { l = 1.1, h = 0.72, avance = 0.95 },
+			dents = 4,
+			griffe = 1.45,
 		})
-		rayures(r, 2, ombre(ombre(couleur)))
-		-- plumes sur la tête
+		local t = r.t
 		local rouge = vif(Charte.tapis)
-		piece("bloc", "Plume", V(0.3, 1.1, 0.55), V(0, r.yT + r.T.Y / 2 + 0.35, r.zT + 0.2), rouge, V(-25, 0, 0))
-		piece("bloc", "Plume", V(0.3, 0.85, 0.55), V(0, r.yT + r.T.Y / 2 + 0.2, r.zT + 0.8), rouge, V(-40, 0, 0))
-		-- griffes en faucille au bout des pieds
-		paire("coin", "Griffe", V(0.3, 0.6, 0.6), V(r.xJ, 0.55, -0.15 - 0.75 * r.ep - 0.2), BLANC)
+		piece("coin", "Plume", V(0.24, 1.1, 1.5), t.H + V(0, t.R * 0.95, t.R * 0.25), rouge, V(0, 180, 0))
+		piece("coin", "Plume", V(0.24, 0.85, 1.2), t.H + V(0, t.R * 0.6, t.R * 0.85), lumiere(rouge), V(0, 180, 0))
+		motifs(r, {
+			{ dir = V(0, 0.95, 0.3), d = 0.28 },
+			{ dir = V(0.6, 0.75, 0.2), d = 0.24 },
+			{ dir = V(-0.6, 0.75, 0.2), d = 0.24 },
+		}, ombre(ombre(c)))
 	end
 
-	-- Dilopho : jaune vif, double crête rouge et collerette déployée derrière la tête
+	-- Dilopho : jaune vif, double crête rouge en demi-lune, grande collerette bicolore
 	ESPECES.Dilopho = function()
+		local c = vif(Charte.dore)
 		local r = theropode({
-			corps = V(2.2, 2.0, 3.0),
-			jambe = 1.5,
-			cou = 0.3,
-			queue = 2.2,
-			couleur = vif(Charte.dore),
-			ventre = Charte.creme,
-			crane = V(2.3, 2.0, 2.3),
-			museau = V(1.3, 0.6, 1.0),
-			dents = 2,
-		})
-		-- les deux crêtes
-		paire("bloc", "Crete", V(0.25, 1.0, 1.8), V(r.T.X * 0.25, r.yT + r.T.Y / 2 + 0.35, r.zT - 0.1), vif(Charte.alerte))
-		-- collerette : quatre grands pétales en éventail derrière la tête
-		local angles = { -120, -60, 60, 120 }
-		local centre = V(0, r.yT - 0.2, r.zT + r.T.Z * 0.45)
-		local rayon = r.T.X * 0.7
-		for i, a in ipairs(angles) do
-			local rad = math.rad(a)
-			local couleur = vif(Charte.lave)
-			if i % 2 == 0 then
-				couleur = vif(Charte.alerte)
-			end
-			local pos = centre + V(-math.sin(rad) * rayon, math.cos(rad) * rayon, 0)
-			piece("bloc", "Collerette", V(1.0, 2.2, 0.15), pos, couleur, V(0, 0, a))
-		end
-	end
-
-	-- Ptéro : reptile volant rose, grandes ailes jaunes déployées, bec et crête
-	ESPECES.Ptero = function()
-		local couleur = vif(Charte.alerte)
-		local membrane = vif(Charte.sable)
-		-- pattes courtes et pieds
-		paire("bloc", "Pied", V(0.7, 0.3, 0.9), V(0.6, 0.15, -0.1), ombre(couleur))
-		paire("bloc", "PatteAr", V(0.45, 1.0, 0.45), V(0.6, 0.8, 0.1), couleur)
-		-- corps
-		local yCorps = 2.0
-		piece("bloc", "Corps", V(1.8, 1.7, 2.2), V(0, yCorps, 0), couleur)
-		piece("bloc", "Ventre", V(1.4, 1.1, 0.2), V(0, yCorps - 0.1, -1.15), Charte.creme)
-		piece("bloc", "Cou", V(0.8, 0.8, 0.8), V(0, 2.9, -0.7), couleur)
-		-- grosse tête à bec
-		local yT, zT = 3.7, -1.2
-		tete({
-			pos = V(0, yT, zT),
-			crane = V(1.9, 1.7, 1.8),
-			museau = V(0.7, 0.5, 1.6),
-			couleur = couleur,
-			machoire = vif(Charte.dore),
-			dents = 2,
-		})
-		-- crête vers l'arrière
-		piece("bloc", "Crete", V(0.3, 0.9, 2.0), V(0, yT + 0.85, zT + 1.3), vif(Charte.dore), V(-20, 0, 0))
-		-- ailes : membrane, bout d'aile et bras osseux sur le bord d'attaque
-		paire("bloc", "Aile", V(4.0, 0.2, 2.0), V(2.8, 2.5, 0.2), membrane, V(0, 0, 12))
-		paire("bloc", "AileBout", V(2.2, 0.2, 1.3), V(5.5, 3.1, 0), membrane, V(0, 0, 20))
-		paire("bloc", "PatteAv", V(4.2, 0.4, 0.4), V(2.8, 2.55, -0.8), couleur, V(0, 0, 12))
-		-- petite queue
-		piece("bloc", "Queue", V(0.45, 0.45, 1.1), V(0, 1.9, 1.5), couleur, V(10, 0, 0))
-		-- taches sur les ailes
-		paire("bloc", "Tache", V(1.1, 0.25, 0.8), V(3.2, 2.6, 0.5), vif(Charte.lave), V(0, 0, 12))
-	end
-
-	-- Carno : rouge vif, cornes au-dessus des yeux, gros crocs, bras minuscules, dos bosselé
-	ESPECES.Carno = function()
-		local couleur = vif(Charte.tapis)
-		local r = theropode({
-			corps = V(2.4, 2.2, 3.0),
-			jambe = 1.5,
-			epaisseur = 1.1,
-			cou = 0.2,
-			bras = 0.45,
-			queue = 2.2,
-			couleur = couleur,
-			ventre = Charte.sable,
-			crane = V(2.5, 2.2, 2.4),
-			museau = V(1.6, 0.8, 0.9),
-			dents = 2,
-		})
-		-- cornes
-		paire("coin", "Corne", V(0.55, 1.1, 0.8), V(r.T.X * 0.3, r.yT + r.T.Y / 2 + 0.5, r.zT), vif(Charte.dore), V(0, 0, -20))
-		sourcils(r, ombre(ombre(couleur)))
-		-- bosses le long du dos
-		for i = 1, 3 do
-			piece("bloc", "Bosse", V(0.6, 0.45, 0.6), V(0, r.yCorps + r.C.Y / 2 + 0.15, -1.0 + (i - 1) * 1.0), ombre(couleur), V(0, 45, 0))
-		end
-	end
-
-	-- Spino : bleu vif, museau de crocodile et grande voile orange et jaune
-	ESPECES.Spino = function()
-		local r = theropode({
-			corps = V(2.4, 2.2, 3.4),
-			jambe = 1.5,
-			epaisseur = 1.05,
-			cou = 0.3,
-			bras = 1.0,
+			corps = 2.4,
+			tete = 2.4,
+			bras = 0.6,
 			queue = 2.4,
-			couleur = vif(Charte.raretes.Rare or Charte.gemme),
+			leveQueue = 0.4,
+			couleur = c,
 			ventre = Charte.creme,
-			crane = V(2.3, 2.0, 2.4),
-			museau = V(1.1, 0.6, 1.8),
+			museau = { l = 1.2, h = 0.7, avance = 0.8 },
 			dents = 2,
 		})
-		-- voile : lames de hauteurs croissantes puis décroissantes
-		local hauteurs = { 1.2, 2.0, 2.6, 2.6, 2.0, 1.2 }
-		local n = #hauteurs
-		local haut = r.yCorps + r.C.Y / 2 - 0.2
-		for i, h in ipairs(hauteurs) do
-			local c = vif(Charte.lave)
-			if i % 2 == 0 then
-				c = vif(Charte.dore)
-			end
-			local z = -r.C.Z / 2 + 0.4 + (r.C.Z - 0.8) * (i - 1) / (n - 1)
-			piece("bloc", "Voile", V(0.3, h, 0.7), V(0, haut + h / 2, z), c)
-		end
+		local t = r.t
+		cotes(function(sx)
+			disque("Crete", t.H + V(sx * 0.3, t.R * 0.8, t.R * 0.25), V(1, 0, 0), 1.8, 0.2, vif(Charte.alerte))
+		end)
+		local cc = t.H + V(0, -t.R * 0.15, t.R * 0.45)
+		disque("Collerette", cc, V(0, 0, -1), t.d * 1.75, 0.16, vif(Charte.lave))
+		disque("Collerette", cc + V(0, 0, -0.14), V(0, 0, -1), t.d * 1.4, 0.16, vif(Charte.alerte))
+		motifs(r, {
+			{ dir = V(0.45, 0.85, 0.2), d = 0.26 },
+			{ dir = V(-0.45, 0.85, 0.2), d = 0.26 },
+		}, vif(Charte.lave))
 	end
 
-	-- Rex : énorme tête verte, quatre grandes dents, sourcils froncés, bras ridicules
-	ESPECES.Rex = function()
-		local couleur = vif(Charte.jungle)
+	-- Ptéro : reptile volant rose, bec doré, grande crête, ailes triangulaires déployées
+	ESPECES.Ptero = function()
+		local c = vif(Charte.alerte)
+		local peauAile = vif(Charte.sable)
+		local D = 1.9
+		local yC = 2.0
+		boule("Corps", D, V(0, yC, 0), c)
+		boule("Ventre", D * 0.78, V(0, yC - 0.2, -0.38), Charte.creme)
+
+		-- tête ronde et bec
+		local T = 1.9
+		local R = T / 2
+		local H = V(0, 3.35, -0.75)
+		boule("Tete", T, H, c)
+		yeux(H, R, T * 0.42, {})
+		local bec = vif(Charte.dore)
+		local yBec = H.Y - 0.3
+		piece("coin", "BecHaut", V(0.8, 0.6, 2.2), V(0, yBec, H.Z - R - 0.65), bec)
+		piece("bloc", "Bouche", V(0.5, 0.22, 1.1), V(0, yBec - 0.36, H.Z - R - 0.05), INTERIEUR_BOUCHE, nil, SANS_OMBRE)
+		piece("coin", "BecBas", V(0.56, 0.36, 1.6), V(0, yBec - 0.3 - 0.12 - 0.18, H.Z - R - 0.3), ombre(bec), V(0, 0, 180))
+		cotes(function(sx)
+			piece("bloc", "Dent", V(0.2, 0.2, 0.12), V(sx * 0.18, yBec - 0.3, H.Z - R - 0.35), BLANC, V(0, 0, 45), SANS_OMBRE)
+		end)
+		cotes(function(sx, cote)
+			local nj = V(sx * 0.85, -0.2, -0.48).Unit
+			disque("Joue" .. cote, H + nj * (R - 0.03), nj, R * 0.5, 0.08, ROSE_JOUE, SANS_OMBRE)
+		end)
+		-- crête pointée vers l'arrière, bout coloré
+		local cCrete = V(0, H.Y + R * 0.55, H.Z + R * 0.55 + 0.7)
+		piece("coin", "Crete", V(0.24, 1.1, 2.2), cCrete, bec, V(0, 180, 0))
+		piece("coin", "CreteBout", V(0.3, 0.6, 1.2), cCrete + V(0, -0.25, 0.5), vif(Charte.lave), V(0, 180, 0))
+
+		-- pattes
+		pattesArriere(c, 0.5, 0.15, 0.9, ombre(c), 0.8, 0.8)
+
+		-- ailes : membrane, bout coloré, bras osseux sur le bord d'attaque, tache
+		local envergure, corde = 4.4, 2.6
+		cotes(function(sx, cote)
+			local cf, taille = membrane(sx, V(sx * (0.5 + envergure / 2), yC + 0.35, -0.55 + corde / 2), envergure, corde, 0.18, 14, false)
+			poser("coin", "Aile" .. cote, taille, cf, peauAile)
+			poser("coin", "AileBout" .. cote, V(0.24, envergure * 0.36, corde * 0.36), cf * CFrame.new(0, envergure * 0.32, corde * 0.32), vif(Charte.lave))
+			local a = (cf * CFrame.new(0, -envergure / 2 + 0.2, corde / 2)).Position
+			local b = (cf * CFrame.new(0, envergure / 2, corde / 2)).Position
+			segment("PatteAv" .. cote, a, b, 0.3, c)
+			poser("cylindre", "Tache" .. cote, V(0.22, 0.9, 0.9), cf * CFrame.new(0, -envergure * 0.12, corde * 0.12), vif(Charte.lave))
+		end)
+
+		-- petite queue
+		boule("Queue", 0.6, V(0, yC - 0.1, 0.95), c)
+		boule("QueueBout", 0.36, V(0, yC - 0.15, 1.4), ombre(c))
+	end
+
+	-- Carno : rouge vif, cornes dorées, sourcils froncés, bras minuscules, dos bosselé
+	ESPECES.Carno = function()
+		local c = vif(Charte.tapis)
 		local r = theropode({
-			corps = V(2.8, 2.6, 3.2),
-			jambe = 1.7,
-			epaisseur = 1.3,
-			cou = 0.1,
-			bras = 0.5,
-			epaisseurBras = 0.8,
-			queue = 2.2,
-			couleur = couleur,
+			corps = 2.5,
+			tete = 2.5,
+			epaisseur = 1.1,
+			bras = 0.25,
+			epaisseurBras = 0.9,
+			queue = 2.4,
+			leveQueue = 0.3,
+			couleur = c,
 			ventre = Charte.sable,
-			crane = V(3.0, 2.6, 2.8),
-			museau = V(2.2, 1.0, 1.3),
+			museau = { l = 1.6, h = 0.85, avance = 0.6 },
 			dents = 4,
+			narines = false,
 		})
-		rayures(r, 2, ombre(couleur))
-		sourcils(r, ombre(ombre(couleur)))
-	end
-
-	-- Mosa : reptile marin turquoise, grosse tête ronde, quatre nageoires et queue en croissant
-	ESPECES.Mosa = function()
-		local couleur = vif(ombre(Charte.gemme))
-		local nageoire = vif(Charte.nuit)
-		local yCorps = 1.5
-		piece("bloc", "Corps", V(2.4, 1.8, 3.6), V(0, yCorps, 0), couleur)
-		piece("bloc", "Ventre", V(2.5, 0.6, 3.2), V(0, 0.95, 0), Charte.creme)
-		-- grosse tête de crocodile marin
-		tete({
-			pos = V(0, 2.0, -2.6),
-			crane = V(2.4, 1.9, 2.2),
-			museau = V(1.5, 0.6, 1.2),
-			couleur = couleur,
-			machoire = lumiere(couleur),
-			dents = 4,
-		})
-		-- nageoires
-		paire("bloc", "PatteAv", V(1.9, 0.25, 0.9), V(1.9, 0.8, -0.9), nageoire, V(0, -25, -15))
-		paire("bloc", "PatteAr", V(1.4, 0.25, 0.7), V(1.7, 0.8, 1.2), nageoire, V(0, -25, -15))
-		-- queue et nageoire caudale
-		piece("bloc", "Queue", V(1.4, 1.1, 2.4), V(0, 1.4, 3.0), couleur)
-		piece("bloc", "QueueBout", V(0.8, 0.7, 1.6), V(0, 1.4, 4.8), couleur)
-		piece("bloc", "NageoireQueue", V(0.25, 1.8, 0.8), V(0, 2.2, 5.8), nageoire, V(30, 0, 0))
-		piece("bloc", "NageoireQueue", V(0.25, 1.2, 0.7), V(0, 0.8, 5.8), nageoire, V(-30, 0, 0))
-		-- aileron dorsal et bandes claires sur le dos
-		piece("coin", "Aileron", V(0.3, 1.2, 1.6), V(0, yCorps + 0.9 + 0.6, 0.2), nageoire)
-		for i = 1, 2 do
-			piece("bloc", "Rayure", V(2.5, 0.3, 0.5), V(0, yCorps + 0.8, -0.9 + (i - 1) * 1.8), lumiere(couleur))
+		local t = r.t
+		cotes(function(sx, cote)
+			-- losange à moitié enfoncé : une corne triangulaire penchée vers l'extérieur
+			piece("bloc", "Corne" .. cote, V(0.75, 0.75, 0.6), t.H + V(sx * t.R * 0.55, t.R * 0.82, t.R * 0.1), vif(Charte.dore), V(0, 0, 45 - 18 * sx))
+		end)
+		sourcils(t, ombre(ombre(c)))
+		for _, dir in ipairs({ V(0, 1, -0.1), V(0, 0.85, 0.5), V(0, 0.5, 0.9) }) do
+			boule("Bosse", 0.55, surDos(r, "hanche", dir, 0.08), ombre(c))
 		end
 	end
 
-	-- Giga : colosse de pierre claire, épines, sourcils et regard divins lumineux
+	-- Spino : bleu vif, long museau de crocodile, grande voile bicolore à rayons
+	ESPECES.Spino = function()
+		local c = vif(Charte.raretes.Rare or Charte.gemme)
+		local r = theropode({
+			corps = 2.5,
+			tete = 2.3,
+			epaisseur = 1.05,
+			bras = 0.8,
+			queue = 2.8,
+			leveQueue = 0.4,
+			couleur = c,
+			ventre = Charte.creme,
+			museau = { l = 1.0, h = 0.62, avance = 1.7 },
+			dents = 4,
+		})
+		local centre = r.corps.c + V(0, r.D * 0.5, r.D * 0.18)
+		disque("Voile", centre, V(1, 0, 0), 3.6, 0.22, vif(Charte.dore))
+		disque("Voile", centre + V(0, -0.1, 0), V(1, 0, 0), 2.7, 0.3, vif(Charte.lave))
+		for _, a in ipairs({ -50, 0, 50 }) do
+			local bout = centre + V(0, math.cos(RAD(a)) * 1.7, math.sin(RAD(a)) * 1.7)
+			segment("Rayon", centre, bout, 0.38, ombre(vif(Charte.lave)))
+		end
+	end
+
+	-- Rex : énorme tête verte, grandes dents et crocs, sourcils froncés, bras ridicules
+	ESPECES.Rex = function()
+		local c = vif(Charte.jungle)
+		local r = theropode({
+			corps = 2.6,
+			tete = 3.1,
+			epaisseur = 1.3,
+			bras = 0.3,
+			epaisseurBras = 0.8,
+			queue = 2.4,
+			leveQueue = 0.3,
+			couleur = c,
+			ventre = Charte.sable,
+			museau = { l = 2.0, h = 1.0, avance = 0.8 },
+			dents = 4,
+			crocs = true,
+			ouverture = 18,
+		})
+		sourcils(r.t, ombre(ombre(c)))
+		motifs(r, {
+			{ dir = V(0.5, 0.8, 0.25), d = 0.3 },
+			{ dir = V(-0.5, 0.8, 0.25), d = 0.3 },
+		}, ombre(c))
+	end
+
+	-- Mosa : reptile marin turquoise allongé, museau de crocodile, nageoires en pagaie, queue en cœur
+	ESPECES.Mosa = function()
+		local c = vif(ombre(Charte.gemme))
+		local nageoire = vif(Charte.nuit)
+		local cCorps = V(0, 1.3, 0)
+		boule("Corps", 2.3, cCorps, c)
+		boule("Ventre", 2.0, V(0, 1.05, -0.35), Charte.creme)
+		tete({
+			museau = { l = 1.4, h = 0.62, avance = 1.3 },
+			machoire = lumiere(c),
+			ouverture = 12,
+			dents = 4,
+			crocs = true,
+		}, V(0, 1.85, -1.75), 2.3, c)
+		local cHanche = V(0, 1.2, 1.2)
+		boule("Hanche", 1.9, cHanche, c)
+		boule("Queue", 1.4, V(0, 1.05, 2.3), c)
+		boule("QueueMilieu", 1.0, V(0, 1.0, 3.2), c)
+		boule("QueueBout", 0.66, V(0, 1.05, 3.95), c)
+
+		-- nageoires en pagaie, balayées vers l'arrière
+		cotes(function(sx, cote)
+			local cf, taille = membrane(sx, V(sx * 1.5, 0.6, -0.4), 1.8, 1.2, 0.2, -20, true)
+			poser("coin", "PatteAv" .. cote, taille, cf, nageoire)
+			cf, taille = membrane(sx, V(sx * 1.25, 0.55, 1.4), 1.3, 0.9, 0.2, -20, true)
+			poser("coin", "PatteAr" .. cote, taille, cf, nageoire)
+		end)
+		-- nageoire caudale en cœur et aileron dorsal
+		disque("NageoireQueue", V(0, 1.9, 4.5), V(1, 0, 0), 1.3, 0.2, nageoire)
+		disque("NageoireQueue", V(0, 0.7, 4.4), V(1, 0, 0), 1.0, 0.2, nageoire)
+		piece("coin", "Aileron", V(0.26, 1.1, 1.5), V(0, 2.85, 0.6), nageoire)
+
+		-- bandes claires sur le dos
+		local clair = lumiere(lumiere(c))
+		tache("Tache", cCorps, 2.3, V(0.6, 0.8, 0.1), 0.7, clair)
+		tache("Tache", cCorps, 2.3, V(-0.6, 0.8, 0.1), 0.7, clair)
+		tache("Tache", cHanche, 1.9, V(0, 1, 0.3), 0.7, clair)
+	end
+
+	-- Giga : colosse de pierre claire, regard, sourcils et épines divins lumineux
 	ESPECES.Giga = function()
 		local divin = Charte.raretes.Divin or Charte.gemme
-		local couleur = lumiere(Charte.pierre)
+		local c = lumiere(lumiere(Charte.pierre))
 		local r = theropode({
-			corps = V(3.0, 2.8, 3.6),
-			jambe = 1.8,
-			epaisseur = 1.35,
-			cou = 0.1,
-			bras = 0.7,
-			queue = 2.4,
-			couleur = couleur,
-			ventre = lumiere(couleur),
-			crane = V(3.0, 2.6, 2.8),
-			museau = V(2.1, 0.9, 1.4),
-			dents = 2,
-			pupille = divin,
-			pupilleNeon = true,
+			corps = 2.6,
+			tete = 2.8,
+			epaisseur = 1.25,
+			bras = 0.5,
+			queue = 2.6,
+			leveQueue = 0.3,
+			couleur = c,
+			ventre = lumiere(c),
+			couleurBout = ombre(c),
+			museau = { l = 1.9, h = 0.95, avance = 0.8 },
+			dents = 4,
+			narines = false,
+			iris = divin,
+			irisNeon = true,
 		})
-		-- épines lumineuses sur le dos
-		for i = 1, 4 do
-			local h = 1.0
-			if i == 2 or i == 3 then
-				h = 1.4
-			end
-			piece("coin", "Epine", V(0.4, h, 1.0), V(0, r.yCorps + r.C.Y / 2 + h / 2 - 0.1, -1.4 + (i - 1) * 0.95), divin, nil, NEON)
+		sourcils(r.t, divin, NEON)
+		local epines = {
+			{ dir = V(0, 1, -0.1), h = 1.0 },
+			{ dir = V(0, 0.95, 0.4), h = 1.3 },
+			{ dir = V(0, 0.65, 0.8), h = 1.1 },
+			{ dir = V(0, 0.2, 1), h = 0.8 },
+		}
+		for _, ep in ipairs(epines) do
+			local p = surDos(r, "hanche", ep.dir, 0.15)
+			piece("coin", "Epine", V(0.4, ep.h, ep.h * 0.9), p + V(0, ep.h * 0.3, 0), divin, nil, NEON)
 		end
-		-- sourcils lumineux
-		sourcils(r, divin, NEON)
+		local corps = courant.modele:FindFirstChild("Corps")
+		if corps then
+			Outils.lumiere(corps, { genre = "Point", Range = 12, Brightness = 1.2, Color = divin })
+		end
 	end
 
-	-- Cosmosaure : secret cosmique violet vif, bandes de gemme lumineuses et étoiles en orbite
+	-- Cosmosaure : secret cosmique violet, taches et bout de queue lumineux, étoiles en orbite
 	ESPECES.Cosmosaure = function()
-		local couleur = vif(Charte.violet)
+		local c = vif(Charte.violet)
 		local r = theropode({
-			corps = V(2.8, 2.6, 3.6),
-			jambe = 1.7,
-			epaisseur = 1.25,
-			cou = 0.2,
-			bras = 0.7,
-			queue = 2.4,
-			couleur = couleur,
-			couleurTete = couleur,
-			ventre = Charte.gemme,
-			extraVentre = NEON,
+			corps = 2.6,
+			tete = 2.8,
+			epaisseur = 1.2,
+			bras = 0.6,
+			queue = 2.6,
+			leveQueue = 0.7,
+			couleur = c,
+			ventre = lumiere(Charte.gemme),
 			couleurBout = Charte.gemme,
 			extraBout = NEON,
-			crane = V(2.9, 2.5, 2.7),
-			museau = V(1.8, 0.8, 1.3),
+			museau = { l = 1.7, h = 0.85, avance = 0.7 },
 			dents = 2,
-			pupille = Charte.gemme,
-			pupilleNeon = true,
+			narines = false,
+			iris = Charte.gemme,
+			irisNeon = true,
 		})
-		rayures(r, 2, Charte.gemme, NEON)
-		-- étoiles à quatre branches (deux barres croisées) et une petite étoile ronde
-		local yE = r.yCorps + r.C.Y / 2
+		motifs(r, {
+			{ dir = V(0, 0.95, 0.3), d = 0.26 },
+			{ dir = V(0.6, 0.7, 0.2), d = 0.2 },
+			{ dir = V(-0.6, 0.7, 0.2), d = 0.2 },
+		}, Charte.gemme, NEON)
+		-- étoiles à quatre branches (deux barres croisées) et une petite lune ronde
+		local yE = r.yC + r.D / 2
 		local etoiles = {
-			{ pos = V(-2.2, yE + 2.2, 0.8), taille = 1.0, couleur = vif(Charte.dore) },
-			{ pos = V(2.2, yE + 1.6, 0.2), taille = 0.8, couleur = BLANC },
+			{ pos = V(-2.4, yE + 2.0, 0.6), taille = 1.0, couleur = vif(Charte.dore) },
+			{ pos = V(2.3, yE + 1.5, 0.2), taille = 0.8, couleur = BLANC },
 		}
 		for _, et in ipairs(etoiles) do
-			local t = et.taille
-			piece("bloc", "Etoile", V(0.25, t * 1.6, 0.25), et.pos, et.couleur, V(0, 0, 45), NEON)
-			piece("bloc", "Etoile", V(0.25, t * 1.6, 0.25), et.pos, et.couleur, V(0, 0, -45), NEON)
+			piece("bloc", "Etoile", V(0.25, et.taille * 1.6, 0.25), et.pos, et.couleur, V(0, 0, 45), NEON)
+			piece("bloc", "Etoile", V(0.25, et.taille * 1.6, 0.25), et.pos, et.couleur, V(0, 0, -45), NEON)
 		end
-		piece("boule", "Etoile", V(0.5, 0.5, 0.5), V(0.3, yE + 3.0, 2.2), Charte.gemme, nil, NEON)
+		boule("Etoile", 0.5, V(0.4, yE + 2.8, 2.2), Charte.gemme, NEON)
 
 		-- halo violet autour du corps
 		local corps = courant.modele:FindFirstChild("Corps")
@@ -579,15 +727,20 @@ function M.construire(ctx)
 			local teinte = vif(Charte.raretes[infos.rarete] or Charte.terre)
 			fabriquer(espece, function()
 				local r = theropode({
-					corps = V(2.2, 2.0, 3.0),
-					jambe = 1.5,
+					corps = 2.4,
+					tete = 2.4,
+					bras = 0.6,
+					queue = 2.4,
+					leveQueue = 0.4,
 					couleur = teinte,
 					ventre = Charte.creme,
-					crane = V(2.3, 2.0, 2.3),
-					museau = V(1.3, 0.7, 1.1),
+					museau = { l = 1.2, h = 0.72, avance = 0.8 },
 					dents = 2,
 				})
-				rayures(r, 2, ombre(teinte))
+				motifs(r, {
+					{ dir = V(0.5, 0.8, 0.2), d = 0.26 },
+					{ dir = V(-0.5, 0.8, 0.2), d = 0.26 },
+				}, ombre(teinte))
 			end)
 		end
 	end

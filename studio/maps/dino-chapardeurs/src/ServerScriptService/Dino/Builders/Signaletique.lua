@@ -1,20 +1,22 @@
--- Constructeur Signaletique : panneaux-flèches épais aux couleurs vives, look « simulateur Roblox » (STYLE.md).
--- Sur la Place, quatre panneaux-flèches (planche orientée vers la destination, pointe au bout) :
--- Boutique (Comptoir, ouest, orange), Renaissance (Autel, est, violet), Dinos à vendre (Tapis, nord, rouge),
--- Dinodex (borne, sud, bleu). Au-dessus de chacun, un titre géant flottant cerné de noir (Style.etiquette).
+-- Constructeur Signaletique : panneaux-flèches en bois, finition « pro » (STYLE.md §4).
+-- Chaque panneau : socle de pierre rond, poteau en bois coiffé d'une boule peinte, planche en WoodPlanks
+-- aux bords biseautés côté arrière (coins) et pointe de flèche peinte côté destination (deux coins).
+-- Sur chaque face, une plaque peinte en dégradé, cerclée de noir, avec reflet, clous et texte blanc cerné.
+-- Sur la Place, quatre panneaux-flèches : Boutique (Comptoir, ouest, orange), Renaissance (Autel, est, violet),
+-- Dinos à vendre (Tapis, nord, rouge), Dinodex (borne, sud, bleu). Au-dessus de chacun, un titre géant flottant.
 -- Au début du Tapis « NURSERIE → », à la fin « GRANDE PORTE → », de chaque côté du Tapis.
--- Au nord de la Place, face aux joueurs qui apparaissent, un panneau de règles court et lisible.
+-- Au nord de la Place, face aux joueurs qui apparaissent, un tableau des règles à toit de bardeaux.
 -- Les flèches du texte sont recalculées pour chaque face : elles pointent toujours dans la bonne direction.
 -- Emprise (CONTRAT §10) : Place (hors secteur du tableau d'honneur) et bouts du Tapis.
 local M = {}
 
-local BUDGET = 100 -- parts au maximum pour ce constructeur
+local BUDGET = 120 -- parts au maximum pour ce constructeur
 
 -- valeurs par défaut, remplaçables par Equilibrage.signaletique
 local DEFAUTS = {
 	largeurFleche = 9,      -- largeur d'une planche indicatrice
 	reculBoutPlace = 17,    -- distance des panneaux Boutique / Renaissance au centre (sur l'axe est-ouest)
-	decalageAllee = 3.5,    -- décalage vers le sud pour laisser les allées libres
+	decalageAllee = 6.5,    -- décalage vers le sud : allées libres, et hors du champ du tableau d'honneur (z > 106)
 	tapisX = 6.5,           -- panneau vers le Tapis : décalage est (hors de la margelle de la fontaine, rayon 5,45)
 	tapisRecul = 17.5,      -- ... et distance au nord du centre
 	dinodexX = -4.5,        -- panneau vers le Dinodex : décalage ouest
@@ -30,9 +32,12 @@ local DEFAUTS = {
 }
 
 -- forme des panneaux-flèches
-local HAUTEUR_POTEAU = 5
+local HAUTEUR_POTEAU = 5      -- hauteur du centre de la planche au-dessus du sol
 local HAUTEUR_PLANCHE = 2.6
-local EPAISSEUR_PLANCHE = 0.9
+local EPAISSEUR_PLANCHE = 0.7
+local LONGUEUR_POINTE = 1.6   -- pointe de flèche (côté destination)
+local BISEAU = 0.55           -- coins coupés (côté arrière)
+local PARTS_FLECHE = 9        -- socle, poteau, boule, planche, talon, 2 biseaux, 2 demi-pointes
 local PIXELS_PAR_STUD = 40
 
 local function lireReglages(ctx)
@@ -75,12 +80,22 @@ function M.construire(ctx)
 		BLANC = Style.couleurs.texte
 	end
 
+	-- bois en trois teintes (base, ombre, lumière) et pierre des socles
+	local BOIS = Charte.bois
+	local BOIS_SOMBRE = Charte.ombre(Charte.bois)
+	local BOIS_CLAIR = Charte.lumiere(Charte.bois)
+	local PIERRE = Charte.lumiere(Charte.pierre)
+	local MAT_PLANCHES = Enum.Material.WoodPlanks
+	local MAT_BOIS = Enum.Material.Wood
+	local MAT_PIERRE = Enum.Material.Slate
+	local METAL = Charte.ombre(Charte.pierre)
+
 	-- palette { haut, bas } d'une couleur de bouton (Style.boutons), avec repli sur la Charte
 	local function palette(nom, repli)
 		if Style and Style.boutons and Style.boutons[nom] then
 			return Style.boutons[nom]
 		end
-		return { repli, repli }
+		return { Charte.lumiere(repli), repli }
 	end
 
 	-- ===== compteur de parts : on s'arrête net au budget =====
@@ -95,6 +110,14 @@ function M.construire(ctx)
 	local function bloc(parent, props)
 		if not reserver(1) then return nil end
 		return Outils.bloc(parent, props)
+	end
+	local function coin(parent, props)
+		if not reserver(1) then return nil end
+		return Outils.coin(parent, props)
+	end
+	local function cylindre(parent, props)
+		if not reserver(1) then return nil end
+		return Outils.cylindre(parent, props)
 	end
 	local function boule(parent, props)
 		if not reserver(1) then return nil end
@@ -131,7 +154,42 @@ function M.construire(ctx)
 		return t
 	end
 
-	-- face d'une planche : fond en dégradé vif, bordure noire épaisse, texte blanc cerné
+	-- petit cadre d'interface (reflet, clou, pastille)
+	local function cadreGui(parent, props, rayon)
+		local f = Instance.new("Frame")
+		f.BorderSizePixel = 0
+		for cle, valeur in pairs(props) do
+			f[cle] = valeur
+		end
+		if rayon then
+			local c = Instance.new("UICorner")
+			c.CornerRadius = UDim.new(0, rayon)
+			c.Parent = f
+		end
+		f.Parent = parent
+		return f
+	end
+
+	-- quatre clous de métal aux coins d'une plaque
+	local function clous(plaque, taille, retrait)
+		for _, ax in ipairs({ 0, 1 }) do
+			for _, ay in ipairs({ 0, 1 }) do
+				local clou = cadreGui(plaque, {
+					Name = "Clou",
+					AnchorPoint = Vector2.new(ax, ay),
+					Position = UDim2.new(ax, retrait * (1 - 2 * ax), ay, retrait * (1 - 2 * ay)),
+					Size = UDim2.fromOffset(taille, taille),
+					BackgroundColor3 = Charte.lumiere(Charte.pierre),
+					ZIndex = 3,
+				}, taille)
+				if Style then
+					Style.bordure(clou, 2)
+				end
+			end
+		end
+	end
+
+	-- face d'une planche : marge de bois visible, plaque peinte en dégradé, cerclée de noir, reflet brillant et clous
 	local function faceCartoon(planche, face, couleurs, contenu)
 		local gui = Instance.new("SurfaceGui")
 		gui.Name = "Affiche"
@@ -145,17 +203,28 @@ function M.construire(ctx)
 		fond.Name = "Fond"
 		fond.AnchorPoint = Vector2.new(0.5, 0.5)
 		fond.Position = UDim2.fromScale(0.5, 0.5)
-		fond.Size = UDim2.new(1, -12, 1, -12)
+		fond.Size = UDim2.new(1, -18, 1, -18)
 		fond.BackgroundColor3 = Color3.new(1, 1, 1)
 		fond.BorderSizePixel = 0
 		if Style then
-			Style.coins(fond, 14)
-			Style.bordure(fond, 6)
+			Style.coins(fond, 12)
+			Style.bordure(fond, 5)
 			Style.degrade(fond, couleurs[1], couleurs[2])
 		else
 			fond.BackgroundColor3 = couleurs[2]
 		end
 		fond.Parent = gui
+
+		-- reflet brillant sur le haut de la plaque
+		cadreGui(fond, {
+			Name = "Reflet",
+			Position = UDim2.fromOffset(6, 5),
+			Size = UDim2.new(1, -12, 0.4, 0),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BackgroundTransparency = 0.78,
+			ZIndex = 2,
+		}, 9)
+		clous(fond, 9, 6)
 		contenu(fond)
 		return gui
 	end
@@ -168,7 +237,8 @@ function M.construire(ctx)
 		return Style.etiquette(part, lignes, props)
 	end
 
-	-- panneau-flèche : planche épaisse orientée vers la destination, pointe au bout, titre flottant
+	-- panneau-flèche : poteau de bois, planche en WoodPlanks orientée vers la destination,
+	-- talon biseauté à l'arrière, pointe peinte au bout, titre flottant
 	-- info : { nom, titre, droite, gauche, couleurs = { haut, bas } }
 	local function fleche(parent, info, position, direction)
 		local d = Vector3.new(direction.X, 0, direction.Z)
@@ -178,30 +248,95 @@ function M.construire(ctx)
 		d = d.Unit
 		-- l'axe X local de la planche pointe vers la destination
 		local angle = math.deg(math.atan2(-d.Z, d.X))
-		local largeur = R.largeurFleche
+		local W = R.largeurFleche
+		local H = HAUTEUR_PLANCHE
+		local T = EPAISSEUR_PLANCHE
+		local L = LONGUEUR_POINTE
+		local C = BISEAU
 		local couleurs = info.couleurs
-		if not reserver(2) then return nil end
+		-- tout le panneau ou rien
+		if not reserver(PARTS_FLECHE) then return nil end
 
 		local m = Outils.modele(parent, info.nom)
-		local tailleP = Vector3.new(0.8, HAUTEUR_POTEAU, 0.8)
+		local x, y0, z = position.X, position.Y, position.Z
+
+		-- socle de pierre rond (axe du cylindre = X, couché à la verticale)
+		Outils.cylindre(m, {
+			Name = "Pied",
+			Size = Vector3.new(0.5, 2, 2),
+			CFrame = CFrame.new(x, y0 + 0.25, z) * CFrame.Angles(0, 0, math.rad(90)),
+			Color = PIERRE,
+			Material = MAT_PIERRE,
+		})
+		-- poteau de bois qui dépasse un peu au-dessus de la planche
+		local hPoteau = HAUTEUR_POTEAU + H / 2 + 0.3
+		local tailleP = Vector3.new(0.7, hPoteau, 0.7)
 		Outils.bloc(m, {
 			Name = "Poteau",
 			Size = tailleP,
-			CFrame = Outils.surSol(tailleP, position.X, position.Z, angle, position.Y),
-			Color = NOIR,
+			CFrame = Outils.surSol(tailleP, x, z, angle, y0),
+			Color = BOIS_SOMBRE,
+			Material = MAT_BOIS,
 		})
+		-- boule peinte au sommet du poteau
+		Outils.boule(m, {
+			Name = "Boule",
+			Size = Vector3.new(0.9, 0.9, 0.9),
+			CFrame = CFrame.new(x, y0 + hPoteau + 0.3, z),
+			Color = couleurs[2],
+			Material = MAT_BOIS,
+			CanCollide = false,
+		})
+
 		local planche = Outils.bloc(m, {
 			Name = "Planche",
-			Size = Vector3.new(largeur, HAUTEUR_PLANCHE, EPAISSEUR_PLANCHE),
-			CFrame = CFrame.new(position.X, position.Y + HAUTEUR_POTEAU, position.Z) * CFrame.Angles(0, math.rad(angle), 0),
-			Color = couleurs[2],
+			Size = Vector3.new(W, H, T),
+			CFrame = CFrame.new(x, y0 + HAUTEUR_POTEAU, z) * CFrame.Angles(0, math.rad(angle), 0),
+			Color = BOIS,
+			Material = MAT_PLANCHES,
 			CanCollide = false,
 		})
 		m.PrimaryPart = planche
+		local cf = planche.CFrame
+
+		-- talon arrière : bloc central + deux coins qui coupent les angles en biseau
+		Outils.bloc(m, {
+			Name = "Talon",
+			Size = Vector3.new(C, H - 2 * C, T),
+			CFrame = cf * CFrame.new(-W / 2 - C / 2, 0, 0),
+			Color = BOIS,
+			Material = MAT_PLANCHES,
+			CanCollide = false,
+		})
+		-- pointe de flèche : deux demi-triangles peints aux couleurs de la destination
+		for _, s in ipairs({ 1, -1 }) do
+			local retourne = CFrame.new()
+			if s < 0 then
+				retourne = CFrame.Angles(0, 0, math.pi)
+			end
+			-- biseau : face verticale contre la planche (+X local du coin), pente vers l'arrière
+			Outils.coin(m, {
+				Name = "Biseau",
+				Size = Vector3.new(T, C, C),
+				CFrame = cf * CFrame.new(-W / 2 - C / 2, s * (H / 2 - C / 2), 0) * CFrame.Angles(0, math.rad(90), 0) * retourne,
+				Color = BOIS,
+				Material = MAT_PLANCHES,
+				CanCollide = false,
+			})
+			-- demi-pointe : face verticale contre la planche, pente vers la destination
+			Outils.coin(m, {
+				Name = "Pointe",
+				Size = Vector3.new(T, H / 2, L),
+				CFrame = cf * CFrame.new(W / 2 + L / 2, s * H / 4, 0) * CFrame.Angles(0, math.rad(-90), 0) * retourne,
+				Color = couleurs[2],
+				Material = MAT_PLANCHES,
+				CanCollide = false,
+			})
+		end
 
 		-- faces : la face arrière se lit vers +X local, la face avant vers -X local
 		for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
-			local droite = planche.CFrame.RightVector
+			local droite = cf.RightVector
 			if face == Enum.NormalId.Front then
 				droite = -droite
 			end
@@ -213,47 +348,26 @@ function M.construire(ctx)
 				texte(fond, {
 					Name = "Texte",
 					AnchorPoint = Vector2.new(0.5, 0.5),
-					Position = UDim2.fromScale(0.5, 0.5),
-					Size = UDim2.new(1, -24, 1, -16),
+					Position = UDim2.fromScale(0.5, 0.52),
+					Size = UDim2.new(1, -40, 1, -22),
 					Text = mot,
+					ZIndex = 4,
 					titre = true,
 				}, 4)
 			end)
 		end
 
-		-- pointe en losange, cernée de noir par un losange plus grand derrière
-		bloc(m, {
-			Name = "Pointe",
-			Size = Vector3.new(1.8, 1.8, EPAISSEUR_PLANCHE + 0.1),
-			CFrame = planche.CFrame * CFrame.new(largeur / 2, 0, 0) * CFrame.Angles(0, 0, math.rad(45)),
-			Color = couleurs[1],
-			CanCollide = false,
-		})
-		bloc(m, {
-			Name = "PointeContour",
-			Size = Vector3.new(2.2, 2.2, EPAISSEUR_PLANCHE - 0.1),
-			CFrame = planche.CFrame * CFrame.new(largeur / 2, 0, 0) * CFrame.Angles(0, 0, math.rad(45)),
-			Color = NOIR,
-			CanCollide = false,
-		})
-		-- pied de pierre claire
-		bloc(m, {
-			Name = "Pied",
-			Size = Vector3.new(1.6, 0.5, 1.6),
-			CFrame = Outils.surSol(Vector3.new(1.6, 0.5, 1.6), position.X, position.Z, angle, position.Y),
-			Color = Charte.sable,
-		})
-
-		-- titre géant flottant, lisible de loin (et sur mobile)
+		-- titre flottant facultatif : discret, juste au-dessus de la planche (sous la boule du poteau).
+		-- Les panneaux de la Place n'en portent plus : la borne, le Comptoir et la fontaine ont déjà le leur.
 		if info.titre then
 			titreFlottant(planche, {
 				{ texte = info.titre, couleur = couleurs[1], titre = true, contour = 4 },
 			}, {
 				Name = "Titre",
-				largeur = 14,
-				hauteurLigne = 2.4,
-				StudsOffset = Vector3.new(0, 3.2, 0),
-				MaxDistance = 150,
+				largeur = 9,
+				hauteurLigne = 1.6,
+				StudsOffset = Vector3.new(0, 2.2, 0),
+				MaxDistance = 70,
 			})
 		end
 		return m
@@ -275,7 +389,6 @@ function M.construire(ctx)
 		local posBoutique = Vector3.new(CX - R.reculBoutPlace, 0, CZ + R.decalageAllee)
 		fleche(m, {
 			nom = "VersBoutique",
-			titre = "🛒 BOUTIQUE →",
 			droite = "BOUTIQUE →",
 			gauche = "← BOUTIQUE",
 			couleurs = palette("orange", Charte.lave),
@@ -289,7 +402,6 @@ function M.construire(ctx)
 		local posAutel = Vector3.new(CX + R.reculBoutPlace, 0, CZ + R.decalageAllee)
 		fleche(m, {
 			nom = "VersRenaissance",
-			titre = "♻️ RENAISSANCE →",
 			droite = "RENAISSANCE →",
 			gauche = "← RENAISSANCE",
 			couleurs = palette("violet", Charte.violet),
@@ -304,7 +416,6 @@ function M.construire(ctx)
 		local posTapis = Vector3.new(CX + R.tapisX, 0, CZ - R.tapisRecul)
 		fleche(m, {
 			nom = "VersTapis",
-			titre = "🦖 DINOS À VENDRE",
 			droite = "DINOS →",
 			gauche = "← DINOS",
 			couleurs = palette("rouge", Charte.tapis),
@@ -325,7 +436,6 @@ function M.construire(ctx)
 		local posDinodex = Vector3.new(CX + R.dinodexX, 0, CZ + R.dinodexRecul)
 		fleche(m, {
 			nom = "VersDinodex",
-			titre = "📖 DINODEX",
 			droite = "DINODEX →",
 			gauche = "← DINODEX",
 			couleurs = palette("bleu", Charte.gemme),
@@ -367,7 +477,7 @@ function M.construire(ctx)
 		end
 	end)
 
-	-- ===== 3. panneau des règles, face à la Place =====
+	-- ===== 3. tableau des règles, face à la Place =====
 	-- entre la Place et l'arrière des Bases du sud, visible dès l'apparition (on regarde vers le nord)
 	etape("regles", function()
 		local m = Outils.modele(dossier, "Regles")
@@ -382,39 +492,95 @@ function M.construire(ctx)
 			return repere * CFrame.new(x, y, z)
 		end
 		local yMilieu = bas + H / 2
-		local hPoteau = bas + H + 0.4
+		local yHaut = bas + H           -- haut de la planche
+		local yToit = yHaut + 0.7       -- dessous du toit (dessus de la poutre)
+		local hToit = 1.9
+		local profToit = 2.3            -- avancée de chaque pan du toit
+		local largeurToit = L + 4
+		local xPoteau = L / 2 + 0.5
 		local bleu = palette("bleu", Charte.gemme)
+		local rougeToit = Charte.ombre(Charte.tapis)
 
+		-- poteaux de bois sur socles de pierre ronds
 		for _, s in ipairs({ -1, 1 }) do
-			bloc(m, {
-				Name = "Poteau",
-				Size = Vector3.new(1, hPoteau, 1),
-				CFrame = ici(s * (L / 2 + 0.9), hPoteau / 2, 0),
-				Color = NOIR,
+			cylindre(m, {
+				Name = "Pied",
+				Size = Vector3.new(0.6, 2.2, 2.2),
+				CFrame = ici(s * xPoteau, 0.3, 0) * CFrame.Angles(0, 0, math.rad(90)),
+				Color = PIERRE,
+				Material = MAT_PIERRE,
 			})
 			bloc(m, {
-				Name = "Pied",
-				Size = Vector3.new(1.8, 0.6, 1.8),
-				CFrame = ici(s * (L / 2 + 0.9), 0.3, 0),
-				Color = Charte.sable,
+				Name = "Poteau",
+				Size = Vector3.new(1, yToit, 1),
+				CFrame = ici(s * xPoteau, yToit / 2, 0),
+				Color = BOIS_SOMBRE,
+				Material = MAT_BOIS,
 			})
 		end
 		local planche = bloc(m, {
 			Name = "Planche",
-			Size = Vector3.new(L, H, 1),
+			Size = Vector3.new(L, H, 0.6),
 			CFrame = ici(0, yMilieu, 0),
-			Color = Style and Style.couleurs.fond or Charte.nuit,
+			Color = BOIS,
+			Material = MAT_PLANCHES,
 		})
-		-- cadre noir épais, façon bordure cartoon
-		bloc(m, { Name = "Cadre", Size = Vector3.new(L + 1.2, 0.6, 1.2), CFrame = ici(0, bas + H + 0.3, 0), Color = NOIR })
-		bloc(m, { Name = "Cadre", Size = Vector3.new(L + 1.2, 0.6, 1.2), CFrame = ici(0, bas - 0.3, 0), Color = NOIR })
-		bloc(m, { Name = "Cadre", Size = Vector3.new(0.6, H, 1.2), CFrame = ici(-L / 2 - 0.3, yMilieu, 0), Color = NOIR })
-		bloc(m, { Name = "Cadre", Size = Vector3.new(0.6, H, 1.2), CFrame = ici(L / 2 + 0.3, yMilieu, 0), Color = NOIR })
-		-- œuf doré qui flotte au-dessus
+		-- poutres haute et basse en bois sombre
+		bloc(m, {
+			Name = "Poutre",
+			Size = Vector3.new(L + 3, 0.7, 1.1),
+			CFrame = ici(0, yHaut + 0.35, 0),
+			Color = BOIS_SOMBRE,
+			Material = MAT_PLANCHES,
+		})
+		bloc(m, {
+			Name = "Poutre",
+			Size = Vector3.new(L, 0.5, 0.9),
+			CFrame = ici(0, bas - 0.25, 0),
+			Color = BOIS_SOMBRE,
+			Material = MAT_PLANCHES,
+		})
+		-- toit à deux pans (coins) en bardeaux rouges, faîtage en bois
+		coin(m, {
+			Name = "Toit",
+			Size = Vector3.new(largeurToit, hToit, profToit),
+			CFrame = ici(0, yToit + hToit / 2, -profToit / 2),
+			Color = rougeToit,
+			Material = MAT_PLANCHES,
+		})
+		coin(m, {
+			Name = "Toit",
+			Size = Vector3.new(largeurToit, hToit, profToit),
+			CFrame = ici(0, yToit + hToit / 2, profToit / 2) * CFrame.Angles(0, math.pi, 0),
+			Color = rougeToit,
+			Material = MAT_PLANCHES,
+		})
+		cylindre(m, {
+			Name = "Faitage",
+			Size = Vector3.new(largeurToit + 0.4, 0.5, 0.5),
+			CFrame = ici(0, yToit + hToit, 0),
+			Color = BOIS_SOMBRE,
+			Material = MAT_BOIS,
+		})
+		-- lanterne sous l'avancée du toit, au-dessus du tableau
+		local lampe = bloc(m, {
+			Name = "Lanterne",
+			Size = Vector3.new(0.5, 0.5, 0.5),
+			CFrame = ici(0, yToit - 0.05, -1.2),
+			Color = Charte.dore,
+			Material = Enum.Material.Neon,
+			CanCollide = false,
+		})
+		if lampe then
+			local l = Outils.lumiere(lampe, { Range = 12, Brightness = 1.2, Color = Charte.dore })
+			l.Shadows = true
+		end
+		-- œuf doré qui flotte au-dessus du faîtage
+		local yOeuf = yToit + hToit + 1.5
 		local oeuf = boule(m, {
 			Name = "Oeuf",
 			Size = Vector3.new(1.4, 1.8, 1.4),
-			CFrame = ici(0, hPoteau + 4.2, 0),
+			CFrame = ici(0, yOeuf, 0),
 			Color = Charte.dore,
 			Material = Enum.Material.Neon,
 			CanCollide = false,
@@ -428,14 +594,14 @@ function M.construire(ctx)
 		end
 		m.PrimaryPart = planche
 
-		-- titre géant flottant
+		-- titre géant flottant, au-dessus de l'œuf
 		titreFlottant(planche, {
 			{ texte = "📜 RÈGLES", couleur = Style and Style.couleurs.revenu or Charte.dore, titre = true, contour = 4 },
 		}, {
 			Name = "Titre",
 			largeur = 12,
 			hauteurLigne = 2.6,
-			StudsOffset = Vector3.new(0, H / 2 + 1.6, 0),
+			StudsOffset = Vector3.new(0, yOeuf - yMilieu + 2.8, 0),
 			MaxDistance = 160,
 		})
 
@@ -450,9 +616,15 @@ function M.construire(ctx)
 		end
 		local vert = Charte.herbe
 		local jaune = Charte.dore
+		local fondHaut = Charte.nuit
+		local fondBas = Charte.nuit
+		local carte = Charte.lumiere(Charte.nuit)
 		if Style and Style.couleurs then
 			vert = Style.couleurs.argent
 			jaune = Style.couleurs.revenu
+			fondHaut = Style.couleurs.fondHaut
+			fondBas = Style.couleurs.fond
+			carte = Style.couleurs.carte
 		end
 
 		-- règles courtes, une idée par ligne
@@ -465,43 +637,50 @@ function M.construire(ctx)
 		local pied = "Départ " .. Charte.argent(depart) .. "  •  Verrou " .. tostring(math.floor(dureeVerrou + 0.5)) .. " s"
 
 		local function affiche(face)
-			faceCartoon(planche, face, { bleu[1], bleu[2] }, function(fond)
-				-- le fond du panneau reste sombre : on retire le dégradé bleu, gardé pour le bandeau
-				local degrade = fond:FindFirstChildOfClass("UIGradient")
-				if degrade then
-					degrade:Destroy()
-				end
-				fond.BackgroundColor3 = Style and Style.couleurs.fond or Charte.nuit
-
-				local bandeau = Instance.new("Frame")
-				bandeau.Name = "Bandeau"
-				bandeau.BorderSizePixel = 0
-				bandeau.BackgroundColor3 = Color3.new(1, 1, 1)
-				bandeau.Size = UDim2.fromScale(1, 0.2)
+			faceCartoon(planche, face, { fondHaut, fondBas }, function(fond)
+				-- bandeau de titre bleu brillant
+				local bandeau = cadreGui(fond, {
+					Name = "Bandeau",
+					Position = UDim2.new(0, 10, 0, 10),
+					Size = UDim2.new(1, -20, 0.19, 0),
+					BackgroundColor3 = Color3.new(1, 1, 1),
+					ZIndex = 3,
+				}, 10)
 				if Style then
-					Style.coins(bandeau, 14)
 					Style.degrade(bandeau, bleu[1], bleu[2])
+					Style.bordure(bandeau, 3)
 				else
 					bandeau.BackgroundColor3 = bleu[2]
 				end
-				bandeau.Parent = fond
 				texte(bandeau, {
 					Name = "Titre",
 					AnchorPoint = Vector2.new(0.5, 0.5),
 					Position = UDim2.fromScale(0.5, 0.5),
 					Size = UDim2.fromScale(0.9, 0.8),
 					Text = "COMMENT JOUER ?",
+					ZIndex = 4,
 					titre = true,
 				}, 4)
 
+				-- une pastille arrondie par règle
 				for i, ligne in ipairs(lignes) do
-					texte(fond, {
+					local pastille = cadreGui(fond, {
+						Name = "Regle" .. i,
+						Position = UDim2.new(0.04, 0, 0.245 + (i - 1) * 0.152, 0),
+						Size = UDim2.new(0.92, 0, 0.13, 0),
+						BackgroundColor3 = carte,
+						BackgroundTransparency = 0.15,
+						ZIndex = 3,
+					}, 8)
+					texte(pastille, {
 						Name = "Ligne" .. i,
-						Position = UDim2.fromScale(0.05, 0.23 + (i - 1) * 0.155),
-						Size = UDim2.fromScale(0.9, 0.14),
+						AnchorPoint = Vector2.new(0.5, 0.5),
+						Position = UDim2.fromScale(0.5, 0.5),
+						Size = UDim2.new(1, -16, 1, -4),
 						Text = ligne.texte,
 						TextColor3 = ligne.couleur,
-					}, 4)
+						ZIndex = 4,
+					}, 3)
 				end
 
 				texte(fond, {
@@ -510,6 +689,7 @@ function M.construire(ctx)
 					Size = UDim2.fromScale(0.8, 0.1),
 					Text = pied,
 					TextColor3 = vert,
+					ZIndex = 4,
 				}, 3)
 			end)
 		end

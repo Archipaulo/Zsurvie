@@ -1,6 +1,8 @@
 -- Interface Renaissance : panneau ouvert depuis l'Autel (ou le HUD), au style « simulateur Roblox ».
--- Montre le niveau, le gros multiplicateur actuel ➜ suivant, une barre de progression argent / coût,
--- ce que l'on perd et ce que l'on gagne, et un gros bouton « RENAÎTRE » à confirmer en deux temps.
+-- Montre le niveau, le gros multiplicateur actuel ➜ suivant, une barre de progression argent / coût
+-- (reflet, repères, pourcentage, éclat qui balaie quand on peut renaître), ce que l'on perd et ce que
+-- l'on gagne, et un gros bouton « RENAÎTRE » à confirmer en deux temps.
+-- Ouverture : fond qui s'assombrit, panneau qui apparaît en fondu et rebondit ; fermeture en fondu.
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
@@ -8,6 +10,10 @@ local M = {}
 
 local DELAI_CONFIRMATION = 4 -- secondes pour confirmer après le premier clic
 local ATTENTE_ENVOI = 1.5    -- secondes de blocage après l'envoi au serveur
+local DUREE_OUVERTURE = 0.28
+local DUREE_FERMETURE = 0.16
+local OPACITE_FOND = 0.45    -- transparence du voile sombre une fois ouvert
+local ESPACE_INSECABLE = string.char(0xC2, 0xA0) -- garde « TU PERDS » / « TU GAGNES » sur une ligne
 
 -- nombre fini (ni NaN, ni infini)
 local function estFini(n)
@@ -23,6 +29,21 @@ local function formaterMultiplicateur(x)
 	return texte
 end
 
+-- lance un tween sans jamais faire planter l'interface
+local function animer(objet, duree, style, direction, buts)
+	local ok, tween = pcall(function()
+		return TweenService:Create(objet, TweenInfo.new(duree, style, direction), buts)
+	end)
+	if ok and tween then
+		tween:Play()
+		return tween
+	end
+	for cle, valeur in pairs(buts) do
+		objet[cle] = valeur
+	end
+	return nil
+end
+
 function M.demarrer(ctx)
 	local Charte = ctx.Charte
 	local Style = ctx.Style
@@ -34,6 +55,8 @@ function M.demarrer(ctx)
 	local couleurs = Style.couleurs
 	local ROUGE = Style.boutons.rouge[1]
 	local VERT = couleurs.argent
+	local BLANC = Color3.new(1, 1, 1)
+	local NOIR = Color3.new(0, 0, 0)
 
 	-- ===== chiffres (toujours via Equilibrage, avec repli sûr) =====
 	local MAX = 10
@@ -108,19 +131,48 @@ function M.demarrer(ctx)
 		return "$" .. tostring(math.floor(n))
 	end
 
+	-- reflet brillant (moitié haute, fondu vers le bas) sur un cadre coloré
+	local function reflet(parent, rayon, opacite)
+		local r = Instance.new("Frame")
+		r.Name = "Reflet"
+		r.BackgroundColor3 = BLANC
+		r.BackgroundTransparency = 1 - (opacite or 0.4)
+		r.BorderSizePixel = 0
+		r.Position = UDim2.new(0, 5, 0, 3)
+		r.Size = UDim2.new(1, -10, 0.42, 0)
+		r.ZIndex = 2
+		Style.coins(r, rayon or 8)
+		local fondu = Instance.new("UIGradient")
+		fondu.Rotation = 90
+		fondu.Transparency = NumberSequence.new(0.05, 1)
+		fondu.Parent = r
+		r.Parent = parent
+		return r
+	end
+
 	-- ===== construction du panneau =====
+	-- voile sombre plein écran (bloque les clics derrière)
 	local fond = Instance.new("Frame")
 	fond.Name = "RenaissanceFond"
 	fond.Active = true
 	fond.BackgroundColor3 = couleurs.ombre
-	fond.BackgroundTransparency = 0.5
+	fond.BackgroundTransparency = OPACITE_FOND
 	fond.BorderSizePixel = 0
 	fond.Size = UDim2.fromScale(1, 1)
 	fond.ZIndex = 40
 	fond.Visible = false
 	fond.Parent = ctx.gui
 
-	local panneau, contenu, boutonFermer = Style.panneau(fond, {
+	-- groupe transparent : permet le fondu de tout le panneau (et de son ombre) d'un coup
+	local groupe = Instance.new("CanvasGroup")
+	groupe.Name = "Groupe"
+	groupe.BackgroundTransparency = 1
+	groupe.BorderSizePixel = 0
+	groupe.Size = UDim2.fromScale(1, 1)
+	groupe.GroupTransparency = 0
+	groupe.Parent = fond
+
+	local panneau, contenu, boutonFermer = Style.panneau(groupe, {
 		Name = "Renaissance",
 		titre = "RENAISSANCE",
 		icone = "♻️",
@@ -128,144 +180,245 @@ function M.demarrer(ctx)
 		Size = UDim2.new(0.94, 0, 0.9, 0),
 	})
 	panneau.Position = UDim2.fromScale(0.5, 0.5)
-	local limite = panneau:FindFirstChildOfClass("UISizeConstraint")
-	if limite then
-		limite.MaxSize = Vector2.new(540, 600)
-		limite.MinSize = Vector2.new(300, 380)
+	-- même limite pour le panneau et pour son ombre portée (cadre frère « RenaissanceOmbre »)
+	local ombrePanneau = groupe:FindFirstChild("RenaissanceOmbre")
+	for _, cadre in ipairs({ panneau, ombrePanneau }) do
+		local limite = cadre and cadre:FindFirstChildOfClass("UISizeConstraint")
+		if limite then
+			limite.MaxSize = Vector2.new(540, 600)
+			limite.MinSize = Vector2.new(300, 380)
+		end
 	end
+	-- échelle d'ouverture / fermeture (rebond)
+	local echellePanneau = Instance.new("UIScale")
+	echellePanneau.Name = "Ouverture"
+	echellePanneau.Scale = 1
+	echellePanneau.Parent = panneau
 
-	-- niveau actuel « RENAISSANCE 2 / 10 »
-	local niveauTexte = Style.texte(contenu, {
+	-- pastille du niveau « NIVEAU 2 / 10 »
+	local pastille = Instance.new("Frame")
+	pastille.Name = "Pastille"
+	pastille.AnchorPoint = Vector2.new(0.5, 0)
+	pastille.Position = UDim2.fromScale(0.5, 0)
+	pastille.Size = UDim2.fromScale(0.5, 0.072)
+	pastille.BackgroundColor3 = BLANC
+	pastille.BorderSizePixel = 0
+	pastille.Parent = contenu
+	Style.coins(pastille, 999)
+	Style.bordure(pastille, 3)
+	Style.degrade(pastille, Style.boutons.violet[2]:Lerp(couleurs.fond, 0.35), Style.boutons.violet[2]:Lerp(couleurs.fond, 0.7))
+	local niveauTexte = Style.texte(pastille, {
 		Name = "Niveau",
-		Position = UDim2.fromScale(0, 0),
-		Size = UDim2.fromScale(1, 0.08),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.new(1, -20, 0.8, 0),
 		Text = "",
 		contour = 3,
-		tailleMax = 28,
+		tailleMax = 26,
 	})
 
-	-- gros multiplicateur « x1,5 ➜ x2 »
-	local rangeeMult = Instance.new("Frame")
-	rangeeMult.Name = "Multiplicateur"
-	rangeeMult.BackgroundTransparency = 1
-	rangeeMult.Position = UDim2.fromScale(0, 0.08)
-	rangeeMult.Size = UDim2.fromScale(1, 0.17)
-	rangeeMult.Parent = contenu
+	-- gros multiplicateur « x1,5 ➜ x2 » sur une carte violette
+	local rangeeMult = Style.carte(contenu, {
+		Name = "Multiplicateur",
+		BackgroundColor3 = Style.boutons.violet[2]:Lerp(couleurs.fond, 0.62),
+		Position = UDim2.fromScale(0, 0.088),
+		Size = UDim2.fromScale(1, 0.172),
+	})
+	reflet(rangeeMult, 12, 0.12)
 	local multActuel = Style.texte(rangeeMult, {
 		Name = "Actuel",
-		Position = UDim2.fromScale(0, 0),
-		Size = UDim2.fromScale(0.4, 1),
+		Position = UDim2.fromScale(0, 0.06),
+		Size = UDim2.fromScale(0.4, 0.88),
 		TextXAlignment = Enum.TextXAlignment.Right,
 		Text = "x1",
+		ZIndex = 3,
 		titre = true,
 		contour = 4,
-		tailleMax = 64,
+		tailleMax = 60,
 	})
 	local fleche = Style.texte(rangeeMult, {
 		Name = "Fleche",
-		Position = UDim2.fromScale(0.4, 0.15),
-		Size = UDim2.fromScale(0.2, 0.7),
+		Position = UDim2.fromScale(0.4, 0.18),
+		Size = UDim2.fromScale(0.2, 0.64),
 		Text = "➜",
 		TextColor3 = couleurs.revenu,
+		ZIndex = 3,
 		contour = 3,
-		tailleMax = 48,
+		tailleMax = 46,
 	})
 	local multSuivant = Style.texte(rangeeMult, {
 		Name = "Suivant",
-		Position = UDim2.fromScale(0.6, 0),
-		Size = UDim2.fromScale(0.4, 1),
+		Position = UDim2.fromScale(0.6, 0.02),
+		Size = UDim2.fromScale(0.4, 0.96),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Text = "x1",
+		ZIndex = 3,
 		titre = true,
 		contour = 4,
-		tailleMax = 72,
+		tailleMax = 70,
 	})
 	Style.degradeRarete(multSuivant, "Divin")
 
 	-- coût de la suivante (argent vert)
 	local coutTexte = Style.texte(contenu, {
 		Name = "Cout",
-		Position = UDim2.fromScale(0, 0.26),
-		Size = UDim2.fromScale(1, 0.07),
+		Position = UDim2.fromScale(0, 0.272),
+		Size = UDim2.fromScale(1, 0.062),
 		Text = "",
 		TextColor3 = VERT,
 		contour = 3,
 		tailleMax = 28,
 	})
 
-	-- barre de progression Argent / coût : épaisse, cernée de noir, remplissage vert en dégradé
+	-- barre de progression Argent / coût : rail creusé, remplissage vert brillant, repères, pourcentage
 	local barre = Instance.new("Frame")
 	barre.Name = "Barre"
-	barre.Position = UDim2.fromScale(0, 0.34)
+	barre.Position = UDim2.fromScale(0, 0.344)
 	barre.Size = UDim2.fromScale(1, 0.1)
-	barre.BackgroundColor3 = couleurs.carte
+	barre.BackgroundColor3 = BLANC
 	barre.BorderSizePixel = 0
 	barre.ClipsDescendants = true
 	barre.Parent = contenu
 	Style.coins(barre, 14)
 	Style.bordure(barre, 4)
+	Style.degrade(barre, couleurs.fond:Lerp(NOIR, 0.35), couleurs.carte)
+
 	local remplissage = Instance.new("Frame")
 	remplissage.Name = "Remplissage"
 	remplissage.Size = UDim2.fromScale(0, 1)
-	remplissage.BackgroundColor3 = Color3.new(1, 1, 1)
+	remplissage.BackgroundColor3 = BLANC
 	remplissage.BorderSizePixel = 0
+	remplissage.ClipsDescendants = true
+	remplissage.ZIndex = 1
 	remplissage.Parent = barre
 	Style.coins(remplissage, 14)
-	Style.degrade(remplissage, Style.boutons.vert[1], Style.boutons.vert[2])
+	local degradeRemplissage = Style.degrade(remplissage, Style.boutons.vert[1], Style.boutons.vert[2])
+	reflet(remplissage, 8, 0.55)
+
+	-- éclat qui balaie la barre quand la renaissance est possible
+	local balayage = Instance.new("Frame")
+	balayage.Name = "Balayage"
+	balayage.BackgroundColor3 = BLANC
+	balayage.BorderSizePixel = 0
+	balayage.Position = UDim2.fromScale(-0.35, 0.1)
+	balayage.Size = UDim2.fromScale(0.22, 0.8)
+	balayage.ZIndex = 3
+	balayage.Visible = false
+	balayage.Parent = remplissage
+	Style.coins(balayage, 8)
+	local fonduBalayage = Instance.new("UIGradient")
+	fonduBalayage.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.5, 0.35),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	fonduBalayage.Parent = balayage
+
+	-- repères à 25 / 50 / 75 %
+	for i = 1, 3 do
+		local repere = Instance.new("Frame")
+		repere.Name = "Repere" .. i
+		repere.AnchorPoint = Vector2.new(0.5, 0.5)
+		repere.Position = UDim2.fromScale(i * 0.25, 0.5)
+		repere.Size = UDim2.new(0, 3, 0.46, 0)
+		repere.BackgroundColor3 = couleurs.contour
+		repere.BackgroundTransparency = 0.55
+		repere.BorderSizePixel = 0
+		repere.ZIndex = 2
+		repere.Parent = barre
+		Style.coins(repere, 2)
+	end
+
 	local barreTexte = Style.texte(barre, {
 		Name = "Texte",
-		Position = UDim2.fromScale(0.5, 0.5),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Size = UDim2.fromScale(0.94, 0.78),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 14, 0.5, 0),
+		Size = UDim2.new(0.74, -14, 0.72, 0),
+		TextXAlignment = Enum.TextXAlignment.Left,
 		Text = "",
-		ZIndex = 3,
+		ZIndex = 4,
+		contour = 3,
+		tailleMax = 28,
+	})
+	local pourcentTexte = Style.texte(barre, {
+		Name = "Pourcent",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -14, 0.5, 0),
+		Size = UDim2.new(0.24, -8, 0.72, 0),
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Text = "",
+		ZIndex = 4,
+		titre = true,
 		contour = 3,
 		tailleMax = 30,
 	})
 
-	-- cartes « Tu perds » / « Tu gagnes »
-	local function colonne(nom, x, titre, couleur)
+	-- cartes « Tu perds » / « Tu gagnes » : bandeau de titre coloré sur une ligne, deux lignes dessous
+	local function colonne(nom, x, titre, couleur, palette)
 		local c = Style.carte(contenu, {
 			Name = nom,
-			Position = UDim2.fromScale(x, 0.47),
-			Size = UDim2.fromScale(0.485, 0.27),
+			Position = UDim2.fromScale(x, 0.468),
+			Size = UDim2.fromScale(0.485, 0.278),
 		})
 		local bord = c:FindFirstChild("Bordure")
 		if bord then
 			bord.Color = couleur
 		end
-		Style.texte(c, {
+		local entete = Instance.new("Frame")
+		entete.Name = "Entete"
+		entete.AnchorPoint = Vector2.new(0.5, 0)
+		entete.Position = UDim2.new(0.5, 0, 0, 8)
+		entete.Size = UDim2.new(1, -16, 0.26, 0)
+		entete.BackgroundColor3 = BLANC
+		entete.BorderSizePixel = 0
+		entete.Parent = c
+		Style.coins(entete, 10)
+		Style.bordure(entete, 3)
+		Style.degrade(entete, palette[1], palette[2])
+		reflet(entete, 6, 0.35)
+		Style.texte(entete, {
 			Name = "Titre",
-			Position = UDim2.fromScale(0.05, 0.04),
-			Size = UDim2.fromScale(0.9, 0.28),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.52),
+			Size = UDim2.new(1, -12, 0.8, 0),
 			Text = titre,
-			TextColor3 = couleur,
+			ZIndex = 3,
 			titre = true,
 			contour = 3,
-			tailleMax = 30,
+			tailleMax = 26,
 		})
 		local lignes = {}
 		for i = 1, 2 do
 			lignes[i] = Style.texte(c, {
 				Name = "Ligne" .. i,
-				Position = UDim2.fromScale(0.06, 0.36 + (i - 1) * 0.31),
-				Size = UDim2.fromScale(0.88, 0.27),
+				Position = UDim2.fromScale(0.06, 0.38 + (i - 1) * 0.3),
+				Size = UDim2.fromScale(0.88, 0.26),
 				TextXAlignment = Enum.TextXAlignment.Left,
 				Text = "",
 				contour = 2.5,
 				tailleMax = 22,
 			})
 		end
+		-- fin séparateur entre les deux lignes
+		local separateur = Instance.new("Frame")
+		separateur.Name = "Separateur"
+		separateur.AnchorPoint = Vector2.new(0.5, 0.5)
+		separateur.Position = UDim2.fromScale(0.5, 0.665)
+		separateur.Size = UDim2.new(0.88, 0, 0, 2)
+		separateur.BackgroundColor3 = BLANC
+		separateur.BackgroundTransparency = 0.85
+		separateur.BorderSizePixel = 0
+		separateur.Parent = c
 		return c, lignes
 	end
-	local colPerte, lignesPerte = colonne("Perte", 0, "❌ TU PERDS", ROUGE)
-	local colGain, lignesGain = colonne("Gain", 0.515, "✅ TU GAGNES", VERT)
+	local colPerte, lignesPerte = colonne("Perte", 0, "TU" .. ESPACE_INSECABLE .. "PERDS", ROUGE, Style.boutons.rouge)
+	local colGain, lignesGain = colonne("Gain", 0.515, "TU" .. ESPACE_INSECABLE .. "GAGNES", VERT, Style.boutons.vert)
 
 	-- « MAX » géant doré à la place des cartes
 	local messageMax = Style.texte(contenu, {
 		Name = "Max",
-		Position = UDim2.fromScale(0, 0.47),
-		Size = UDim2.fromScale(1, 0.27),
+		Position = UDim2.fromScale(0, 0.468),
+		Size = UDim2.fromScale(1, 0.278),
 		Text = "👑 MAX 👑",
 		Visible = false,
 		titre = true,
@@ -276,7 +429,7 @@ function M.demarrer(ctx)
 
 	local raison = Style.texte(contenu, {
 		Name = "Raison",
-		Position = UDim2.fromScale(0, 0.76),
+		Position = UDim2.fromScale(0, 0.762),
 		Size = UDim2.fromScale(1, 0.06),
 		Text = "",
 		TextColor3 = couleurs.revenu,
@@ -289,12 +442,42 @@ function M.demarrer(ctx)
 	local jetonConfirmation = 0 -- invalide les délais périmés
 	local finAttente = 0        -- os.clock() jusqu'auquel le bouton reste bloqué après envoi
 	local ouvert = false
+	local jetonAnimation = 0    -- invalide les fins d'animation périmées (ouvrir / fermer)
+	local tweenBalayage = nil
 
 	local boutonRenaitre, libelleRenaitre
 
 	local function styleBouton(texte, couleur)
 		libelleRenaitre.Text = texte
 		Style.couleurBouton(boutonRenaitre, couleur)
+	end
+
+	-- éclat de la barre : actif seulement quand le panneau est ouvert et la renaissance possible
+	local function eclat(actif)
+		if actif and ouvert then
+			if tweenBalayage then
+				return
+			end
+			balayage.Position = UDim2.fromScale(-0.35, 0.1)
+			balayage.Visible = true
+			local ok, tween = pcall(function()
+				return TweenService:Create(balayage, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, false, 1.1), {
+					Position = UDim2.fromScale(1.15, 0.1),
+				})
+			end)
+			if ok and tween then
+				tweenBalayage = tween
+				tween:Play()
+			end
+		else
+			if tweenBalayage then
+				pcall(function()
+					tweenBalayage:Cancel()
+				end)
+				tweenBalayage = nil
+			end
+			balayage.Visible = false
+		end
 	end
 
 	-- vrai si la renaissance est possible, sinon faux et la raison
@@ -335,19 +518,21 @@ function M.demarrer(ctx)
 		fleche.Visible = not estMax
 		multSuivant.Visible = not estMax
 		if estMax then
-			multActuel.Size = UDim2.fromScale(1, 1)
+			multActuel.Size = UDim2.fromScale(1, 0.88)
 			multActuel.TextXAlignment = Enum.TextXAlignment.Center
 		else
-			multActuel.Size = UDim2.fromScale(0.4, 1)
+			multActuel.Size = UDim2.fromScale(0.4, 0.88)
 			multActuel.TextXAlignment = Enum.TextXAlignment.Right
 			multSuivant.Text = "x" .. formaterMultiplicateur(multiplicateurDe(niveau + 1))
 		end
 
 		local progression = 1
+		local pourcent = ""
 		if estMax then
 			coutTexte.Text = "Renaissance maximale atteinte !"
 			coutTexte.TextColor3 = couleurs.revenu
-			barreTexte.Text = "MAX"
+			barreTexte.Text = "👑 MAX"
+			pourcent = "100%"
 		else
 			coutTexte.TextColor3 = VERT
 			local cout = coutDe(niveau)
@@ -355,16 +540,21 @@ function M.demarrer(ctx)
 				progression = math.clamp(argent / cout, 0, 1)
 				coutTexte.Text = "Coût : " .. montant(cout)
 				barreTexte.Text = montant(argent) .. " / " .. montant(cout)
+				-- arrondi vers le bas : « 100% » seulement quand on a vraiment la somme
+				pourcent = math.floor(progression * 100) .. "%"
 			elseif cout then
 				coutTexte.Text = "Coût : GRATUIT"
 				barreTexte.Text = montant(argent)
+				pourcent = "100%"
 			else
 				progression = 0
 				coutTexte.Text = "Coût : indisponible"
 				barreTexte.Text = "..."
+				pourcent = "--"
 			end
-			lignesPerte[1].Text = "💸 Ton argent (retour à " .. montant(ARGENT_DEPART) .. ")"
-			lignesPerte[2].Text = "🦖 Tous les dinos de ta Base"
+			-- textes courts et de même longueur que ceux de « TU GAGNES » : même taille de police
+			lignesPerte[1].Text = "💸 Argent remis à " .. montant(ARGENT_DEPART)
+			lignesPerte[2].Text = "🦖 Dinos de ta Base"
 			lignesGain[1].Text = "💰 Revenus x" .. formaterMultiplicateur(multiplicateurDe(niveau + 1))
 			if emplacementsDe(niveau + 1) > emplacementsDe(niveau) then
 				lignesGain[2].Text = "🏠 +1 emplacement (" .. emplacementsDe(niveau + 1) .. ")"
@@ -373,14 +563,25 @@ function M.demarrer(ctx)
 			end
 		end
 
-		pcall(function()
-			TweenService:Create(remplissage, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-				Size = UDim2.fromScale(progression, 1),
-			}):Play()
-		end)
+		-- barre : or au maximum, vert sinon ; pourcentage jaune quand la barre est pleine
+		local palette = Style.boutons.vert
+		if estMax then
+			palette = Style.boutons.jaune
+		end
+		degradeRemplissage.Color = ColorSequence.new(palette[1], palette[2])
+		pourcentTexte.Text = pourcent
+		if progression >= 1 then
+			pourcentTexte.TextColor3 = couleurs.revenu
+		else
+			pourcentTexte.TextColor3 = couleurs.texte
+		end
+		animer(remplissage, 0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {
+			Size = UDim2.fromScale(progression, 1),
+		})
 
 		-- bouton
 		local ok, pourquoi = possible()
+		eclat(ok and not estMax)
 		if estMax then
 			confirmation = false
 			styleBouton("👑 MAX", "gris")
@@ -407,7 +608,7 @@ function M.demarrer(ctx)
 	end
 
 	local function clicRenaitre()
-		if os.clock() < finAttente then
+		if not ouvert or os.clock() < finAttente then
 			return
 		end
 		local ok = possible()
@@ -465,22 +666,40 @@ function M.demarrer(ctx)
 	tailleBouton.MaxSize = Vector2.new(420, 84)
 	tailleBouton.Parent = boutonRenaitre
 
-	-- ===== ouverture / fermeture =====
+	-- ===== ouverture (fondu + rebond) / fermeture (fondu + léger rétrécissement) =====
 	local function fermer()
 		if not ouvert then
 			return
 		end
 		ouvert = false
 		annulerConfirmation()
-		fond.Visible = false
+		eclat(false)
+		jetonAnimation = jetonAnimation + 1
+		local jeton = jetonAnimation
+		animer(fond, DUREE_FERMETURE, Enum.EasingStyle.Quad, Enum.EasingDirection.In, { BackgroundTransparency = 1 })
+		animer(groupe, DUREE_FERMETURE, Enum.EasingStyle.Quad, Enum.EasingDirection.In, { GroupTransparency = 1 })
+		animer(echellePanneau, DUREE_FERMETURE, Enum.EasingStyle.Quad, Enum.EasingDirection.In, { Scale = 0.88 })
+		task.delay(DUREE_FERMETURE + 0.02, function()
+			if jetonAnimation == jeton and not ouvert then
+				fond.Visible = false
+			end
+		end)
 	end
 
 	local function ouvrir()
 		annulerConfirmation()
 		ouvert = true
+		jetonAnimation = jetonAnimation + 1
+		-- départ : voile clair, panneau transparent et réduit, barre vide (elle se remplit à l'ouverture)
+		fond.BackgroundTransparency = 1
+		groupe.GroupTransparency = 1
+		echellePanneau.Scale = 0.8
+		remplissage.Size = UDim2.fromScale(0, 1)
 		fond.Visible = true
 		rafraichir()
-		Style.pop(panneau)
+		animer(fond, 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, { BackgroundTransparency = OPACITE_FOND })
+		animer(groupe, 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, { GroupTransparency = 0 })
+		animer(echellePanneau, DUREE_OUVERTURE, Enum.EasingStyle.Back, Enum.EasingDirection.Out, { Scale = 1 })
 	end
 
 	boutonFermer.Activated:Connect(function()

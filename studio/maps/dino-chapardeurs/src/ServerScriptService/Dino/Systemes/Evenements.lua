@@ -224,16 +224,64 @@ function M.demarrer(ctx)
 		return p
 	end
 
-	-- couleurs cartoon des meteorites (jaune -> orange -> rose, comme les degrades des boutons)
+	-- palette : roche Basalt sombre, veines Neon de feu (blanc chaud -> jaune -> orange -> braise)
 	local JAUNE = Charte.dore
 	local ORANGE = Charte.lave
-	local ROSE = Charte.alerte
 	if Style then
 		JAUNE = Style.couleurs.revenu
 		ORANGE = Style.boutons.orange[2]
-		ROSE = Style.boutons.rose[2]
 	end
-	local ROCHE = Charte.encre:Lerp(Charte.pierre, 0.45)
+	local BLANC_CHAUD = Color3.fromRGB(255, 244, 205)
+	local BRAISE = Color3.fromRGB(200, 42, 18)
+	local BRAISE_FROIDE = Color3.fromRGB(110, 24, 14)
+	local BASALTE = Color3.fromRGB(58, 49, 48)
+	local BASALTE_CLAIR = Color3.fromRGB(84, 73, 70)
+	local BASALTE_SOMBRE = Color3.fromRGB(36, 30, 31)
+	local CALCINE = Color3.fromRGB(48, 38, 34)
+	local FUMEE_SOMBRE = Color3.fromRGB(64, 56, 54)
+	local FUMEE_CLAIRE = Color3.fromRGB(128, 120, 116)
+	local POUSSIERE = Charte.sable:Lerp(Charte.pierre, 0.5)
+	local TEXTURE_FEU = "rbxasset://textures/particles/fire_main.dds"
+	local TEXTURE_FUMEE = "rbxasset://textures/particles/smoke_main.dds"
+	local QUAD = Enum.EasingStyle.Quad
+	local SORTIE = Enum.EasingDirection.Out
+	local ENTREE = Enum.EasingDirection.In
+
+	local function animer(inst, duree, style, sens, buts)
+		local t = TweenService:Create(inst, TweenInfo.new(duree, style, sens), buts)
+		t:Play()
+		return t
+	end
+
+	local function cube(t)
+		return Vector3.new(t, t, t)
+	end
+
+	local function suite(cles)
+		local points = {}
+		for _, c in ipairs(cles) do
+			table.insert(points, NumberSequenceKeypoint.new(c[1], c[2]))
+		end
+		return NumberSequence.new(points)
+	end
+
+	-- direction aleatoire ; hauteurMax borne la composante verticale (evite les cas degeneres de lookAt)
+	local function directionAleatoire(hauteurMax)
+		local h = hauteurMax or 1
+		local y = alea:NextNumber(-h, h)
+		local a = alea:NextNumber(0, math.pi * 2)
+		local r = math.sqrt(1 - y * y)
+		return Vector3.new(math.cos(a) * r, y, math.sin(a) * r)
+	end
+
+	local function emetteur(parent, props)
+		local e = Instance.new("ParticleEmitter")
+		for cle, valeur in pairs(props) do
+			e[cle] = valeur
+		end
+		e.Parent = parent
+		return e
+	end
 
 	-- fait disparaitre une part en douceur puis la detruit
 	local function effacer(part, attente, duree)
@@ -257,107 +305,339 @@ function M.demarrer(ctx)
 		})
 	end
 
-	-- cratere cartoon : rebord sombre, coeur Neon qui brille puis s'eteint, gros eclats colores
-	local function eclats(impact, rayon)
-		local rebord = disque("CratereRebord", impact, rayon * 3.4, 0.5, ROCHE, Enum.Material.SmoothPlastic)
-		effacer(rebord, 3.5, 1.2)
-		local coeur = disque("CratereCoeur", impact, rayon * 2.1, 0.7, ORANGE, Enum.Material.Neon)
-		effacer(coeur, 0.8, 2.5)
-		local centre = disque("CratereCentre", impact, rayon * 1, 0.8, JAUNE, Enum.Material.Neon)
-		effacer(centre, 0.4, 1.5)
-		for i = 1, 6 do
-			local angle = (i / 6) * math.pi * 2 + alea:NextNumber(-0.3, 0.3)
-			local dist = rayon * 1.4 + alea:NextNumber(0, 1.5)
-			local taille = alea:NextNumber(1.2, 2.2)
-			local couleur = ROCHE
-			local materiau = Enum.Material.SmoothPlastic
-			if i % 3 == 0 then
+	-- ===== le rocher : Basalt bossele, veines Neon, face avant chauffee a blanc =====
+	local function rocher(centre, d, sens)
+		local m = { pieces = {}, veines = {} }
+		-- coeur de lave : il transparait entre les blocs de basalte (veines lumineuses)
+		m.coeur = nouvellePart({
+			Name = "Meteore",
+			Shape = Enum.PartType.Ball,
+			Size = cube(d * 0.92),
+			Position = centre,
+			Color = ORANGE,
+			Material = Enum.Material.Neon,
+		})
+		table.insert(m.pieces, m.coeur)
+		table.insert(m.veines, m.coeur)
+		-- six blocs de basalte autour du coeur : silhouette de vrai rocher, trois teintes pour le volume
+		local axes = {
+			Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0), Vector3.new(0, 1, 0),
+			Vector3.new(0, -1, 0), Vector3.new(0, 0, 1), Vector3.new(0, 0, -1),
+		}
+		local teintes = { BASALTE, BASALTE_SOMBRE, BASALTE_CLAIR }
+		local tourne = CFrame.Angles(alea:NextNumber(0, 6.28), alea:NextNumber(0, 6.28), 0)
+		for i, axe in ipairs(axes) do
+			local dir = (tourne * (axe + directionAleatoire() * 0.18)).Unit
+			local t = d * alea:NextNumber(0.52, 0.76)
+			table.insert(m.pieces, nouvellePart({
+				Name = "Bosse",
+				Shape = Enum.PartType.Ball,
+				Size = cube(t),
+				Position = centre + dir * d * alea:NextNumber(0.24, 0.29),
+				Color = teintes[(i - 1) % 3 + 1],
+				Material = Enum.Material.Basalt,
+			}))
+		end
+		-- veines de lave : fines lames Neon posees a fleur de roche
+		for i = 1, 3 do
+			local dir = directionAleatoire(0.8)
+			local couleur = ORANGE
+			if i % 2 == 0 then
 				couleur = JAUNE
-				materiau = Enum.Material.Neon
-			elseif i % 3 == 1 then
+			end
+			local veine = nouvellePart({
+				Name = "Veine",
+				Size = Vector3.new(0.3, d * 0.45, 0.3),
+				CFrame = CFrame.lookAt(centre + dir * (d * 0.56 - 0.15), centre + dir * d) * CFrame.Angles(0, 0, alea:NextNumber(0, math.pi)),
+				Color = couleur,
+				Material = Enum.Material.Neon,
+			})
+			table.insert(m.veines, veine)
+			table.insert(m.pieces, veine)
+		end
+		-- face avant incandescente, du cote de la chute
+		m.front = nouvellePart({
+			Name = "FrontChaud",
+			Shape = Enum.PartType.Ball,
+			Size = cube(d * 0.82),
+			Position = centre + sens * d * 0.24,
+			Color = JAUNE:Lerp(BLANC_CHAUD, 0.35),
+			Material = Enum.Material.Neon,
+			Transparency = 0.1,
+		})
+		table.insert(m.pieces, m.front)
+
+		-- trainee de feu large : blanc chaud -> jaune -> orange -> braise -> fumee
+		local a0 = Instance.new("Attachment")
+		a0.Position = Vector3.new(d * 0.45, 0, 0)
+		a0.Parent = m.coeur
+		local a1 = Instance.new("Attachment")
+		a1.Position = Vector3.new(-d * 0.45, 0, 0)
+		a1.Parent = m.coeur
+		local trainee = Instance.new("Trail")
+		trainee.Attachment0 = a0
+		trainee.Attachment1 = a1
+		trainee.Lifetime = 0.6
+		trainee.LightEmission = 0.9
+		trainee.FaceCamera = true
+		trainee.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, BLANC_CHAUD),
+			ColorSequenceKeypoint.new(0.15, JAUNE),
+			ColorSequenceKeypoint.new(0.4, ORANGE),
+			ColorSequenceKeypoint.new(0.7, BRAISE),
+			ColorSequenceKeypoint.new(1, FUMEE_SOMBRE),
+		})
+		trainee.Transparency = suite({ { 0, 0 }, { 0.4, 0.2 }, { 0.75, 0.6 }, { 1, 1 } })
+		trainee.WidthScale = suite({ { 0, 1 }, { 1, 0.25 } })
+		trainee.Parent = m.coeur
+		m.trainee = trainee
+		-- flammes qui lechent le rocher
+		m.feu = emetteur(m.coeur, {
+			Texture = TEXTURE_FEU,
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, BLANC_CHAUD),
+				ColorSequenceKeypoint.new(0.25, JAUNE),
+				ColorSequenceKeypoint.new(0.6, ORANGE),
+				ColorSequenceKeypoint.new(1, BRAISE),
+			}),
+			LightEmission = 1,
+			Size = suite({ { 0, d * 0.75 }, { 1, d * 0.2 } }),
+			Transparency = suite({ { 0, 0.1 }, { 0.7, 0.5 }, { 1, 1 } }),
+			Lifetime = NumberRange.new(0.35, 0.6),
+			Speed = NumberRange.new(3, 6),
+			SpreadAngle = Vector2.new(25, 25),
+			Rotation = NumberRange.new(0, 360),
+			RotSpeed = NumberRange.new(-90, 90),
+			Rate = 70,
+		})
+		-- panache de fumee sombre
+		m.fumee = emetteur(m.coeur, {
+			Texture = TEXTURE_FUMEE,
+			Color = ColorSequence.new(FUMEE_SOMBRE, FUMEE_CLAIRE),
+			LightInfluence = 1,
+			Size = suite({ { 0, d * 0.5 }, { 1, d * 1.8 } }),
+			Transparency = suite({ { 0, 0.45 }, { 1, 1 } }),
+			Lifetime = NumberRange.new(1.4, 2.2),
+			Speed = NumberRange.new(1, 2.5),
+			Rotation = NumberRange.new(0, 360),
+			RotSpeed = NumberRange.new(-30, 30),
+			Drag = 1,
+			Rate = 28,
+		})
+		-- etincelles
+		m.etincelles = emetteur(m.coeur, {
+			Color = ColorSequence.new(JAUNE, ORANGE),
+			LightEmission = 1,
+			Size = suite({ { 0, 0.8 }, { 1, 0 } }),
+			Lifetime = NumberRange.new(0.4, 0.7),
+			Speed = NumberRange.new(4, 9),
+			SpreadAngle = Vector2.new(180, 180),
+			Rate = 22,
+		})
+		m.lueur = Instance.new("PointLight")
+		m.lueur.Color = ORANGE
+		m.lueur.Range = 24
+		m.lueur.Brightness = 4
+		m.lueur.Parent = m.coeur
+		return m
+	end
+
+	-- ===== l'impact : eclair, onde de choc, fumee, cratere calcine, fissures de lave, eclats projetes =====
+	local function impacter(impact, d, m)
+		-- le rocher reste fiche dans le sol et refroidit (veines qui virent a la braise)
+		pcall(function()
+			m.trainee.Enabled = false
+			m.feu.Enabled = false
+			m.etincelles.Enabled = false
+			m.fumee.Rate = 8
+			animer(m.front, 0.4, QUAD, SORTIE, { Transparency = 1 })
+			animer(m.lueur, 3, QUAD, SORTIE, { Brightness = 0 })
+			for _, veine in ipairs(m.veines) do
+				animer(veine, 2.8, Enum.EasingStyle.Linear, SORTIE, { Color = BRAISE_FROIDE })
+			end
+		end)
+		task.delay(2.6, function()
+			if m.fumee.Parent then
+				m.fumee.Enabled = false
+			end
+		end)
+		for _, piece in ipairs(m.pieces) do
+			effacer(piece, 3.8, 1.2)
+		end
+
+		-- eclair blanc qui gonfle et s'evanouit
+		local eclair = nouvellePart({
+			Name = "Eclair",
+			Shape = Enum.PartType.Ball,
+			Size = cube(d * 1.3),
+			Position = impact + Vector3.new(0, d * 0.4, 0),
+			Color = BLANC_CHAUD,
+			Material = Enum.Material.Neon,
+			Transparency = 0.1,
+		})
+		animer(eclair, 0.35, QUAD, SORTIE, { Size = cube(d * 4.2), Transparency = 1 })
+		Debris:AddItem(eclair, 0.5)
+
+		-- onde de choc lumineuse puis anneau de poussiere plus lent
+		local onde = disque("OndeDeChoc", impact + Vector3.new(0, 0.15, 0), d * 1.2, 0.35, JAUNE:Lerp(BLANC_CHAUD, 0.4), Enum.Material.Neon)
+		onde.Transparency = 0.1
+		animer(onde, 0.6, QUAD, SORTIE, { Size = Vector3.new(0.15, d * 7.5, d * 7.5), Transparency = 1 })
+		Debris:AddItem(onde, 0.8)
+		local poussiere = disque("Poussiere", impact + Vector3.new(0, 0.05, 0), d * 1.6, 0.6, POUSSIERE, Enum.Material.SmoothPlastic)
+		poussiere.Transparency = 0.25
+		animer(poussiere, 1.2, Enum.EasingStyle.Quint, SORTIE, { Size = Vector3.new(0.2, d * 5.5, d * 5.5), Transparency = 1 })
+		Debris:AddItem(poussiere, 1.4)
+
+		-- cratere : sol calcine, mare de lave qui refroidit
+		local brulure = disque("CratereRebord", impact, d * 2.7, 0.18, CALCINE, Enum.Material.Basalt)
+		effacer(brulure, 4.2, 1.4)
+		local lave = disque("CratereCoeur", impact, d * 1.6, 0.3, ORANGE, Enum.Material.Neon)
+		animer(lave, 2.4, Enum.EasingStyle.Linear, SORTIE, { Color = BRAISE_FROIDE })
+		effacer(lave, 2.2, 2)
+
+		-- fissures de lave qui rayonnent depuis le rocher
+		for i = 1, 4 do
+			local angle = (i / 4) * math.pi * 2 + alea:NextNumber(-0.5, 0.5)
+			local longueur = d * alea:NextNumber(0.45, 0.72)
+			local milieu = d * 0.55 + longueur / 2
+			local fissure = nouvellePart({
+				Name = "Fissure",
+				Size = Vector3.new(longueur, 0.3, alea:NextNumber(0.25, 0.4)),
+				CFrame = CFrame.new(impact + Vector3.new(math.cos(angle) * milieu, 0.12, math.sin(angle) * milieu)) * CFrame.Angles(0, -angle, 0),
+				Color = JAUNE:Lerp(ORANGE, 0.5),
+				Material = Enum.Material.Neon,
+			})
+			animer(fissure, 2.4, Enum.EasingStyle.Linear, SORTIE, { Color = BRAISE_FROIDE })
+			effacer(fissure, 1.8, 1.8)
+		end
+
+		-- rebord : dalles de basalte soulevees, qui jaillissent du sol
+		for i = 1, 6 do
+			local angle = (i / 6) * math.pi * 2 + alea:NextNumber(-0.25, 0.25)
+			local dist = d * alea:NextNumber(1.1, 1.3)
+			local l = alea:NextNumber(1.4, 2.4)
+			local h = alea:NextNumber(0.8, 1.5)
+			local couleur = BASALTE
+			if i % 2 == 0 then
+				couleur = BASALTE_SOMBRE
+			end
+			local cf = CFrame.new(impact + Vector3.new(math.cos(angle) * dist, h * 0.3, math.sin(angle) * dist))
+				* CFrame.Angles(0, -angle, 0)
+				* CFrame.Angles(0, 0, -math.rad(alea:NextNumber(18, 32)))
+			local dalle = nouvellePart({
+				Name = "Rebord",
+				Size = Vector3.new(l, h, l * 0.7),
+				CFrame = cf * CFrame.new(0, -h, 0),
+				Color = couleur,
+				Material = Enum.Material.Basalt,
+			})
+			animer(dalle, 0.22, Enum.EasingStyle.Back, SORTIE, { CFrame = cf })
+			effacer(dalle, 3.8, 1.2)
+		end
+
+		-- eclats projetes en cloche (deux braises Neon, le reste en basalte)
+		for i = 1, 5 do
+			local angle = alea:NextNumber(0, math.pi * 2)
+			local dist = d * alea:NextNumber(1.8, 2.8)
+			local t = alea:NextNumber(0.7, 1.3)
+			local couleur = BASALTE_CLAIR
+			local materiau = Enum.Material.Basalt
+			if i <= 2 then
 				couleur = ORANGE
 				materiau = Enum.Material.Neon
 			end
+			local depart = impact + Vector3.new(0, d * 0.5, 0)
+			local arrivee = impact + Vector3.new(math.cos(angle) * dist, t * 0.35, math.sin(angle) * dist)
+			local sommet = depart:Lerp(arrivee, 0.5) + Vector3.new(0, d * 0.9, 0)
 			local eclat = nouvellePart({
 				Name = "Debris",
-				Size = Vector3.new(taille, taille, taille),
-				CFrame = CFrame.new(impact + Vector3.new(math.cos(angle) * dist, taille / 2, math.sin(angle) * dist))
-					* CFrame.Angles(alea:NextNumber(0, 3), alea:NextNumber(0, 3), 0),
+				Size = Vector3.new(t, t * 0.8, t),
+				CFrame = CFrame.new(depart),
 				Color = couleur,
 				Material = materiau,
 			})
+			animer(eclat, 0.25, QUAD, SORTIE, { CFrame = CFrame.new(sommet) * CFrame.Angles(alea:NextNumber(0, 3), alea:NextNumber(0, 3), 0) })
+			task.delay(0.25, function()
+				if eclat.Parent then
+					animer(eclat, 0.3, QUAD, ENTREE, { CFrame = CFrame.new(arrivee) * CFrame.Angles(alea:NextNumber(0, 3), alea:NextNumber(0, 3), alea:NextNumber(0, 3)) })
+				end
+			end)
+			if i <= 2 then
+				animer(eclat, 2.5, Enum.EasingStyle.Linear, SORTIE, { Color = BRAISE_FROIDE })
+			end
 			effacer(eclat, 3, 1)
 		end
+
+		-- bouffee de fumee et gerbe d'etincelles
+		local souffle = nouvellePart({
+			Name = "Souffle",
+			Size = Vector3.new(d, 0.5, d),
+			Position = impact + Vector3.new(0, 0.6, 0),
+			Transparency = 1,
+		})
+		local nuage = emetteur(souffle, {
+			Texture = TEXTURE_FUMEE,
+			Color = ColorSequence.new(POUSSIERE, FUMEE_CLAIRE),
+			LightInfluence = 1,
+			Size = suite({ { 0, d * 0.5 }, { 1, d * 1.7 } }),
+			Transparency = suite({ { 0, 0.3 }, { 0.7, 0.6 }, { 1, 1 } }),
+			Lifetime = NumberRange.new(1.2, 2),
+			Speed = NumberRange.new(6, 12),
+			SpreadAngle = Vector2.new(80, 80),
+			Drag = 3,
+			Acceleration = Vector3.new(0, 3, 0),
+			Rotation = NumberRange.new(0, 360),
+			RotSpeed = NumberRange.new(-40, 40),
+			Rate = 0,
+		})
+		local gerbe = emetteur(souffle, {
+			Color = ColorSequence.new(BLANC_CHAUD, ORANGE),
+			LightEmission = 1,
+			Size = suite({ { 0, 0.6 }, { 1, 0 } }),
+			Lifetime = NumberRange.new(0.6, 1.1),
+			Speed = NumberRange.new(22, 38),
+			SpreadAngle = Vector2.new(55, 55),
+			Acceleration = Vector3.new(0, -60, 0),
+			Rate = 0,
+		})
+		pcall(function()
+			nuage:Emit(18)
+			gerbe:Emit(30)
+		end)
+		local flash = Instance.new("PointLight")
+		flash.Color = JAUNE
+		flash.Range = 30
+		flash.Brightness = 6
+		flash.Parent = souffle
+		animer(flash, 0.8, QUAD, SORTIE, { Brightness = 0 })
+		Debris:AddItem(souffle, 2.6)
 	end
 
 	local function lancerMeteore()
 		local impact = pointAleatoire()
 		local depart = impact + Vector3.new(alea:NextNumber(-40, 40), HAUTEUR_CHUTE, alea:NextNumber(-40, 40))
-		local rayon = alea:NextNumber(5, 7.5)
-		local boule = nouvellePart({
-			Name = "Meteore",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.new(rayon, rayon, rayon),
-			Position = depart,
-			Color = ORANGE,
-			Material = Enum.Material.Neon,
-		})
-		Debris:AddItem(boule, DUREE_CHUTE + 3)
+		local d = alea:NextNumber(5, 7)
+		local arrivee = impact + Vector3.new(0, d * 0.3, 0) -- le rocher finit a moitie enfonce
+		local deplacement = arrivee - depart
+		local m = rocher(depart, d, deplacement.Unit)
+		for _, piece in ipairs(m.pieces) do
+			Debris:AddItem(piece, DUREE_CHUTE + 6)
+		end
 
-		-- trainee coloree large (jaune -> orange -> rose)
-		local a0 = Instance.new("Attachment")
-		a0.Position = Vector3.new(0, rayon * 0.5, 0)
-		a0.Parent = boule
-		local a1 = Instance.new("Attachment")
-		a1.Position = Vector3.new(0, -rayon * 0.5, 0)
-		a1.Parent = boule
-		local trainee = Instance.new("Trail")
-		trainee.Attachment0 = a0
-		trainee.Attachment1 = a1
-		trainee.Lifetime = 0.9
-		trainee.LightEmission = 1
-		trainee.FaceCamera = true
-		trainee.Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, JAUNE),
-			ColorSequenceKeypoint.new(0.45, ORANGE),
-			ColorSequenceKeypoint.new(1, ROSE),
-		})
-		trainee.Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0),
-			NumberSequenceKeypoint.new(0.6, 0.35),
-			NumberSequenceKeypoint.new(1, 1),
-		})
-		trainee.WidthScale = NumberSequence.new(1.2, 0.1)
-		trainee.Parent = boule
-		-- etincelles cartoon
-		local etincelles = Instance.new("ParticleEmitter")
-		etincelles.Color = ColorSequence.new(JAUNE, ORANGE)
-		etincelles.LightEmission = 1
-		etincelles.Rate = 30
-		etincelles.Lifetime = NumberRange.new(0.4, 0.7)
-		etincelles.Speed = NumberRange.new(4, 9)
-		etincelles.SpreadAngle = Vector2.new(180, 180)
-		etincelles.Size = NumberSequence.new(1.2, 0)
-		etincelles.Parent = boule
-		local lueur = Instance.new("PointLight")
-		lueur.Color = ORANGE
-		lueur.Range = 22
-		lueur.Brightness = 3
-		lueur.Parent = boule
-
-		local tween = TweenService:Create(
-			boule,
-			TweenInfo.new(DUREE_CHUTE, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-			{ Position = impact + Vector3.new(0, rayon / 2, 0) }
-		)
+		-- toutes les pieces glissent du meme vecteur, avec la meme courbe : le rocher reste solidaire
+		local info = TweenInfo.new(DUREE_CHUTE, QUAD, ENTREE)
+		local tween = nil
+		for _, piece in ipairs(m.pieces) do
+			local t = TweenService:Create(piece, info, { Position = piece.Position + deplacement })
+			if piece == m.coeur then
+				tween = t
+			end
+			t:Play()
+		end
 		tween.Completed:Connect(function()
 			effetTous("Meteore", impact, {})
-			pcall(eclats, impact, rayon)
-			if boule.Parent then
-				boule:Destroy()
-			end
+			pcall(impacter, impact, d, m)
 		end)
-		tween:Play()
 	end
 
 	-- ===== deroulement =====

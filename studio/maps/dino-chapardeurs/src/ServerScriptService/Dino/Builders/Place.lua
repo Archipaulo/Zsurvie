@@ -1,30 +1,32 @@
--- Constructeur Place : la grande place du sud où tout le monde apparaît.
--- Look « simulateur » (STYLE.md) : dallage clair et net, fontaine cartoon, titres flottants géants
--- (« 🦖 DINO CHAPARDEURS » arc-en-ciel au-dessus de la fontaine, « 📖 DINODEX » bleu sur la borne).
--- Au centre, l'unique SpawnLocation sur un socle ; dallage circulaire sable et crème ;
--- au nord, une fontaine gardée par une statue de dino en blocs qui crache de l'eau ;
--- au bord sud, la borne Dinodex (invite « Index », ouverte côté client) ; bancs et bacs à fleurs.
+-- Constructeur Place : la grande place du sud où tout le monde apparaît (version 2, rendu « pro »).
+-- Dallage en pavés clairs (Cobblestone) dessiné d'anneaux et de rayons d'ardoise (Slate), bordé d'une
+-- plinthe en relief ; au centre, l'unique SpawnLocation encastrée dans une estrade de marbre ;
+-- au nord, une fontaine de pierre sculptée (Marble / Slate) à l'eau de verre bleu, gardée par une
+-- statue de dino en bronze qui crache de l'eau ; au bord sud, la borne Dinodex (coque Metal, écran Neon,
+-- invite « Index ») ; bancs en lattes de bois sur pieds de métal, bacs à fleurs et lampadaires.
+-- Titres flottants géants (« 🦖 DINO CHAPARDEURS » arc-en-ciel, « 📖 DINODEX » bleu).
 -- Emprise (CONTRAT §10) : disque r20 autour de Plan.place.centre. Le secteur ouest-nord-ouest
 -- reste libre pour le tableau d'honneur (Systemes/Classement), les axes est et ouest pour les
--- allées vers l'Autel et le Comptoir.
+-- allées vers l'Autel et le Comptoir, l'axe nord pour l'allée du Tapis.
 local M = {}
 
-local BUDGET = 200 -- parts au maximum pour ce constructeur
+local BUDGET = 260 -- parts au maximum pour ce constructeur
 
 -- valeurs par défaut, remplaçables par Equilibrage.place
 local DEFAUTS = {
 	rayon = 20,              -- rayon du dallage (emprise)
-	epaisseurDalle = 0.2,    -- dessus du dallage à Y = 0,2
+	epaisseurDalle = 0.22,   -- dessus du dallage (pavés du bord) à Y = 0,22
 	tailleApparition = 8,    -- SpawnLocation 8 x 8
 	hauteurApparition = 1,   -- dessus de la SpawnLocation à Y = 1
 	reculFontaine = 13.5,    -- distance du centre de la fontaine au centre (vers le nord)
-	rayonFontaine = 5,       -- rayon du bassin
+	rayonFontaine = 5,       -- rayon du bassin (axe de la margelle)
 	echelleStatue = 0.7,     -- échelle de la statue de dino
 	debitJet = 60,           -- particules par seconde crachées par le dino
 	distanceBorne = 16.5,    -- distance de la borne Dinodex au centre (vers le sud)
 	distanceInvite = 10,     -- portée de l'invite « Index »
 	rayonBancs = 15,
 	rayonFleurs = 17.5,
+	rayonLampes = 18.5,
 }
 
 local function lireReglages(ctx)
@@ -58,55 +60,77 @@ function M.construire(ctx)
 	local CENTRE = infoPlace.centre or Vector3.new(0, 0, 100)
 	local CX, CZ = CENTRE.X, CENTRE.Z
 	local RAYON = math.min(R.rayon, infoPlace.rayon or R.rayon)
-	local Y_DALLE = R.epaisseurDalle
+	local Y_SOL = R.epaisseurDalle -- niveau de pose des accessoires
 	local Style = ctx.Style
 	local hex = Charte.hex
+	local ombre = Charte.ombre
+	local lumiere = Charte.lumiere
 
-	-- palette « simulateur » : dallage clair et net, pierre presque blanche, eau turquoise vive
+	local MAT = Enum.Material
+	-- palette : pavés clairs, ardoise gris-bleu, marbre crème, bronze patiné, eau bleue
 	local TEINTES = {
-		bordure = hex("D9D2C3"),     -- liseré extérieur du dallage
-		clair = hex("FFF8EA"),       -- dalles claires
-		sable = Charte.sable,        -- dalles sable
-		pierre = hex("ECE8F2"),      -- pierre claire des socles et de la fontaine
-		pierreOmbre = hex("C7C0D6"), -- pierre en alternance
-		eau = hex("4FD8FF"),
-		bleu = hex("2F8BFF"),
-		bleuClair = hex("7FD6FF"),
-		dino = hex("3FD65A"),        -- statue vert vif
-		dinoOmbre = hex("22A844"),
-		ventre = hex("C9FF8A"),
+		pave = hex("E8DFCC"),         -- pavés clairs du dallage
+		paveCoeur = hex("F1EADB"),    -- pavés du cœur, un ton plus clair
+		ardoise = hex("7C8096"),      -- anneaux, rayons et plinthes
+		ardoiseFonce = hex("5B5F73"),
+		marbre = hex("F3EFE6"),
+		marbreOmbre = hex("D9D3C6"),
+		pierre = hex("A9A5B6"),       -- pierre sculptée de la margelle
+		eau = hex("3FB6EA"),
+		eauFond = hex("1F6E8C"),
+		bronze = hex("47AE8A"),       -- statue : bronze patiné (vert-de-gris)
+		bronzeClair = hex("8FD9B6"),
+		or_ = hex("F2B632"),
+		bleuBorne = hex("3B7BFF"),
+		ecran = hex("5FE3FF"),
 		bois = hex("B8743A"),
+		metal = hex("3A4152"),
+		lanterne = hex("FFE3A3"),
+		terreCuite = hex("C8734A"),
+		feuillage = hex("3FAE4A"),
 	}
 
 	-- ===== compteur de parts : on s'arrête net au budget =====
 	local nbParts = 0
-	local function reserver()
-		if nbParts >= BUDGET then
+	local function reserver(n)
+		n = n or 1
+		if nbParts + n > BUDGET then
 			return false
 		end
-		nbParts = nbParts + 1
+		nbParts = nbParts + n
 		return true
 	end
 	local function bloc(parent, props)
-		if not reserver() then return nil end
+		if not reserver(1) then return nil end
 		return Outils.bloc(parent, props)
 	end
 	local function coin(parent, props)
-		if not reserver() then return nil end
+		if not reserver(1) then return nil end
 		return Outils.coin(parent, props)
 	end
 	local function boule(parent, props)
-		if not reserver() then return nil end
+		if not reserver(1) then return nil end
 		return Outils.boule(parent, props)
 	end
-	-- disque horizontal (l'axe d'un cylindre Roblox est X : on le couche sur Z)
-	local function disque(parent, nom, x, z, rayon, epaisseur, yBas, couleur, props)
-		if not reserver() then return nil end
+	-- bloc aux arêtes verticales arrondies (6 parts)
+	local function arrondi(parent, props, rayon)
+		if not reserver(6) then return nil end
+		return Outils.blocArrondi(parent, props, rayon)
+	end
+	-- dalle sur liseré en relief (2 parts)
+	local function dalleBordee(parent, props, bord, couleurBord)
+		if not reserver(2) then return nil end
+		return Outils.dalleBordee(parent, props, bord, couleurBord)
+	end
+	-- cylindre d'axe vertical (l'axe d'un cylindre Roblox est X : on le couche sur Z), posé de yBas à yBas + hauteur
+	local function disque(parent, nom, x, z, rayon, hauteur, yBas, couleur, materiau, props)
+		if not reserver(1) then return nil end
 		local p = Outils.cylindre(parent, {
 			Name = nom,
-			Size = Vector3.new(epaisseur, rayon * 2, rayon * 2),
-			CFrame = CFrame.new(x, yBas + epaisseur / 2, z) * CFrame.Angles(0, 0, math.rad(90)),
+			Size = Vector3.new(hauteur, rayon * 2, rayon * 2),
+			CFrame = CFrame.new(x, yBas + hauteur / 2, z) * CFrame.Angles(0, 0, math.rad(90)),
 			Color = couleur,
+			Material = materiau or MAT.SmoothPlastic,
 		})
 		if props then
 			for cle, valeur in pairs(props) do
@@ -114,6 +138,32 @@ function M.construire(ctx)
 			end
 		end
 		return p
+	end
+	-- anneau de segments droits (margelles, plinthes) autour de (x, z)
+	local function anneau(parent, nom, x, z, rayon, segments, largeur, hauteur, yBas, couleur, materiau, couleurAlt)
+		local longueur = 2 * rayon * math.tan(math.pi / segments) + largeur * 0.45
+		for k = 0, segments - 1 do
+			local a = (k + 0.5) * 2 * math.pi / segments
+			local c = couleur
+			if couleurAlt and k % 2 == 1 then
+				c = couleurAlt
+			end
+			bloc(parent, {
+				Name = nom,
+				Size = Vector3.new(largeur, hauteur, longueur),
+				CFrame = CFrame.new(x + rayon * math.cos(a), yBas + hauteur / 2, z + rayon * math.sin(a)) * CFrame.Angles(0, -a, 0),
+				Color = c,
+				Material = materiau,
+			})
+		end
+	end
+	-- lumière à ombres (les ombres ne sont qu'un plus)
+	local function lampe(part, props)
+		local l = Outils.lumiere(part, props)
+		pcall(function()
+			l.Shadows = true
+		end)
+		return l
 	end
 
 	-- position au sol autour du centre (angle en degrés : 0 = est, 90 = sud, 270 = nord)
@@ -130,51 +180,79 @@ function M.construire(ctx)
 		end
 	end
 
-	-- ===== 1. dallage circulaire =====
+	-- ===== 1. dallage circulaire : pavés clairs, anneaux et rayons d'ardoise, plinthe =====
 	etape("dallage", function()
 		local m = Outils.modele(dossier, "Dallage")
-		-- anneaux concentriques, chacun un souffle plus haut pour éviter le scintillement
-		disque(m, "Bord", CX, CZ, RAYON, Y_DALLE, 0, TEINTES.bordure)
-		disque(m, "AnneauCreme", CX, CZ, RAYON - 0.8, 0.02, Y_DALLE, TEINTES.clair)
-		disque(m, "AnneauSable", CX, CZ, RAYON * 0.67, 0.02, Y_DALLE + 0.02, TEINTES.sable)
-		disque(m, "Coeur", CX, CZ, RAYON * 0.36, 0.02, Y_DALLE + 0.04, TEINTES.clair)
-		-- rayons de dalles claires entre le cœur et l'anneau, comme une rose des vents
-		local rInt, rExt = RAYON * 0.36, RAYON * 0.67
-		local longueur = rExt - rInt
+		-- disques pleins empilés : chacun dépasse le précédent de 2 cm (pas de scintillement)
+		disque(m, "Fond", CX, CZ, RAYON, 0.2, 0, TEINTES.ardoiseFonce, MAT.Slate)
+		disque(m, "Paves", CX, CZ, RAYON - 0.7, Y_SOL, 0, TEINTES.pave, MAT.Cobblestone)
+		disque(m, "AnneauArdoise", CX, CZ, RAYON * 0.65, Y_SOL + 0.02, 0, TEINTES.ardoise, MAT.Slate)
+		disque(m, "PavesCoeur", CX, CZ, RAYON * 0.62, Y_SOL + 0.04, 0, TEINTES.paveCoeur, MAT.Cobblestone)
+
+		-- rose des vents : huit rayons d'ardoise entre l'estrade et l'anneau
+		local rInt, rExt = 6.6, RAYON * 0.62
 		for k = 0, 7 do
 			local angle = k * 45 + 22.5
 			local p = autour((rInt + rExt) / 2, angle)
 			bloc(m, {
 				Name = "Rayon",
-				Size = Vector3.new(longueur, 0.02, 1),
-				CFrame = CFrame.new(p.X, Y_DALLE + 0.05, p.Z) * CFrame.Angles(0, -math.rad(angle), 0),
-				Color = TEINTES.clair,
+				Size = Vector3.new(rExt - rInt, 0.06, 0.7),
+				CFrame = CFrame.new(p.X, Y_SOL + 0.04, p.Z) * CFrame.Angles(0, -math.rad(angle), 0),
+				Color = TEINTES.ardoise,
+				Material = MAT.Slate,
 			})
 		end
+		-- rayons extérieurs, dans l'axe des diagonales (hors allées, fontaine et borne)
+		local rInt2, rExt2 = RAYON * 0.65, RAYON - 0.7
+		for _, angle in ipairs({ 45, 135, 225, 315, 0, 180 }) do
+			local p = autour((rInt2 + rExt2) / 2, angle)
+			bloc(m, {
+				Name = "RayonExterieur",
+				Size = Vector3.new(rExt2 - rInt2, 0.04, 0.5),
+				CFrame = CFrame.new(p.X, Y_SOL + 0.01, p.Z) * CFrame.Angles(0, -math.rad(angle), 0),
+				Color = TEINTES.ardoise,
+				Material = MAT.Slate,
+			})
+		end
+
+		-- plinthe en relief tout autour (ardoise, arêtes claires en alternance)
+		anneau(m, "Plinthe", CX, CZ, RAYON - 0.45, 20, 0.7, 0.4, 0, TEINTES.ardoise, MAT.Slate, lumiere(TEINTES.ardoise))
 	end)
 
-	-- ===== 2. l'unique SpawnLocation =====
+	-- ===== 2. l'unique SpawnLocation, encastrée dans une estrade de marbre =====
 	etape("apparition", function()
 		local m = Outils.modele(dossier, "Apparition")
 		local t = R.tailleApparition
 		local h = R.hauteurApparition
-		-- socle en marche d'escalier autour de la SpawnLocation
+		local rEstrade = t * 0.707 + 0.7
+		disque(m, "Marche", CX, CZ, rEstrade + 0.6, 0.45, 0, TEINTES.ardoise, MAT.Slate)
+		disque(m, "Estrade", CX, CZ, rEstrade, 0.6, 0, TEINTES.marbre, MAT.Marble)
+		-- cadre d'ardoise sous la SpawnLocation (liseré de 0,4 visible tout autour)
 		bloc(m, {
-			Name = "Socle",
-			Size = Vector3.new(t + 1.6, h * 0.6, t + 1.6),
-			CFrame = CFrame.new(CX, Y_DALLE + h * 0.3, CZ),
-			Color = TEINTES.pierre,
+			Name = "Cadre",
+			Size = Vector3.new(t + 0.8, h - 0.15, t + 0.8),
+			CFrame = CFrame.new(CX, (h - 0.15) / 2, CZ),
+			Color = TEINTES.ardoiseFonce,
+			Material = MAT.Slate,
 		})
-		if reserver() then
+		-- clous dorés aux quatre coins du cadre
+		for _, sx in ipairs({ -1, 1 }) do
+			for _, sz in ipairs({ -1, 1 }) do
+				disque(m, "Clou", CX + sx * (t / 2 + 0.2), CZ + sz * (t / 2 + 0.2), 0.3, 0.25, h - 0.15, TEINTES.or_, MAT.Metal, {
+					CanCollide = false,
+				})
+			end
+		end
+		if reserver(1) then
 			local sp = Instance.new("SpawnLocation")
 			sp.Name = "Apparition"
 			sp.Anchored = true
 			sp.Size = Vector3.new(t, h, t)
 			sp.CFrame = CFrame.new(CX, h / 2, CZ) -- dessus à Y = h
-			sp.Material = Enum.Material.SmoothPlastic
+			sp.Material = MAT.Marble
 			sp.TopSurface = Enum.SurfaceType.Smooth
 			sp.BottomSurface = Enum.SurfaceType.Smooth
-			sp.Color = Charte.dore
+			sp.Color = hex("F5C54A")
 			sp.Neutral = true
 			sp.Duration = 0
 			sp.AllowTeamChangeOnTouch = false
@@ -196,57 +274,86 @@ function M.construire(ctx)
 		end
 	end)
 
-	-- ===== 3. fontaine et statue de dino =====
+	-- ===== 3. fontaine de pierre sculptée et statue de dino en bronze =====
 	etape("fontaine", function()
 		local m = Outils.modele(dossier, "Fontaine")
 		local fx, fz = CX, CZ - R.reculFontaine
 		local rf = R.rayonFontaine
-		local pierreClaire = TEINTES.pierre
 
-		-- fond, eau et margelle en 16 segments (look cartoon : margelle blanche et bleue, eau turquoise)
-		disque(m, "Fond", fx, fz, rf, 0.3, Y_DALLE, TEINTES.bleu)
-		local eau = disque(m, "Eau", fx, fz, rf - 0.4, 0.3, Y_DALLE + 0.6, TEINTES.eau, {
-			Transparency = 0.15,
-			Reflectance = 0.1,
+		-- socle, fond sombre, eau de verre bleu
+		disque(m, "Socle", fx, fz, rf + 0.8, 0.4, 0, TEINTES.ardoiseFonce, MAT.Slate)
+		disque(m, "Fond", fx, fz, rf - 0.3, 0.45, 0, TEINTES.eauFond, MAT.Slate)
+		local eau = disque(m, "Eau", fx, fz, rf - 0.3, 0.25, 1.15, TEINTES.eau, MAT.Glass, {
+			Transparency = 0.35,
+			Reflectance = 0.15,
 			CanCollide = false,
 		})
-		local segments = 16
-		local longueur = 2 * rf * math.tan(math.pi / segments) + 0.35
-		for k = 0, segments - 1 do
-			local a = k * 2 * math.pi / segments
-			local x = fx + rf * math.cos(a)
-			local z = fz + rf * math.sin(a)
-			local couleur = TEINTES.bleuClair
-			if k % 2 == 0 then
-				couleur = pierreClaire
-			end
-			bloc(m, {
-				Name = "Margelle",
-				Size = Vector3.new(0.9, 1.3, longueur),
-				CFrame = CFrame.new(x, Y_DALLE + 0.65, z) * CFrame.Angles(0, -a, 0),
-				Color = couleur,
-			})
-		end
+		-- margelle : mur de pierre et couronnement de marbre qui déborde
+		anneau(m, "Margelle", fx, fz, rf, 16, 0.8, 1.4, 0.3, TEINTES.pierre, MAT.Slate, ombre(TEINTES.pierre))
+		anneau(m, "Couronnement", fx, fz, rf, 16, 1.15, 0.28, 1.7, TEINTES.marbre, MAT.Marble)
 
-		-- piédestal
-		local hPied = 2.2
-		local rPied = 1.8
-		local piedestal = disque(m, "Piedestal", fx, fz, rPied, hPied, Y_DALLE, TEINTES.pierre)
-		disque(m, "Chapiteau", fx, fz, rPied + 0.3, 0.3, Y_DALLE + hPied - 0.3, Charte.dore)
-		local yStatue = Y_DALLE + hPied
+		-- piédestal sculpté : base, fût, bague dorée, chapiteau et tablette
+		disque(m, "BasePiedestal", fx, fz, 1.9, 0.9, 0.3, TEINTES.pierre, MAT.Slate)
+		local piedestal = disque(m, "Piedestal", fx, fz, 1.4, 2.9, 0.3, TEINTES.marbre, MAT.Marble)
+		disque(m, "Bague", fx, fz, 1.5, 0.22, 2.35, TEINTES.or_, MAT.Metal)
+		disque(m, "Chapiteau", fx, fz, 2, 0.35, 3.2, TEINTES.pierre, MAT.Slate)
+		disque(m, "Tablette", fx, fz, 1.75, 0.2, 3.55, TEINTES.marbreOmbre, MAT.Marble)
+		local yStatue = 3.75
+
+		-- quatre becs de pierre sur le fût, qui crachent un filet d'eau vers le bassin
+		for _, deg in ipairs({ 45, 135, 225, 315 }) do
+			local a = math.rad(deg)
+			local dx, dz = math.cos(a), math.sin(a)
+			local bec = bloc(m, {
+				Name = "Bec",
+				Size = Vector3.new(0.7, 0.35, 0.45),
+				CFrame = CFrame.new(fx + dx * 1.6, 1.95, fz + dz * 1.6) * CFrame.Angles(0, -a, 0),
+				Color = TEINTES.ardoise,
+				Material = MAT.Slate,
+			})
+			if bec then
+				pcall(function()
+					local att = Instance.new("Attachment")
+					att.Name = "Filet"
+					att.Parent = bec
+					att.WorldCFrame = CFrame.lookAt(Vector3.new(fx + dx * 1.95, 1.95, fz + dz * 1.95), Vector3.new(fx + dx * 3, 2.3, fz + dz * 3))
+					local filet = Instance.new("ParticleEmitter")
+					filet.Name = "Eau"
+					filet.EmissionDirection = Enum.NormalId.Front
+					filet.Color = ColorSequence.new(lumiere(TEINTES.eau), Color3.new(1, 1, 1))
+					filet.Size = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 0.18),
+						NumberSequenceKeypoint.new(1, 0.35),
+					})
+					filet.Transparency = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 0.2),
+						NumberSequenceKeypoint.new(1, 0.8),
+					})
+					filet.Lifetime = NumberRange.new(0.45, 0.55)
+					filet.Rate = 30
+					filet.Speed = NumberRange.new(3, 3.4)
+					filet.SpreadAngle = Vector2.new(3, 3)
+					filet.Acceleration = Vector3.new(0, -18, 0)
+					filet.LightEmission = 0.2
+					filet.Parent = att
+				end)
+			end
+		end
 
 		-- statue : repère tourné vers le sud (le dino regarde l'apparition), reculé d'un stud
 		local S = R.echelleStatue
 		local repere = CFrame.new(fx, yStatue, fz) * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, 0, 1)
-		local vert = TEINTES.dino
-		local ventre = TEINTES.ventre
+		local bronze = TEINTES.bronze
+		local bronzeOmbre = ombre(TEINTES.bronze)
+		local ventre = TEINTES.bronzeClair
 		-- (x, y, avant) en unités de statue ; l'avant est -Z local
-		local function morceau(nom, sx, sy, sz, x, y, f, couleur, rotX, forme)
+		local function morceau(nom, sx, sy, sz, x, y, f, couleur, rotX, forme, materiau)
 			local props = {
 				Name = nom,
 				Size = Vector3.new(sx * S, sy * S, sz * S),
 				CFrame = repere * CFrame.new(x * S, y * S, -f * S) * CFrame.Angles(math.rad(rotX or 0), 0, 0),
 				Color = couleur,
+				Material = materiau or MAT.Metal,
 				CanCollide = false,
 			}
 			if forme == "boule" then
@@ -257,30 +364,32 @@ function M.construire(ctx)
 			return bloc(m, props)
 		end
 
-		morceau("Corps", 3, 3, 4, 0, 2.9, 0, vert)
-		morceau("Ventre", 2.2, 2.2, 0.3, 0, 2.6, 2.05, ventre)
-		morceau("CuisseG", 1.3, 2.6, 2, -1.3, 1.9, -0.3, vert)
-		morceau("CuisseD", 1.3, 2.6, 2, 1.3, 1.9, -0.3, vert)
-		morceau("PiedG", 1.4, 0.6, 2.2, -1.3, 0.3, 0.2, TEINTES.dinoOmbre)
-		morceau("PiedD", 1.4, 0.6, 2.2, 1.3, 0.3, 0.2, TEINTES.dinoOmbre)
-		morceau("BrasG", 0.5, 0.5, 1.3, -1.3, 3.4, 2.2, vert, -20)
-		morceau("BrasD", 0.5, 0.5, 1.3, 1.3, 3.4, 2.2, vert, -20)
-		morceau("Cou", 1.8, 2, 1.8, 0, 4.6, 1.4, vert)
-		morceau("Tete", 2.4, 2, 2.8, 0, 5.9, 2.4, vert)
-		local machoire = morceau("Machoire", 2, 0.9, 1.8, 0, 5.8, 4.4, vert)
+		morceau("Corps", 3, 3, 4, 0, 2.9, 0, bronze)
+		morceau("Poitrail", 2.9, 2.9, 2.9, 0, 3.1, 1.1, bronze, 0, "boule")
+		morceau("Ventre", 2.1, 2.1, 0.3, 0, 2.7, 2.35, ventre)
+		morceau("CuisseG", 1.5, 2.4, 2.4, -1.35, 2, -0.3, bronze, 0, "boule")
+		morceau("CuisseD", 1.5, 2.4, 2.4, 1.35, 2, -0.3, bronze, 0, "boule")
+		morceau("JambeG", 1, 1.4, 1, -1.35, 0.8, 0, bronzeOmbre)
+		morceau("JambeD", 1, 1.4, 1, 1.35, 0.8, 0, bronzeOmbre)
+		morceau("PiedG", 1.4, 0.5, 2.2, -1.35, 0.25, 0.4, bronzeOmbre)
+		morceau("PiedD", 1.4, 0.5, 2.2, 1.35, 0.25, 0.4, bronzeOmbre)
+		morceau("BrasG", 0.5, 0.5, 1.3, -1.2, 3.4, 2.4, bronze, -20)
+		morceau("BrasD", 0.5, 0.5, 1.3, 1.2, 3.4, 2.4, bronze, -20)
+		morceau("Cou", 1.8, 2, 1.8, 0, 4.6, 1.5, bronze)
+		morceau("Tete", 2.4, 2, 2.8, 0, 5.9, 2.4, bronze)
+		local machoire = morceau("Machoire", 2, 0.9, 1.8, 0, 5.8, 4.4, bronze)
 		morceau("MachoireBas", 1.8, 0.5, 1.6, 0, 4.9, 4.1, ventre, -15)
-		morceau("DentG", 0.3, 0.4, 0.3, -0.6, 5.2, 5.0, Charte.creme)
-		morceau("DentD", 0.3, 0.4, 0.3, 0.6, 5.2, 5.0, Charte.creme)
-		morceau("OeilG", 0.7, 0.7, 0.7, -1.15, 6.3, 3.0, Charte.creme, 0, "boule")
-		morceau("OeilD", 0.7, 0.7, 0.7, 1.15, 6.3, 3.0, Charte.creme, 0, "boule")
-		morceau("PupilleG", 0.35, 0.35, 0.35, -1.4, 6.3, 3.1, Charte.encre, 0, "boule")
-		morceau("PupilleD", 0.35, 0.35, 0.35, 1.4, 6.3, 3.1, Charte.encre, 0, "boule")
-		morceau("Queue", 2.2, 2.2, 2.4, 0, 3, -3.1, vert)
-		morceau("QueueBout", 1.4, 1.4, 2.2, 0, 3.3, -5.2, TEINTES.dinoOmbre)
-		morceau("Pic", 0.4, 1, 1.2, 0, 4.9, -1.5, Charte.dore, 0, "coin")
-		morceau("Pic", 0.4, 1, 1.2, 0, 4.9, -0.2, Charte.dore, 0, "coin")
-		morceau("Pic", 0.4, 0.8, 1, 0, 4.5, -3.1, Charte.dore, 0, "coin")
-		morceau("Pic", 0.4, 0.8, 1, 0, 6.9, 1.9, Charte.dore, 0, "coin")
+		morceau("DentG", 0.3, 0.4, 0.3, -0.6, 5.2, 5.0, TEINTES.marbre, 0, nil, MAT.Marble)
+		morceau("DentD", 0.3, 0.4, 0.3, 0.6, 5.2, 5.0, TEINTES.marbre, 0, nil, MAT.Marble)
+		morceau("OeilG", 0.7, 0.7, 0.7, -1.15, 6.3, 3.0, TEINTES.or_, 0, "boule")
+		morceau("OeilD", 0.7, 0.7, 0.7, 1.15, 6.3, 3.0, TEINTES.or_, 0, "boule")
+		morceau("Queue", 2.2, 2.2, 2.4, 0, 3, -3.1, bronze)
+		morceau("QueueMilieu", 1.7, 1.7, 2, 0.4, 2.6, -4.7, bronzeOmbre)
+		morceau("QueueBout", 1.1, 1.1, 1.8, 1.2, 2.2, -5.7, bronze)
+		morceau("Pic", 0.4, 1, 1.2, 0, 4.9, -1.3, TEINTES.or_, 0, "coin")
+		morceau("Pic", 0.4, 1, 1.2, 0, 4.9, 0, TEINTES.or_, 0, "coin")
+		morceau("Pic", 0.4, 0.8, 1, 0, 4.5, -3.1, TEINTES.or_, 0, "coin")
+		morceau("Pic", 0.4, 0.8, 1, 0, 6.9, 1.9, TEINTES.or_, 0, "coin")
 
 		-- le jet : de la gueule, presque vertical, retombe dans le bassin
 		if machoire then
@@ -292,7 +401,7 @@ function M.construire(ctx)
 				local jet = Instance.new("ParticleEmitter")
 				jet.Name = "Eau"
 				jet.EmissionDirection = Enum.NormalId.Top
-				jet.Color = ColorSequence.new(TEINTES.eau, Charte.creme)
+				jet.Color = ColorSequence.new(TEINTES.eau, Color3.new(1, 1, 1))
 				jet.Size = NumberSequence.new({
 					NumberSequenceKeypoint.new(0, 0.3),
 					NumberSequenceKeypoint.new(1, 0.55),
@@ -315,17 +424,17 @@ function M.construire(ctx)
 			end
 		end
 
-		-- éclaboussures là où le jet retombe
+		-- éclaboussures là où le jet retombe, reflets et lumière sous l'eau
 		if eau then
 			pcall(function()
 				local impact = Instance.new("Attachment")
 				impact.Name = "Impact"
 				impact.Parent = eau
-				impact.WorldCFrame = CFrame.new(fx, Y_DALLE + 0.95, fz + 3.9 * S * 1.1)
+				impact.WorldCFrame = CFrame.new(fx, 1.45, fz + 3.9 * S * 1.1)
 				local gerbe = Instance.new("ParticleEmitter")
 				gerbe.Name = "Gerbe"
 				gerbe.EmissionDirection = Enum.NormalId.Top
-				gerbe.Color = ColorSequence.new(Charte.creme)
+				gerbe.Color = ColorSequence.new(Color3.new(1, 1, 1))
 				gerbe.Size = NumberSequence.new(0.25)
 				gerbe.Transparency = NumberSequence.new({
 					NumberSequenceKeypoint.new(0, 0.2),
@@ -337,7 +446,29 @@ function M.construire(ctx)
 				gerbe.SpreadAngle = Vector2.new(35, 35)
 				gerbe.Acceleration = Vector3.new(0, -20, 0)
 				gerbe.Parent = impact
-				Outils.lumiere(eau, { Range = 10, Brightness = 0.6, Color = Charte.gemme })
+
+				-- scintillements à la surface du bassin
+				local surface = Instance.new("Attachment")
+				surface.Name = "Surface"
+				surface.Parent = eau
+				surface.WorldCFrame = CFrame.new(fx + 2.8, 1.45, fz)
+				local reflets = Instance.new("ParticleEmitter")
+				reflets.Name = "Reflets"
+				reflets.EmissionDirection = Enum.NormalId.Top
+				reflets.Color = ColorSequence.new(Color3.new(1, 1, 1))
+				reflets.Size = NumberSequence.new(0.15)
+				reflets.Transparency = NumberSequence.new({
+					NumberSequenceKeypoint.new(0, 0.3),
+					NumberSequenceKeypoint.new(1, 1),
+				})
+				reflets.Lifetime = NumberRange.new(0.6, 0.9)
+				reflets.Rate = 8
+				reflets.Speed = NumberRange.new(0.3, 0.6)
+				reflets.SpreadAngle = Vector2.new(80, 80)
+				reflets.LightEmission = 0.6
+				reflets.Parent = surface
+
+				Outils.lumiere(eau, { Range = 10, Brightness = 0.7, Color = Charte.gemme })
 			end)
 		end
 
@@ -375,7 +506,7 @@ function M.construire(ctx)
 		end
 	end)
 
-	-- ===== 4. borne Dinodex au bord sud =====
+	-- ===== 4. borne Dinodex au bord sud : coque Metal, écran Neon =====
 	etape("dinodex", function()
 		local m = Outils.modele(dossier, "Dinodex")
 		local bx, bz = CX, CZ + R.distanceBorne
@@ -384,57 +515,121 @@ function M.construire(ctx)
 			return CFrame.new(bx + x, y, bz + z)
 		end
 
-		bloc(m, {
+		dalleBordee(m, {
 			Name = "Socle",
-			Size = Vector3.new(5.4, 0.6, 3.4),
-			CFrame = ici(0, Y_DALLE + 0.3, 0),
+			Size = Vector3.new(5.6, 0.5, 3.6),
+			CFrame = ici(0, 0.25 + 0.2, 0),
 			Color = TEINTES.pierre,
+			Material = MAT.Slate,
+		}, 0.35, TEINTES.ardoiseFonce)
+		local yBas = 0.7
+		bloc(m, {
+			Name = "Plinthe",
+			Size = Vector3.new(4.8, 0.4, 2.8),
+			CFrame = ici(0, yBas + 0.2, 0.3),
+			Color = TEINTES.metal,
+			Material = MAT.DiamondPlate,
 		})
-		local yBas = Y_DALLE + 0.6
-		local borne = bloc(m, {
-			Name = "Borne",
-			Size = Vector3.new(4, 5.2, 2),
-			CFrame = ici(0, yBas + 2.6, 0.3),
-			Color = TEINTES.bleu,
+		yBas = yBas + 0.4
+		local hCoque = 5.4
+		local coque = arrondi(m, {
+			Name = "Coque",
+			Size = Vector3.new(4.2, hCoque, 2.2),
+			CFrame = ici(0, yBas + hCoque / 2, 0.3),
+			Color = TEINTES.bleuBorne,
+			Material = MAT.Metal,
+		}, 0.45)
+		local borne = nil
+		if coque then
+			borne = coque:FindFirstChild("CoeurX")
+			if borne then
+				borne.Name = "Borne"
+			end
+		end
+		local avant = 0.3 - 1.1 -- face avant de la coque
+		bloc(m, {
+			Name = "Cadre",
+			Size = Vector3.new(3.8, 3, 0.2),
+			CFrame = ici(0, yBas + 3.3, avant - 0.1),
+			Color = TEINTES.metal,
+			Material = MAT.Metal,
 		})
 		local ecran = bloc(m, {
 			Name = "Ecran",
-			Size = Vector3.new(3.4, 2.6, 0.2),
-			CFrame = ici(0, yBas + 3.5, -0.8),
-			Color = Charte.encre,
+			Size = Vector3.new(3.4, 2.6, 0.1),
+			CFrame = ici(0, yBas + 3.3, avant - 0.25),
+			Color = TEINTES.ecran,
+			Material = MAT.Neon,
 		})
-		bloc(m, { Name = "Cadre", Size = Vector3.new(3.8, 0.3, 0.3), CFrame = ici(0, yBas + 4.95, -0.8), Color = Charte.dore })
-		bloc(m, { Name = "Cadre", Size = Vector3.new(3.8, 0.3, 0.3), CFrame = ici(0, yBas + 2.05, -0.8), Color = Charte.dore })
+		-- pupitre incliné sous l'écran, avec son voyant
+		coin(m, {
+			Name = "Pupitre",
+			Size = Vector3.new(3.4, 0.9, 0.8),
+			CFrame = ici(0, yBas + 1.45, avant - 0.4),
+			Color = ombre(TEINTES.bleuBorne),
+			Material = MAT.Metal,
+		})
 		local voyant = bloc(m, {
 			Name = "Voyant",
-			Size = Vector3.new(1.4, 0.8, 0.3),
-			CFrame = ici(0, yBas + 1.1, -0.75),
+			Size = Vector3.new(1.4, 0.25, 0.12),
+			CFrame = ici(0, yBas + 0.8, avant - 0.08),
 			Color = Charte.gemme,
-			Material = Enum.Material.Neon,
+			Material = MAT.Neon,
 		})
-		bloc(m, { Name = "Liseret", Size = Vector3.new(0.25, 5.2, 0.25), CFrame = ici(-2.05, yBas + 2.6, -0.65), Color = TEINTES.clair })
-		bloc(m, { Name = "Liseret", Size = Vector3.new(0.25, 5.2, 0.25), CFrame = ici(2.05, yBas + 2.6, -0.65), Color = TEINTES.clair })
+		-- filets lumineux de part et d'autre de l'écran
+		for _, sx in ipairs({ -1, 1 }) do
+			bloc(m, {
+				Name = "Liseret",
+				Size = Vector3.new(0.14, 3, 0.22),
+				CFrame = ici(sx * 1.97, yBas + 3.3, avant - 0.1),
+				Color = Charte.gemme,
+				Material = MAT.Neon,
+			})
+		end
+		-- toit, nid doré, œuf lumineux et halo tournant
 		bloc(m, {
 			Name = "Toit",
-			Size = Vector3.new(4.6, 0.5, 2.6),
-			CFrame = ici(0, yBas + 5.45, 0.3),
-			Color = TEINTES.bleuClair,
+			Size = Vector3.new(4.7, 0.35, 2.7),
+			CFrame = ici(0, yBas + hCoque + 0.175, 0.3),
+			Color = ombre(TEINTES.bleuBorne),
+			Material = MAT.Metal,
 		})
-		disque(m, "Nid", bx, bz + 0.3, 0.9, 0.4, yBas + 5.7, Charte.bois)
+		local yToit = yBas + hCoque + 0.35
+		disque(m, "Nid", bx, bz + 0.3, 0.9, 0.35, yToit, TEINTES.or_, MAT.Metal)
 		local oeuf = boule(m, {
 			Name = "Oeuf",
-			Size = Vector3.new(1.6, 1.6, 1.6),
-			CFrame = ici(0, yBas + 6.95, 0.3),
+			Size = Vector3.new(1.4, 1.7, 1.4),
+			CFrame = ici(0, yToit + 1.5, 0.3),
 			Color = Charte.dore,
-			Material = Enum.Material.Neon,
+			Material = MAT.Neon,
 			CanCollide = false,
 		})
+		local halo = disque(m, "Halo", bx, bz + 0.3, 1.3, 0.1, yToit + 1.4, Charte.gemme, MAT.Neon, {
+			Transparency = 0.45,
+			CanCollide = false,
+		})
+		if halo then
+			Outils.animer(halo, "tourne", 0.6)
+		end
 		if oeuf then
 			Outils.animer(oeuf, "flotte", 0.8)
-			Outils.lumiere(oeuf, { Range = 12, Brightness = 1.2, Color = Charte.dore })
+			lampe(oeuf, { Range = 12, Brightness = 1.2, Color = Charte.dore })
 		end
 		if voyant then
 			Outils.animer(voyant, "pulse", 1.2)
+		end
+		if ecran then
+			Outils.lumiere(ecran, { genre = "Surface", Range = 8, Brightness = 0.8, Color = TEINTES.ecran })
+		end
+		if not borne then
+			-- repli : une part simple porte l'invite
+			borne = bloc(m, {
+				Name = "Borne",
+				Size = Vector3.new(4, hCoque, 2),
+				CFrame = ici(0, yBas + hCoque / 2, 0.3),
+				Color = TEINTES.bleuBorne,
+				Material = MAT.Metal,
+			})
 		end
 		if borne then
 			m.PrimaryPart = borne
@@ -464,7 +659,7 @@ function M.construire(ctx)
 				Name = "TitreDinodex",
 				largeur = 14,
 				hauteurLigne = 2.4,
-				StudsOffset = Vector3.new(0, 8.2, 0),
+				StudsOffset = Vector3.new(0, 8.4, 0),
 				MaxDistance = 160,
 				AlwaysOnTop = false,
 			})
@@ -491,7 +686,9 @@ function M.construire(ctx)
 				fond.BorderSizePixel = 0
 				fond.Parent = gui
 				if Style then
-					fond.BackgroundColor3 = Style.couleurs.fond
+					-- fond blanc teinté par un dégradé bleu nuit, comme un écran allumé
+					fond.BackgroundColor3 = Color3.new(1, 1, 1)
+					Style.degrade(fond, Style.couleurs.fondHaut or lumiere(Style.couleurs.fond), Style.couleurs.fond)
 				end
 
 				local titre
@@ -578,16 +775,24 @@ function M.construire(ctx)
 		end
 	end)
 
-	-- ===== 5. bancs (tournés vers le centre ou vers la fontaine) =====
+	-- ===== 5. bancs : lattes de bois sur pieds de métal =====
 	etape("bancs", function()
 		local m = Outils.modele(dossier, "Bancs")
 		local fontaine = Vector3.new(CX, 0, CZ - R.reculFontaine)
+		local bois = TEINTES.bois
 		local function banc(pos, cible)
-			local repere = CFrame.lookAt(Vector3.new(pos.X, Y_DALLE, pos.Z), Vector3.new(cible.X, Y_DALLE, cible.Z))
-			bloc(m, { Name = "Assise", Size = Vector3.new(5, 0.4, 1.6), CFrame = repere * CFrame.new(0, 1.3, 0), Color = TEINTES.bois })
-			bloc(m, { Name = "Dossier", Size = Vector3.new(5, 1.4, 0.3), CFrame = repere * CFrame.new(0, 2.2, 0.75), Color = TEINTES.bois })
-			bloc(m, { Name = "Pied", Size = Vector3.new(0.5, 1.1, 1.4), CFrame = repere * CFrame.new(-2, 0.55, 0), Color = TEINTES.pierreOmbre })
-			bloc(m, { Name = "Pied", Size = Vector3.new(0.5, 1.1, 1.4), CFrame = repere * CFrame.new(2, 0.55, 0), Color = TEINTES.pierreOmbre })
+			-- l'avant (-Z local) regarde la cible
+			local repere = CFrame.lookAt(Vector3.new(pos.X, Y_SOL, pos.Z), Vector3.new(cible.X, Y_SOL, cible.Z))
+			bloc(m, { Name = "Latte", Size = Vector3.new(5, 0.22, 0.72), CFrame = repere * CFrame.new(0, 1.25, -0.39), Color = bois, Material = MAT.WoodPlanks })
+			bloc(m, { Name = "Latte", Size = Vector3.new(5, 0.22, 0.72), CFrame = repere * CFrame.new(0, 1.25, 0.39), Color = ombre(bois), Material = MAT.WoodPlanks })
+			-- dossier incliné vers l'arrière (+Z local)
+			local dos = repere * CFrame.new(0, 0, 0.6) * CFrame.Angles(math.rad(10), 0, 0)
+			bloc(m, { Name = "Dossier", Size = Vector3.new(5, 0.5, 0.18), CFrame = dos * CFrame.new(0, 1.85, 0), Color = bois, Material = MAT.WoodPlanks })
+			bloc(m, { Name = "Dossier", Size = Vector3.new(5, 0.5, 0.18), CFrame = dos * CFrame.new(0, 2.5, 0), Color = lumiere(bois), Material = MAT.WoodPlanks })
+			for _, sx in ipairs({ -2.1, 2.1 }) do
+				bloc(m, { Name = "Pied", Size = Vector3.new(0.22, 1.14, 1.6), CFrame = repere * CFrame.new(sx, 0.57, 0), Color = TEINTES.metal, Material = MAT.Metal })
+				bloc(m, { Name = "Montant", Size = Vector3.new(0.22, 1.7, 0.22), CFrame = dos * CFrame.new(sx, 2.05, 0.15), Color = TEINTES.metal, Material = MAT.Metal })
+			end
 		end
 		banc(autour(R.rayonBancs, 45), CENTRE)
 		banc(autour(R.rayonBancs, 135), CENTRE)
@@ -596,38 +801,69 @@ function M.construire(ctx)
 		banc(Vector3.new(CX + 8.5, 0, fontaine.Z), fontaine)
 	end)
 
-	-- ===== 6. bacs à fleurs =====
+	-- ===== 6. bacs à fleurs : terre cuite, rebord d'ardoise, buisson fleuri =====
 	etape("fleurs", function()
 		local m = Outils.modele(dossier, "Fleurs")
-		local couleursFleurs = { Charte.alerte, Charte.dore, Charte.violet, Charte.gemme, Charte.lave }
+		local couleursFleurs = { Charte.alerte, Charte.dore, Charte.violet, hex("FF8FC7"), Color3.new(1, 1, 1) }
 		local hasard = Outils.aleatoire(2026)
-		local function bac(angle)
-			local p = autour(R.rayonFleurs, angle)
-			local repere = CFrame.new(p.X, Y_DALLE, p.Z) * CFrame.Angles(0, -math.rad(angle), 0)
-			bloc(m, { Name = "Bac", Size = Vector3.new(2.4, 1, 2.4), CFrame = repere * CFrame.new(0, 0.5, 0), Color = TEINTES.bois })
-			bloc(m, { Name = "Terreau", Size = Vector3.new(2, 0.1, 2), CFrame = repere * CFrame.new(0, 1.02, 0), Color = Charte.terre })
-			local places = { { -0.55, -0.5 }, { 0.55, -0.4 }, { 0, 0.55 } }
-			for _, d in ipairs(places) do
-				local haut = 0.8 + hasard:NextNumber() * 0.5
-				bloc(m, {
-					Name = "Tige",
-					Size = Vector3.new(0.2, haut, 0.2),
-					CFrame = repere * CFrame.new(d[1], 1.05 + haut / 2, d[2]),
-					Color = Charte.jungle,
-					CanCollide = false,
-				})
+		local function bac(x, z, angle)
+			local repere = CFrame.new(x, Y_SOL, z) * CFrame.Angles(0, -math.rad(angle), 0)
+			bloc(m, { Name = "Bac", Size = Vector3.new(2.4, 1, 2.4), CFrame = repere * CFrame.new(0, 0.5, 0), Color = TEINTES.terreCuite, Material = MAT.Brick })
+			bloc(m, { Name = "Rebord", Size = Vector3.new(2.7, 0.22, 2.7), CFrame = repere * CFrame.new(0, 1.05, 0), Color = TEINTES.pierre, Material = MAT.Slate })
+			boule(m, {
+				Name = "Buisson",
+				Size = Vector3.new(2.3, 1.5, 2.3),
+				CFrame = repere * CFrame.new(0, 1.55, 0),
+				Color = TEINTES.feuillage,
+				Material = MAT.LeafyGrass,
+				CanCollide = false,
+			})
+			local places = { { -0.55, -0.45 }, { 0.6, -0.3 }, { 0, 0.6 } }
+			local premiere = hasard:NextInteger(1, #couleursFleurs)
+			for i, d in ipairs(places) do
+				local c = couleursFleurs[(premiere + i - 2) % #couleursFleurs + 1]
 				boule(m, {
 					Name = "Fleur",
 					Size = Vector3.new(0.6, 0.6, 0.6),
-					CFrame = repere * CFrame.new(d[1], 1.05 + haut + 0.2, d[2]),
-					Color = couleursFleurs[hasard:NextInteger(1, #couleursFleurs)],
+					CFrame = repere * CFrame.new(d[1], 2.2 + hasard:NextNumber() * 0.15, d[2]),
+					Color = c,
 					CanCollide = false,
 				})
 			end
 		end
-		local angles = { 25, 65, 115, 155, 340 }
-		for _, a in ipairs(angles) do
-			bac(a)
+		for _, a in ipairs({ 25, 155, 340 }) do
+			local p = autour(R.rayonFleurs, a)
+			bac(p.X, p.Z, a)
+		end
+		-- de part et d'autre de la borne Dinodex
+		bac(CX - 5.3, CZ + R.distanceBorne + 0.3, 0)
+		bac(CX + 5.3, CZ + R.distanceBorne + 0.3, 0)
+	end)
+
+	-- ===== 7. lampadaires (fonte sombre, lanterne chaude à ombres) =====
+	etape("lampadaires", function()
+		local m = Outils.modele(dossier, "Lampadaires")
+		local function lampadaire(pos)
+			local x, z = pos.X, pos.Z
+			disque(m, "Pied", x, z, 0.55, 0.5, Y_SOL, TEINTES.metal, MAT.Metal)
+			disque(m, "Mat", x, z, 0.18, 5.6, Y_SOL + 0.5, TEINTES.metal, MAT.Metal)
+			disque(m, "Bague", x, z, 0.28, 0.25, Y_SOL + 2.2, TEINTES.or_, MAT.Metal)
+			disque(m, "Coupelle", x, z, 0.45, 0.2, Y_SOL + 6.1, TEINTES.metal, MAT.Metal)
+			local globe = boule(m, {
+				Name = "Lanterne",
+				Size = Vector3.new(1.1, 1.1, 1.1),
+				CFrame = CFrame.new(x, Y_SOL + 6.85, z),
+				Color = TEINTES.lanterne,
+				Material = MAT.Neon,
+				CanCollide = false,
+			})
+			disque(m, "Chapeau", x, z, 0.7, 0.22, Y_SOL + 7.4, TEINTES.metal, MAT.Metal)
+			if globe then
+				lampe(globe, { Range = 16, Brightness = 1.1, Color = TEINTES.lanterne })
+			end
+		end
+		for _, a in ipairs({ 45, 135, 235, 305 }) do
+			lampadaire(autour(R.rayonLampes, a))
 		end
 	end)
 

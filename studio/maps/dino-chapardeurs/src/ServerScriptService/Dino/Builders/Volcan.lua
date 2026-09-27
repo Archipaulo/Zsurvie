@@ -1,13 +1,18 @@
--- Constructeur Volcan : pièce maîtresse du nord, version cartoon « simulateur ».
--- Cône arrondi en couches de pierre brun-gris claire (chaque terrasse soulignée d'un liseré clair),
--- bosses rondes sur les flancs, rebord du cratère en boules, lac et coulées de lave orange vif,
--- rochers ronds au pied, fumée claire et titre géant flottant « VOLCAN » cerné de noir.
--- Pendant l'événement « Eruption » (ctx.Etat.Evenement) : projections de lave, lumière vive,
--- lave jaune-orange qui pulse vite, fumée plus sombre et alerte flottante « ÉRUPTION ! ».
+-- Constructeur Volcan : pièce maîtresse du nord, version 2 « rendu professionnel ».
+-- Cône irrégulier sculpté en Terrain Roblox : tranches de terrain empilées (flancs bas en cendre brun-rouge
+-- = Asphalt 6E4F45, haut en Basalt 5B4E57 : dégradé sombre du pied au sommet, jamais la teinte des allées),
+-- légèrement penché, arêtes rocheuses qui descendent du sommet, bosses et éboulis au pied.
+-- Matériaux de terrain possédés par ce module : Asphalt, Basalt, CrackedLava (Rock appartient aux Falaises).
+-- Rebord du cratère en boules de basalte, paroi intérieure en CrackedLava, lac de lave Neon avec cœur
+-- plus chaud, croûtes et bulles ; coulées de lave Neon enfoncées dans des chenaux creusés (lit de
+-- CrackedLava, levées de croûte de chaque côté), largeur irrégulière, qui refroidissent vers le bas
+-- (orange doré → rouge sombre) et finissent en lave figée (Basalt/CrackedLava non Neon) près des mares. Fumée (Smoke + panache), braises (ParticleEmitter), fumerolles.
+-- Pendant l'événement « Eruption » (ctx.Etat.Evenement) : projections, lumière vive qui scintille,
+-- lave jaune-orange qui pulse vite, fumée sombre et épaisse et alerte flottante « ÉRUPTION ! ».
 -- Emprise (CONTRAT §10) : disque de rayon 34 autour de Plan.volcan.centre, hauteur ≤ 70.
 local M = {}
 
-local BUDGET = 350 -- parts au maximum pour ce constructeur
+local BUDGET = 250 -- parts au maximum pour ce constructeur (le terrain ne compte pas)
 
 function M.construire(ctx)
 	local Charte = ctx.Charte
@@ -28,6 +33,9 @@ function M.construire(ctx)
 		end
 		return defaut
 	end
+	local function borne(v, mini, maxi)
+		return math.max(mini, math.min(maxi, v))
+	end
 
 	-- position et limites de l'emprise
 	local infoVolcan = Plan.volcan or {}
@@ -36,33 +44,36 @@ function M.construire(ctx)
 	local HAUTEUR_MAX = infoVolcan.hauteur or 70
 	local CX, CZ = CENTRE.X, CENTRE.Z
 
-	local COUCHES = math.floor(math.max(6, math.min(14, reglage("couches", 10))))
-	local HAUTEUR_COUCHE = math.max(3, reglage("hauteurCouche", 6))
-	-- le sommet du cône laisse la place au rebord du cratère sous la hauteur maximale
-	if COUCHES * HAUTEUR_COUCHE > HAUTEUR_MAX - 6 then
-		HAUTEUR_COUCHE = (HAUTEUR_MAX - 6) / COUCHES
-	end
-	local SOMMET = COUCHES * HAUTEUR_COUCHE
-	local RAYON_BAS = math.min(RAYON_MAX - 3, reglage("rayonBas", 31))
-	local RAYON_HAUT = math.max(8, math.min(RAYON_BAS - 6, reglage("rayonHaut", 11)))
-	local RAYON_LAC = RAYON_HAUT - 2.5
-	local NB_COULEES = math.floor(math.max(2, math.min(6, reglage("coulees", 5))))
+	local SOMMET = borne(reglage("sommet", 44), 30, HAUTEUR_MAX - 14)
+	local RAYON_BAS = math.min(RAYON_MAX - 3.5, reglage("rayonBas", 30.5))
+	local RAYON_HAUT = borne(reglage("rayonHaut", 10), 8, RAYON_BAS - 8)
+	local RAYON_LAC = RAYON_HAUT - 3.2
+	local RAYON_REBORD = RAYON_HAUT - 1
+	local NB_COULEES = math.floor(borne(reglage("coulees", 4), 2, 6))
 	local VITESSE_PULSE_CALME = reglage("pulseCalme", 0.7)
 	local VITESSE_PULSE_ERUPTION = reglage("pulseEruption", 4)
-	local LISERE = 0.6 -- débord du liseré clair de chaque terrasse
-	local DECALAGE_COULEE = LISERE + 0.25 -- la lave coule devant le liseré
+	local PAS = 1.5 -- épaisseur des tranches de terrain
+	local LIMITE_ROCHE = SOMMET * 0.36 -- sous cette hauteur, les flancs sont en cendre (Asphalt)
+	local LEVEE = 0.15 -- la lave affleure dans son chenal creusé (jamais en relief sur le flanc)
 
 	local rng = Outils.aleatoire(reglage("graine", 2026))
+	local M_BASALTE = Enum.Material.Basalt
+	local M_ROCHE = Enum.Material.Asphalt -- cendre du pied : matériau réservé au Volcan (Rock = Falaises)
+	local M_FISSURE = Enum.Material.CrackedLava
+	local HAUT = Vector3.new(0, 1, 0)
 
-	-- ===== couleurs : pierre brun-gris claire, lave orange vif (palette du Style) =====
+	-- ===== couleurs (palette du Style) =====
 	local hex = Charte.hex
-	local PIERRE = hex("A48E7E")
-	local PIERRE_HAUT = hex("8C7666") -- un peu plus chaude et plus sombre vers le sommet
-	local PIERRE_CLAIRE = Charte.lumiere(hex("BCA898"))
-	local PIERRE_OMBRE = Charte.ombre(PIERRE)
-	local FOND_CRATERE = hex("5A4136")
+	local BASALTE_T = hex("5B4E57") -- basalte du terrain : gris chaud légèrement violacé
+	local FISSURE_T = hex("4E3530") -- CrackedLava du terrain : croûte brun sombre, fissures orange
+	local CENDRE_T = hex("6E4F45") -- Asphalt du terrain : cendre brun-rouge du pied du volcan
+	local LAVE_FROIDE = hex("8A1E0E") -- rouge sombre de la lave qui refroidit en bas des coulées
+	local ROCHE_PART = hex("54474F")
+	local ROCHE_PART_CLAIRE = Charte.lumiere(ROCHE_PART)
+	local CROUTE = hex("2E2528")
 	local LAVE = Charte.lave
 	local LAVE_VIVE = Charte.lumiere(Charte.lave)
+	local COEUR = Charte.dore
 	local BRAISE = Charte.dore
 	local CONTOUR = Charte.encre
 	local BLANC = Color3.new(1, 1, 1)
@@ -72,8 +83,9 @@ function M.construire(ctx)
 		local orange = Style.boutons.orange
 		local jaune = Style.boutons.jaune
 		if orange and jaune then
-			LAVE = orange[2]:Lerp(orange[1], 0.3) -- orange vif
+			LAVE = Charte.ombre(orange[2]) -- orange profond (le Neon l'éclaircit déjà)
 			LAVE_VIVE = jaune[1]:Lerp(orange[1], 0.4) -- jaune-orange éclatant pendant l'éruption
+			COEUR = jaune[1]:Lerp(orange[1], 0.25)
 			TITRE_HAUT, TITRE_BAS = jaune[1], orange[2]
 		end
 		if Style.couleurs.revenu then
@@ -90,7 +102,7 @@ function M.construire(ctx)
 		end
 	end
 	local FUMEE_CALME = hex("E4DED8")
-	local FUMEE_ERUPTION = hex("6E6470")
+	local FUMEE_ERUPTION = hex("5E5660")
 
 	-- compteur de parts : on s'arrête net au budget
 	local compteur = 0
@@ -101,247 +113,563 @@ function M.construire(ctx)
 		compteur = compteur + 1
 		return fabrique(parent, props)
 	end
+	-- propriétés d'une part de lave (Neon, sans collision ni ombre)
+	local function propsLave(extra)
+		local t = {
+			Color = LAVE,
+			Material = Enum.Material.Neon,
+			CanCollide = false,
+			CanQuery = false,
+			CastShadow = false,
+		}
+		for k, v in pairs(extra) do
+			t[k] = v
+		end
+		return t
+	end
 
 	local modele = Outils.modele(dossier, "Volcan")
 	local cone = Outils.modele(modele, "Cone")
 	local rochers = Outils.modele(modele, "Rochers")
+	local croutes = Outils.modele(modele, "Croutes")
 	local lave = Outils.modele(modele, "Lave") -- tout ce qui brille et pulse
+	local laveFigee = Outils.modele(modele, "LaveRefroidie") -- bas des coulées : ne brille pas, ne pulse pas
 
-	-- rayon d'une couche : profil bombé (épaules rondes, sommet net), silhouette de gros bonbon
-	local function rayonCouche(i)
-		local t = (i - 1) / (COUCHES - 1)
-		return RAYON_HAUT + (RAYON_BAS - RAYON_HAUT) * (1 - math.pow(t, 1.5))
-	end
-
-	-- direction horizontale d'un angle (radians)
+	-- ===== géométrie du cône =====
 	local function direction(a)
 		return Vector3.new(math.cos(a), 0, math.sin(a))
 	end
-
-	-- CFrame orientée vers l'extérieur du volcan (regard = direction a)
-	local function versExterieur(rayon, y, a)
-		local d = direction(a)
-		local pos = Vector3.new(CX, y, CZ) + d * rayon
-		return CFrame.lookAt(pos, pos + d)
+	-- le cône penche un peu (axe qui dérive doucement avec la hauteur) : silhouette naturelle
+	local phiPenche = rng:NextNumber(0, math.pi * 2)
+	local function centreA(y)
+		local t = borne(y / SOMMET, 0, 1)
+		local amp = 0.4 + 1.8 * t
+		local phi = phiPenche + 0.5 * math.sin(y * 0.06)
+		return Vector3.new(CX + math.cos(phi) * amp, y, CZ + math.sin(phi) * amp)
+	end
+	-- profil concave de volcan : pied large et doux, sommet plus raide
+	local function rayonA(y)
+		local u = 1 - borne(y / SOMMET, 0, 1)
+		return RAYON_HAUT + (RAYON_BAS - RAYON_HAUT) * (math.pow(u, 1.8) * 0.75 + u * 0.25)
+	end
+	-- point de la surface à la hauteur y dans la direction a, décalé de `ecart` vers l'extérieur
+	local function surface(y, a, ecart)
+		return centreA(y) + direction(a) * (rayonA(y) + (ecart or 0))
+	end
+	-- normale extérieure de la surface
+	local function normale(y, a)
+		if y >= SOMMET - 0.2 then
+			return HAUT
+		end
+		local dr = rayonA(y + 0.5) - rayonA(y - 0.5)
+		return (direction(a) - Vector3.new(0, dr, 0)).Unit
+	end
+	-- ramène une boule (ou un objet) dans l'emprise
+	local function dansEmprise(pos, rayon)
+		local dx, dz = pos.X - CX, pos.Z - CZ
+		local d = math.sqrt(dx * dx + dz * dz)
+		local maxi = RAYON_MAX - 0.4 - rayon
+		if d > maxi and d > 0.01 then
+			local k = maxi / d
+			return Vector3.new(CX + dx * k, pos.Y, CZ + dz * k)
+		end
+		return pos
+	end
+	local function ecartAngle(a, b)
+		return math.abs(((a - b + math.pi) % (math.pi * 2)) - math.pi)
 	end
 
-	-- disque horizontal (cylindre couché : l'axe d'un cylindre Roblox est son axe X)
-	local function disque(y, rayon, epaisseur)
-		return Vector3.new(epaisseur, rayon * 2, rayon * 2), CFrame.new(CX, y, CZ) * CFrame.Angles(0, 0, math.pi / 2)
-	end
-
-	-- angles des coulées de lave (réparties tout autour, légèrement irrégulières)
-	local anglesCoulees = {}
+	-- ===== tracés des coulées (définis avant le relief pour y laisser des chenaux) =====
+	local DECALAGES = { -0.55, 0.5, 1.8, -1.85, 3.14, 2.55 }
+	local traces = {}
 	for k = 1, NB_COULEES do
-		local a = (k - 1) / NB_COULEES * math.pi * 2 + math.rad(rng:NextNumber(-12, 12)) + math.rad(25)
-		table.insert(anglesCoulees, a)
+		local a0 = math.pi / 2 + DECALAGES[k] + rng:NextNumber(-0.12, 0.12) -- tournées vers la Place (+Z)
+		table.insert(traces, {
+			a0 = a0,
+			phase = rng:NextNumber(0, math.pi * 2),
+			ampl = rng:NextNumber(2, 3.2),
+			freq = rng:NextNumber(0.1, 0.15),
+		})
 	end
-	local function presDUneCoulee(a, marge)
-		for _, ac in ipairs(anglesCoulees) do
-			local ecart = math.abs(((a - ac + math.pi) % (math.pi * 2)) - math.pi)
-			if ecart < marge then
+	-- angle d'une coulée à la hauteur y : elle serpente, sauf au débord du cratère
+	local function angleTrace(tr, y)
+		local enveloppe = borne((SOMMET - y) / 10, 0, 1)
+		local lateral = tr.ampl * math.sin(y * tr.freq + tr.phase) * enveloppe
+		return tr.a0 + lateral / math.max(4, rayonA(y))
+	end
+	-- vrai si le point (y, a) est à moins de `marge` studs (sur le flanc) d'une coulée
+	local function presDUneCoulee(a, y, marge)
+		for _, tr in ipairs(traces) do
+			if ecartAngle(a, angleTrace(tr, y)) * rayonA(y) < marge then
 				return true
 			end
 		end
 		return false
 	end
 
-	-- ===== le cône : couches de pierre claire, liseré clair, bosses rondes =====
-	for i = 1, COUCHES do
-		local r = rayonCouche(i)
-		local yBas = (i - 1) * HAUTEUR_COUCHE
-		local t = (i - 1) / (COUCHES - 1)
-		local couleur = PIERRE:Lerp(PIERRE_HAUT, t)
-		if i % 2 == 0 then
-			-- alternance très douce : on lit les terrasses sans assombrir le volcan
-			couleur = couleur:Lerp(PIERRE_OMBRE, 0.25)
+	-- ===== le relief en terrain =====
+	local terrainOk = Outils.terrainCylindre ~= nil and Outils.terrainBoule ~= nil
+	if terrainOk then
+		if Outils.couleurTerrain then
+			Outils.couleurTerrain(M_BASALTE, BASALTE_T)
+			Outils.couleurTerrain(M_FISSURE, FISSURE_T)
+			Outils.couleurTerrain(M_ROCHE, CENDRE_T)
 		end
-		local taille, cf = disque(yBas + HAUTEUR_COUCHE / 2, r, HAUTEUR_COUCHE)
-		part(Outils.cylindre, cone, {
-			Name = "Couche" .. i,
-			Size = taille,
-			CFrame = cf,
-			Color = couleur,
-		})
 
-		-- liseré clair en haut de la couche : le bord de terrasse se lit de loin (style jouet)
-		local tailleL, cfL = disque(yBas + HAUTEUR_COUCHE - 0.4, r + LISERE, 0.8)
-		part(Outils.cylindre, cone, {
-			Name = "Lisere" .. i,
-			Size = tailleL,
-			CFrame = cfL,
-			Color = PIERRE_CLAIRE:Lerp(couleur, 0.3 * t),
-		})
+		-- 1. tranches empilées (le pied descend sous l'herbe pour la remplacer)
+		local y0 = -2
+		while y0 < SOMMET - 0.01 do
+			local ym = math.max(0, y0 + PAS / 2)
+			local materiau = M_BASALTE
+			if ym < LIMITE_ROCHE then
+				materiau = M_ROCHE
+			end
+			Outils.terrainCylindre(CFrame.new(centreA(ym)) + Vector3.new(0, y0 + PAS / 2 - ym, 0), PAS + 0.4, rayonA(ym), materiau)
+			y0 = y0 + PAS
+		end
 
-		-- bosses rondes sur le flanc de la couche : silhouette douce et cartoon
-		local nbBosses = math.max(3, math.floor(r / 6))
-		for b = 1, nbBosses do
-			local a = (b - 1) / nbBosses * math.pi * 2 + rng:NextNumber(-0.2, 0.2) + i * 0.7
-			if not presDUneCoulee(a, math.rad(16)) then
-				local d = math.min(HAUTEUR_COUCHE * 0.9, rng:NextNumber(3.4, 5))
-				-- la bosse ne dépasse jamais l'emprise
-				local rb = math.min(r - 0.4, RAYON_MAX - 0.5 - d / 2)
-				local teinte = couleur:Lerp(PIERRE_CLAIRE, rng:NextNumber(0.1, 0.35))
-				if rng:NextNumber() < 0.35 then
-					teinte = couleur:Lerp(PIERRE_OMBRE, rng:NextNumber(0.3, 0.6))
+		-- 2. arêtes de basalte qui descendent du sommet (langues sombres dans la cendre)
+		local NB_ARETES = 7
+		local decalageAretes = rng:NextNumber(0, math.pi * 2)
+		for k = 1, NB_ARETES do
+			local a0 = (k - 0.5) / NB_ARETES * math.pi * 2 + decalageAretes + rng:NextNumber(-0.2, 0.2)
+			local y = SOMMET - rng:NextNumber(2, 5)
+			local yBas = rng:NextNumber(3, LIMITE_ROCHE)
+			while y > yBas do
+				local t = y / SOMMET
+				local rad = (2.2 + 2.6 * (1 - t)) * rng:NextNumber(0.85, 1.15)
+				local a = a0 + 0.07 * math.sin(y * 0.15 + k)
+				if not presDUneCoulee(a, y, rad + 2.8) then
+					local materiau = M_BASALTE
+					if y < LIMITE_ROCHE - 6 and rng:NextNumber() < 0.5 then
+						materiau = M_ROCHE
+					end
+					Outils.terrainBoule(dansEmprise(surface(y, a, -rad * 0.55), rad), rad, materiau)
 				end
-				part(Outils.boule, cone, {
-					Name = "Bosse",
-					Size = Vector3.new(d, d, d),
-					CFrame = CFrame.new(CX, yBas + HAUTEUR_COUCHE * 0.45, CZ) + direction(a) * rb,
-					Color = teinte,
-				})
+				y = y - rad * 0.8
+			end
+		end
+
+		-- 3. bosses : cendre rousse dans le basalte, basalte dans la cendre
+		for n = 1, 30 do
+			local y = rng:NextNumber(2, SOMMET - 6)
+			local a = rng:NextNumber(0, math.pi * 2)
+			local t = y / SOMMET
+			local rad = rng:NextNumber(2.4, 4.2) * (1 + 0.4 * (1 - t))
+			if not presDUneCoulee(a, y, rad + 2.2) then
+				local materiau = M_BASALTE
+				if y < LIMITE_ROCHE then
+					if rng:NextNumber() > 0.3 then
+						materiau = M_ROCHE
+					end
+				elseif rng:NextNumber() < 0.25 then
+					materiau = M_ROCHE
+				end
+				Outils.terrainBoule(dansEmprise(surface(y, a, -rad * 0.6), rad), rad, materiau)
+			end
+		end
+
+		-- 3 bis. frange irrégulière entre la cendre du bas et le basalte du haut
+		for n = 1, 22 do
+			local a = (n - 1) / 22 * math.pi * 2 + rng:NextNumber(-0.1, 0.1)
+			local rad = rng:NextNumber(2.6, 4)
+			local y = LIMITE_ROCHE - rng:NextNumber(0, 6)
+			if not presDUneCoulee(a, y, rad + 2.2) then
+				Outils.terrainBoule(dansEmprise(surface(y, a, -rad * 0.62), rad), rad, M_BASALTE)
+			end
+		end
+
+		-- 4. éboulis au pied (le volcan se fond dans l'herbe)
+		for n = 1, 18 do
+			local a = (n - 1) / 18 * math.pi * 2 + rng:NextNumber(-0.12, 0.12)
+			local rad = rng:NextNumber(2, 3.4)
+			if not presDUneCoulee(a, 0, rad + 3.5) then
+				local materiau = M_ROCHE
+				if rng:NextNumber() < 0.3 then
+					materiau = M_BASALTE
+				end
+				local pos = centreA(0) + direction(a) * (RAYON_BAS + rng:NextNumber(-0.5, 1.5)) + Vector3.new(0, rng:NextNumber(-1.2, 0), 0)
+				Outils.terrainBoule(dansEmprise(pos, rad), rad, materiau)
+			end
+		end
+	else
+		-- Outils sans terrain : cône de secours en parts
+		for i = 1, 8 do
+			local y = (i - 0.5) / 8 * SOMMET
+			part(Outils.cylindre, cone, {
+				Name = "Tranche" .. i,
+				Size = Vector3.new(SOMMET / 8 + 0.2, rayonA(y) * 2, rayonA(y) * 2),
+				CFrame = CFrame.new(centreA(y)) * CFrame.Angles(0, 0, math.pi / 2),
+				Color = ROCHE_PART,
+				Material = M_BASALTE,
+			})
+		end
+	end
+
+	-- ===== le cratère : rebord en boules, paroi fissurée, lac de lave =====
+	local cS = centreA(SOMMET)
+	if terrainOk then
+		local NB_REBORD = 16
+		for b = 1, NB_REBORD do
+			local a = (b - 1) / NB_REBORD * math.pi * 2 + rng:NextNumber(-0.05, 0.05)
+			local rad = rng:NextNumber(2.8, 3.6)
+			local ecartMin = math.pi
+			for _, tr in ipairs(traces) do
+				ecartMin = math.min(ecartMin, ecartAngle(a, tr.a0))
+			end
+			-- échancrure là où la lave déborde
+			if ecartMin > math.rad(20) then
+				if ecartMin < math.rad(36) then
+					rad = 2.3
+				end
+				Outils.terrainBoule(cS + direction(a) * RAYON_REBORD + Vector3.new(0, 0.6 + rng:NextNumber(-0.4, 0.8), 0), rad, M_BASALTE)
+			end
+		end
+		-- paroi intérieure fissurée (lueur orange sous le rebord)
+		for b = 1, 12 do
+			local a = (b - 1) / 12 * math.pi * 2
+			local ecartMin = math.pi
+			for _, tr in ipairs(traces) do
+				ecartMin = math.min(ecartMin, ecartAngle(a, tr.a0))
+			end
+			if ecartMin > math.rad(16) then
+				Outils.terrainBoule(cS + direction(a) * (RAYON_LAC + 1.2) + Vector3.new(0, 0.3, 0), 1.8, M_FISSURE)
 			end
 		end
 	end
 
-	-- ===== le cratère : fond brun chaud, lac de lave, rebord en boules =====
-	local tailleF, cfF = disque(SOMMET + 0.2, RAYON_HAUT - 0.5, 0.4)
-	part(Outils.cylindre, cone, {
-		Name = "FondCratere",
-		Size = tailleF,
-		CFrame = cfF,
-		Color = FOND_CRATERE,
-	})
-	local tailleLac, cfLac = disque(SOMMET + 0.5, RAYON_LAC, 0.6)
-	local lac = part(Outils.cylindre, lave, {
+	local lac = part(Outils.cylindre, lave, propsLave({
 		Name = "LacDeLave",
-		Size = tailleLac,
-		CFrame = cfLac,
-		Color = LAVE,
-		Material = Enum.Material.Neon,
-		CanCollide = false,
-		CanQuery = false,
-		CastShadow = false,
-	})
-
-	local NB_REBORD = reglage("blocsRebord", 14)
-	local rayonRebord = RAYON_HAUT - 1.2
-	local dRebord = math.min(2 * math.pi * rayonRebord / NB_REBORD + 1, 5.5)
-	for b = 1, NB_REBORD do
-		local a = (b - 1) / NB_REBORD * math.pi * 2 + rng:NextNumber(-0.06, 0.06)
-		local d = dRebord * rng:NextNumber(0.9, 1.05)
-		-- échancrure là où la lave déborde du cratère : boule plus petite
-		if presDUneCoulee(a, math.rad(12)) then
-			d = 1.8
-		end
-		d = math.min(d, HAUTEUR_MAX - SOMMET)
-		part(Outils.boule, cone, {
-			Name = "Rebord",
-			Size = Vector3.new(d, d, d),
-			CFrame = CFrame.new(CX, SOMMET + d / 2 - 0.6, CZ) + direction(a) * rayonRebord,
-			Color = PIERRE_HAUT:Lerp(PIERRE_CLAIRE, rng:NextNumber(0.1, 0.4)),
+		Size = Vector3.new(0.8, RAYON_LAC * 2, RAYON_LAC * 2),
+		CFrame = CFrame.new(cS + Vector3.new(0, 0.9, 0)) * CFrame.Angles(0, 0, math.pi / 2),
+	}))
+	-- cœur plus chaud au centre du lac
+	part(Outils.cylindre, lave, propsLave({
+		Name = "CoeurDuLac",
+		Size = Vector3.new(0.3, RAYON_LAC * 1.1, RAYON_LAC * 1.1),
+		CFrame = CFrame.new(cS + Vector3.new(0, 1.38, 0)) * CFrame.Angles(0, 0, math.pi / 2),
+		Color = COEUR,
+	}))
+	-- croûtes sombres qui flottent sur le lac
+	for n = 1, 5 do
+		local a = n / 5 * math.pi * 2 + rng:NextNumber(-0.3, 0.3)
+		local d = rng:NextNumber(RAYON_LAC * 0.45, RAYON_LAC * 0.8)
+		part(Outils.bloc, croutes, {
+			Name = "Croute",
+			Size = Vector3.new(rng:NextNumber(1.4, 2.4), 0.45, rng:NextNumber(1, 1.8)),
+			CFrame = CFrame.new(cS + direction(a) * d + Vector3.new(0, 1.35, 0)) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0),
+			Color = CROUTE,
+			Material = M_BASALTE,
+			CanCollide = false,
+			CanQuery = false,
 		})
 	end
-
 	-- bulles de lave qui flottent dans le lac
 	for b = 1, 4 do
 		local a = rng:NextNumber(0, math.pi * 2)
-		local d = rng:NextNumber(1, RAYON_LAC - 2)
-		local taille = rng:NextNumber(1.4, 2.4)
-		local bulle = part(Outils.boule, lave, {
+		local d = rng:NextNumber(0.5, RAYON_LAC * 0.6)
+		local taille = rng:NextNumber(1.2, 2)
+		local bulle = part(Outils.boule, lave, propsLave({
 			Name = "Bulle",
 			Size = Vector3.new(taille, taille, taille),
-			CFrame = CFrame.new(CX, SOMMET + 0.7, CZ) + direction(a) * d,
+			CFrame = CFrame.new(cS + direction(a) * d + Vector3.new(0, 1.2, 0)),
 			Color = LAVE_VIVE,
-			Material = Enum.Material.Neon,
-			CanCollide = false,
-			CanQuery = false,
-			CastShadow = false,
-		})
+		}))
 		if bulle then
 			Outils.animer(bulle, "flotte", rng:NextNumber(1.2, 2.2))
 		end
 	end
 
-	-- ===== les coulées de lave sur les flancs =====
-	local coulees = {} -- parts de lave (pour les changer de teinte pendant l'éruption)
-	if lac then
-		table.insert(coulees, lac)
+	-- ===== les coulées : lave Neon enfoncée dans un chenal creusé, qui refroidit vers le bas =====
+	local coulees = {} -- parts de lave Neon (pour les changer de teinte pendant l'éruption)
+	local teinteBase = {} -- teinte de repos de chaque part de lave (dégradé chaud → froid)
+	local function ajouterLave(p)
+		if p then
+			table.insert(coulees, p)
+			teinteBase[p] = p.Color
+		end
+		return p
 	end
+	ajouterLave(lac)
 	local lueursPied = {}
-	for k, a in ipairs(anglesCoulees) do
+	local lueursCoulees = {}
+	local RESERVE = 30 -- parts gardées pour les fissures, rochers, fumerolles et la bouche
+
+	-- teinte de la lave selon la hauteur : cœur doré au cratère, orange, puis rouge sombre en bas
+	local function teinteCoulee(y)
+		local t = borne(1 - y / SOMMET, 0, 1)
+		return COEUR:Lerp(LAVE, t):Lerp(LAVE_FROIDE, t * t)
+	end
+
+	-- plaque orientée de pA à pB, face du dessus selon nrm (roulis facultatif autour de l'axe du ruban)
+	local function ruban(parent, nom, pA, pB, largeur, epaisseur, nrm, props, roulis)
+		local long = (pB - pA).Magnitude
+		if long < 0.05 then
+			return nil
+		end
+		local t = {}
+		for k, v in pairs(props) do
+			t[k] = v
+		end
+		t.Name = nom
+		t.Size = Vector3.new(largeur, epaisseur, long + 0.3)
+		t.CFrame = CFrame.lookAt((pA + pB) / 2, pB, nrm) * CFrame.Angles(0, 0, roulis or 0)
+		return part(Outils.bloc, parent, t)
+	end
+	-- disque posé sur la surface (arrondit les coudes de la coulée)
+	local function disquePose(parent, nom, pos, diametre, epaisseur, nrm, props)
+		local tangente = HAUT:Cross(nrm)
+		if tangente.Magnitude < 0.01 then
+			tangente = Vector3.new(1, 0, 0)
+		end
+		local t = {}
+		for k, v in pairs(props) do
+			t[k] = v
+		end
+		t.Name = nom
+		t.Size = Vector3.new(epaisseur, diametre, diametre)
+		t.CFrame = CFrame.fromMatrix(pos, nrm, tangente.Unit)
+		return part(Outils.cylindre, parent, t)
+	end
+	-- lave figée (non Neon) : basalte sombre ou croûte fissurée rougeâtre, en alternance
+	local function propsFigee(i)
+		local t = {
+			CanCollide = false,
+			CanQuery = false,
+		}
+		if i % 2 == 0 then
+			t.Material = M_BASALTE
+			t.Color = CROUTE:Lerp(ROCHE_PART, rng:NextNumber(0.1, 0.35))
+		else
+			t.Material = M_FISSURE
+			t.Color = CROUTE:Lerp(LAVE_FROIDE, rng:NextNumber(0.12, 0.25))
+		end
+		return t
+	end
+
+	local NB_POINTS = math.max(8, math.floor(SOMMET / 4))
+	for k, tr in ipairs(traces) do
 		local coulee = Outils.modele(lave, "Coulee" .. k)
-		for i = COUCHES, 1, -1 do
-			local r = rayonCouche(i)
-			local yBas = (i - 1) * HAUTEUR_COUCHE
-			-- la coulée s'élargit en descendant
-			local largeur = 2.2 + (COUCHES - i) / COUCHES * 2.6 + rng:NextNumber(-0.3, 0.3)
-			-- chute verticale devant le flanc et le liseré de la couche
-			local chute = part(Outils.bloc, coulee, {
-				Name = "Chute",
-				Size = Vector3.new(largeur, HAUTEUR_COUCHE + 0.1, 0.5),
-				CFrame = versExterieur(r + DECALAGE_COULEE, yBas + HAUTEUR_COUCHE / 2, a),
-				Color = LAVE,
-				Material = Enum.Material.Neon,
-				CanCollide = false,
-				CanQuery = false,
-				CastShadow = false,
-			})
-			if chute then
-				table.insert(coulees, chute)
+		local figee = Outils.modele(laveFigee, "Coulee" .. k)
+		-- points du tracé : débord sur le lac, bord du cratère, puis le flanc jusqu'au pied
+		local points = {}
+		table.insert(points, { pos = cS + direction(tr.a0) * (RAYON_LAC - 1.5) + Vector3.new(0, 1.1, 0), y = SOMMET, a = tr.a0 })
+		table.insert(points, { pos = cS + direction(tr.a0) * (RAYON_HAUT + 0.3) + Vector3.new(0, 0.55, 0), y = SOMMET, a = tr.a0 })
+		for i = 1, NB_POINTS do
+			local y = (SOMMET - 2) * (1 - (i - 1) / (NB_POINTS - 1)) + 0.5 * (i - 1) / (NB_POINTS - 1)
+			local a = angleTrace(tr, y)
+			table.insert(points, { pos = surface(y, a, LEVEE), y = y, a = a })
+		end
+		local nSeg = #points - 1
+		local debutFige = math.floor(nSeg * 2 / 3) + 1 -- le dernier tiers de la coulée est figé
+
+		-- largeur irrégulière, segment par segment (renflements et étranglements)
+		local largeurs = {}
+		for i = 1, nSeg do
+			local q = points[i + 1]
+			local base = 3 + 2.8 * (1 - q.y / SOMMET)
+			largeurs[i] = math.max(1.8, base * (0.75 + 0.5 * math.noise(i * 0.4, k + 0.31)))
+		end
+
+		-- chenal dans le terrain : on creuse d'abord toute la coulée, puis on pose le lit de CrackedLava
+		-- juste sous la surface d'origine (la lave affleure, ses bords sont cachés dans le creux)
+		if terrainOk then
+			local echantillons = {}
+			for i = 1, nSeg do
+				local p, q = points[i], points[i + 1]
+				local long = (q.pos - p.pos).Magnitude
+				local n = math.max(1, math.ceil(long / 2.2))
+				for j = 0, n - 1 do
+					local f = j / n
+					local y = p.y + (q.y - p.y) * f
+					local a = p.a + (q.a - p.a) * f
+					local nrmS = normale(y, a)
+					if i == 1 then
+						nrmS = HAUT
+					end
+					table.insert(echantillons, {
+						surf = p.pos:Lerp(q.pos, f) - nrmS * LEVEE,
+						nrm = nrmS,
+						largeur = largeurs[i],
+						creuser = i > 1, -- pas de creusement sous le lac
+					})
+				end
 			end
-			-- ruisseau sur la terrasse du dessous (du bord de la couche i au bord de la couche i - 1)
-			if i > 1 then
-				local rDessous = rayonCouche(i - 1) + DECALAGE_COULEE
-				local longueur = rDessous - r + 0.2
-				local ruisseau = part(Outils.bloc, coulee, {
-					Name = "Ruisseau",
-					Size = Vector3.new(largeur + 0.2, 0.3, longueur),
-					CFrame = versExterieur(r + longueur / 2, yBas + 0.15, a),
-					Color = LAVE,
-					Material = Enum.Material.Neon,
-					CanCollide = false,
-					CanQuery = false,
-					CastShadow = false,
-				})
-				if ruisseau then
-					table.insert(coulees, ruisseau)
+			for _, e in ipairs(echantillons) do
+				if e.creuser then
+					local radC = e.largeur / 2 + 0.8
+					Outils.terrainBoule(dansEmprise(e.surf - e.nrm * (0.4 * radC), radC), radC, Enum.Material.Air)
+				end
+			end
+			for _, e in ipairs(echantillons) do
+				local radB = e.largeur / 2 + 0.6
+				Outils.terrainBoule(dansEmprise(e.surf - e.nrm * (radB + 0.3), radB), radB, M_FISSURE)
+			end
+		end
+
+		for i = 1, nSeg do
+			local p, q = points[i], points[i + 1]
+			local largeur = largeurs[i]
+			local nrm = normale(q.y, q.a)
+			if i == 1 then
+				nrm = HAUT
+			end
+			local nrmSeg = (normale(p.y, p.a) + nrm).Unit
+			local chaud = i < debutFige
+			local seg
+			if chaud then
+				seg = ajouterLave(ruban(coulee, "Coulee", p.pos, q.pos, largeur, 0.6, nrmSeg, propsLave({ Color = teinteCoulee(q.y) })))
+			else
+				-- lave refroidie : à peine plus épaisse que le Neon (elle en recouvre la fin), un peu bosselée
+				seg = ruban(figee, "LaveFigee", p.pos, q.pos, largeur, 0.66, nrmSeg, propsFigee(i), rng:NextNumber(-0.05, 0.05))
+			end
+			if i > 1 and i < nSeg then
+				local diametre = math.max(largeur, largeurs[i + 1]) + 0.1
+				if i + 1 < debutFige then
+					ajouterLave(disquePose(coulee, "Coude", q.pos, diametre, 0.6, nrm, propsLave({ Color = teinteCoulee(q.y) })))
+				else
+					disquePose(figee, "CoudeFige", q.pos, diametre, 0.66, nrm, propsFigee(i + 1))
+				end
+			end
+			-- levées de croûte de chaque côté (petits blocs inclinés, irréguliers, au lieu d'un bord net)
+			if i > 1 and seg and compteur < BUDGET - RESERVE then
+				local cfSeg = seg.CFrame
+				local long = (q.pos - p.pos).Magnitude
+				for _, cote in ipairs({ -1, 1 }) do
+					if rng:NextNumber() < 0.8 then
+						local haut = rng:NextNumber(0.35, 0.7)
+						local centre = cfSeg.Position
+							+ cfSeg.RightVector * cote * (largeur / 2 + rng:NextNumber(0.25, 0.55))
+							+ cfSeg.LookVector * long * rng:NextNumber(-0.25, 0.25)
+							+ cfSeg.UpVector * (0.05 + haut * 0.15)
+						local teinte = CROUTE:Lerp(ROCHE_PART, rng:NextNumber(0.2, 0.6))
+						part(Outils.bloc, croutes, {
+							Name = "Levee",
+							Size = Vector3.new(rng:NextNumber(0.5, 0.9), haut, long * rng:NextNumber(0.3, 0.6)),
+							CFrame = CFrame.fromMatrix(centre, cfSeg.RightVector, cfSeg.UpVector)
+								* CFrame.Angles(rng:NextNumber(-0.15, 0.15), rng:NextNumber(-0.35, 0.35), -cote * rng:NextNumber(0.3, 0.6)),
+							Color = teinte,
+							Material = M_BASALTE,
+							CanCollide = false,
+							CanQuery = false,
+						})
+					end
+				end
+			end
+			-- lueur au milieu du flanc
+			if i == math.floor(#points / 2) and seg and chaud then
+				table.insert(lueursCoulees, Outils.lumiere(seg, { Range = 14, Brightness = 1.2, Color = teinteCoulee(q.y) }))
+			end
+		end
+
+		-- mare au pied de la coulée, dans une cuvette de CrackedLava : lave presque éteinte, rouge sombre, croûtée
+		local fin = points[#points]
+		local rayonMare = 2.8
+		local posMare = centreA(0) + direction(fin.a) * math.min(RAYON_BAS + 0.8, RAYON_MAX - rayonMare - 1)
+		posMare = dansEmprise(Vector3.new(posMare.X, 0, posMare.Z), rayonMare + 0.6)
+		if terrainOk then
+			Outils.terrainCylindre(CFrame.new(posMare.X, -0.4, posMare.Z), 1.8, rayonMare + 0.5, M_FISSURE)
+		end
+		local mare = ajouterLave(part(Outils.cylindre, coulee, propsLave({
+			Name = "Mare",
+			Size = Vector3.new(0.4, rayonMare * 2, rayonMare * 2),
+			CFrame = CFrame.new(posMare.X, 0.62, posMare.Z) * CFrame.Angles(0, 0, math.pi / 2),
+			Color = LAVE_FROIDE:Lerp(LAVE, 0.3),
+		})))
+		if mare then
+			local l = Outils.lumiere(mare, { Range = 12, Brightness = 1.2, Color = LAVE })
+			l.Shadows = false
+			table.insert(lueursPied, l)
+			for n = 1, 2 do
+				if compteur < BUDGET - RESERVE then
+					local a = rng:NextNumber(0, math.pi * 2)
+					part(Outils.bloc, croutes, {
+						Name = "Croute",
+						Size = Vector3.new(rng:NextNumber(1.2, 1.9), 0.35, rng:NextNumber(0.9, 1.4)),
+						CFrame = CFrame.new(Vector3.new(posMare.X, 0.8, posMare.Z) + direction(a) * rng:NextNumber(0.6, 1.5))
+							* CFrame.Angles(0, rng:NextNumber(0, math.pi), 0),
+						Color = CROUTE,
+						Material = M_BASALTE,
+						CanCollide = false,
+						CanQuery = false,
+					})
 				end
 			end
 		end
-		-- mare de lave au pied de la coulée (dans l'emprise)
-		local rayonMare = 2.4
-		local tailleM = Vector3.new(0.3, rayonMare * 2, rayonMare * 2)
-		local posMare = Vector3.new(CX, 0.15, CZ) + direction(a) * math.min(RAYON_BAS + 1.2, RAYON_MAX - rayonMare - 0.3)
-		local mare = part(Outils.cylindre, coulee, {
-			Name = "Mare",
-			Size = tailleM,
-			CFrame = CFrame.new(posMare) * CFrame.Angles(0, 0, math.pi / 2),
-			Color = LAVE,
-			Material = Enum.Material.Neon,
-			CanCollide = false,
-			CanQuery = false,
-			CastShadow = false,
-		})
-		if mare then
-			table.insert(coulees, mare)
-			table.insert(lueursPied, Outils.lumiere(mare, { Range = 12, Brightness = 1.2, Color = LAVE }))
+	end
+
+	-- ===== fissures incandescentes dans le basalte du haut =====
+	for n = 1, 6 do
+		local y = rng:NextNumber(LIMITE_ROCHE + 4, SOMMET - 5)
+		local a = rng:NextNumber(0, math.pi * 2)
+		local essais = 0
+		while presDUneCoulee(a, y, 5) and essais < 8 do
+			a = rng:NextNumber(0, math.pi * 2)
+			essais = essais + 1
+		end
+		if not presDUneCoulee(a, y, 5) then
+			local fissure = Outils.modele(lave, "Fissure")
+			local p1 = surface(y, a, 0.45)
+			local p2 = surface(y - 2.6, a + 0.9 / rayonA(y), 0.45)
+			local p3 = surface(y - 5, a - 0.4 / rayonA(y), 0.45)
+			local s1 = ruban(fissure, "Fissure", p1, p2, 0.4, 0.3, normale(y, a), propsLave({}))
+			local s2 = ruban(fissure, "Fissure", p2, p3, 0.35, 0.3, normale(y - 3, a), propsLave({}))
+			ajouterLave(s1)
+			ajouterLave(s2)
 		end
 	end
 
-	-- ===== rochers ronds au pied du volcan =====
-	local NB_ROCHERS = reglage("rochers", 14)
-	for n = 1, NB_ROCHERS do
-		local a = (n - 1) / NB_ROCHERS * math.pi * 2 + rng:NextNumber(-0.15, 0.15)
-		if not presDUneCoulee(a, math.rad(10)) then
-			local d = rng:NextNumber(2, 3.4)
-			local rr = math.min(RAYON_BAS + 1, RAYON_MAX - 0.3 - d / 2)
-			local pos = direction(a) * rr
-			part(Outils.boule, rochers, {
+	-- ===== rochers de basalte au pied (petits détails, hors des coulées) =====
+	for n = 1, 12 do
+		local a = rng:NextNumber(0, math.pi * 2)
+		if not presDUneCoulee(a, 0, 5) then
+			local taille = Vector3.new(rng:NextNumber(1.8, 3.4), rng:NextNumber(1.2, 2.4), rng:NextNumber(1.8, 3))
+			local pos = centreA(0) + direction(a) * (RAYON_BAS + rng:NextNumber(0.5, 2.5))
+			pos = dansEmprise(Vector3.new(pos.X, taille.Y * 0.3, pos.Z), taille.Magnitude / 2)
+			part(Outils.bloc, rochers, {
 				Name = "Rocher",
-				Size = Vector3.new(d, d, d),
-				CFrame = CFrame.new(CX + pos.X, d * 0.35, CZ + pos.Z), -- à moitié enfoncé dans le sol
-				Color = PIERRE:Lerp(PIERRE_CLAIRE, rng:NextNumber(0, 0.4)),
+				Size = taille,
+				CFrame = CFrame.new(pos) * CFrame.Angles(rng:NextNumber(-0.4, 0.4), rng:NextNumber(0, math.pi * 2), rng:NextNumber(-0.4, 0.4)),
+				Color = ROCHE_PART:Lerp(ROCHE_PART_CLAIRE, rng:NextNumber(0, 0.6)),
+				Material = M_BASALTE,
 			})
 		end
 	end
 
-	-- ===== la bouche : fumée, lueur, projections et titre flottant =====
+	-- ===== fumerolles sur les flancs =====
+	local fumerolles = {}
+	for n = 1, 2 do
+		local y = SOMMET * (0.55 + 0.15 * n)
+		local a = traces[1].a0 + (n * 2 - 3) * 0.9
+		local event = part(Outils.bloc, modele, {
+			Name = "Fumerolle",
+			Size = Vector3.new(1, 1, 1),
+			CFrame = CFrame.new(surface(y, a, 0.3)),
+			Transparency = 1,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+			CastShadow = false,
+		})
+		if event then
+			pcall(function()
+				local s = Instance.new("Smoke")
+				s.Name = "Fumee"
+				s.Color = FUMEE_CALME
+				s.Opacity = 0.08
+				s.RiseVelocity = 3
+				s.Size = 3
+				s.Parent = event
+				table.insert(fumerolles, s)
+			end)
+		end
+	end
+
+	-- ===== la bouche : fumée, braises, lueur, projections et titre flottant =====
 	local bouche = part(Outils.bloc, modele, {
 		Name = "Bouche",
-		Size = Vector3.new(4, 1, 4),
-		CFrame = CFrame.new(CX, SOMMET + 1.5, CZ),
+		Size = Vector3.new(RAYON_LAC * 1.4, 1, RAYON_LAC * 1.4),
+		CFrame = CFrame.new(cS + Vector3.new(0, 1.5, 0)),
 		Transparency = 1,
 		CanCollide = false,
 		CanQuery = false,
@@ -349,7 +677,7 @@ function M.construire(ctx)
 		CastShadow = false,
 	})
 
-	local fumee, lumiere, projections, alerte
+	local fumee, panache, braises, lumiere, projections, alerte
 	if bouche then
 		pcall(function()
 			fumee = Instance.new("Smoke")
@@ -359,6 +687,51 @@ function M.construire(ctx)
 			fumee.RiseVelocity = 6
 			fumee.Size = 12
 			fumee.Parent = bouche
+		end)
+
+		-- panache de fumée douce qui dérive avec le vent
+		pcall(function()
+			panache = Instance.new("ParticleEmitter")
+			panache.Name = "Panache"
+			panache.Texture = "rbxasset://textures/particles/smoke_main.dds"
+			panache.Color = ColorSequence.new(FUMEE_CALME, hex("BDB4AE"))
+			panache.LightInfluence = 1
+			panache.Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 6),
+				NumberSequenceKeypoint.new(1, 20),
+			})
+			panache.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.55),
+				NumberSequenceKeypoint.new(0.6, 0.75),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			panache.Speed = NumberRange.new(4, 7)
+			panache.SpreadAngle = Vector2.new(12, 12)
+			panache.Acceleration = Vector3.new(1.5, 0.8, 0)
+			panache.Lifetime = NumberRange.new(6, 9)
+			panache.Rotation = NumberRange.new(0, 360)
+			panache.RotSpeed = NumberRange.new(-20, 20)
+			panache.Rate = 3
+			panache.Parent = bouche
+		end)
+
+		-- braises qui s'échappent du lac en permanence
+		pcall(function()
+			braises = Instance.new("ParticleEmitter")
+			braises.Name = "Braises"
+			braises.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+			braises.Color = ColorSequence.new(BRAISE, LAVE)
+			braises.LightEmission = 1
+			braises.Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.5),
+				NumberSequenceKeypoint.new(1, 0),
+			})
+			braises.Speed = NumberRange.new(6, 12)
+			braises.SpreadAngle = Vector2.new(40, 40)
+			braises.Acceleration = Vector3.new(0.8, -2, 0)
+			braises.Lifetime = NumberRange.new(1.5, 3)
+			braises.Rate = 6
+			braises.Parent = bouche
 		end)
 
 		lumiere = Outils.lumiere(bouche, { Range = 40, Brightness = 2, Color = LAVE })
@@ -432,14 +805,16 @@ function M.construire(ctx)
 	local function appliquer(enEruption)
 		generation = generation + 1
 		local maGeneration = generation
-		local couleurLave = LAVE
-		if enEruption then
-			couleurLave = LAVE_VIVE
-		end
 		pcall(function()
+			-- au calme chaque part reprend sa teinte du dégradé ; en éruption tout s'embrase vers le jaune-orange
 			for _, p in ipairs(coulees) do
 				if p.Parent then
-					p.Color = couleurLave
+					local base = teinteBase[p] or LAVE
+					if enEruption then
+						p.Color = base:Lerp(LAVE_VIVE, 0.75)
+					else
+						p.Color = base
+					end
 				end
 			end
 			for _, l in ipairs(lueursPied) do
@@ -450,6 +825,17 @@ function M.construire(ctx)
 					else
 						l.Brightness = 1.2
 						l.Range = 12
+					end
+				end
+			end
+			for _, l in ipairs(lueursCoulees) do
+				if l.Parent then
+					if enEruption then
+						l.Brightness = 2.5
+						l.Range = 18
+					else
+						l.Brightness = 1.2
+						l.Range = 14
 					end
 				end
 			end
@@ -464,6 +850,31 @@ function M.construire(ctx)
 		pcall(function()
 			if projections then
 				projections.Enabled = enEruption
+			end
+			if braises then
+				if enEruption then
+					braises.Rate = 40
+				else
+					braises.Rate = 6
+				end
+			end
+			if panache then
+				if enEruption then
+					panache.Rate = 10
+					panache.Color = ColorSequence.new(FUMEE_ERUPTION, hex("3A3238"))
+				else
+					panache.Rate = 3
+					panache.Color = ColorSequence.new(FUMEE_CALME, hex("BDB4AE"))
+				end
+			end
+			for _, s in ipairs(fumerolles) do
+				if enEruption then
+					s.Opacity = 0.25
+					s.Color = FUMEE_ERUPTION
+				else
+					s.Opacity = 0.08
+					s.Color = FUMEE_CALME
+				end
 			end
 			if fumee then
 				if enEruption then

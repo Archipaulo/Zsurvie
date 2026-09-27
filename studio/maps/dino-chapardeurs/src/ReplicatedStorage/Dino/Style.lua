@@ -271,7 +271,7 @@ function Style.panneau(parent, props)
 	local cadre = Instance.new("Frame")
 	cadre.Name = props.Name or "Panneau"
 	cadre.AnchorPoint = Vector2.new(0.5, 0.5)
-	cadre.Position = UDim2.fromScale(0.5, 0.52)
+	cadre.Position = UDim2.new(0.5, 0, 0.5, 40) -- sous le bandeau d'événement du HUD
 	cadre.Size = props.Size or UDim2.new(0.62, 0, 0.7, 0)
 	cadre.BackgroundColor3 = Color3.new(1, 1, 1)
 	cadre.BorderSizePixel = 0
@@ -280,7 +280,7 @@ function Style.panneau(parent, props)
 	Style.bordure(cadre, 5)
 	Style.degrade(cadre, Style.couleurs.fondHaut, Style.couleurs.fond).Name = "Fond"
 	local contrainte = Instance.new("UISizeConstraint")
-	contrainte.MaxSize = Vector2.new(900, 620)
+	contrainte.MaxSize = Vector2.new(900, 560)
 	contrainte.MinSize = Vector2.new(300, 240)
 	contrainte.Parent = cadre
 
@@ -333,6 +333,10 @@ function Style.panneau(parent, props)
 	Style.coins(ombre, 24)
 	local contrainteOmbre = contrainte:Clone()
 	contrainteOmbre.Parent = ombre
+	-- l'ombre suit aussi les contraintes de taille si un module les change après coup
+	for _, prop in ipairs({ "MaxSize", "MinSize" }) do
+		contrainte:GetPropertyChangedSignal(prop):Connect(function() contrainteOmbre[prop] = contrainte[prop] end)
+	end
 	local function suivre()
 		ombre.Size = cadre.Size
 		ombre.Position = cadre.Position + UDim2.fromOffset(0, 10)

@@ -156,6 +156,47 @@ function M.demarrer(ctx)
 		return Color3.new(1, 1, 1)
 	end
 
+	-- dimensions du nom géant (studs) : nom du propriétaire et pastille 🏠 au-dessus
+	local NOM_LARGEUR, NOM_HAUTEUR, ICONE_HAUTEUR = 32, 6, 2.8
+	local LIBRE_LARGEUR, LIBRE_HAUTEUR = 12, 2.2
+	local CONTOUR = (Style and Style.couleurs and Style.couleurs.contour) or Charte.encre
+
+	-- pastille ronde dans la couleur de la base, bordée de noir, avec la petite maison
+	local function creerIcone(gui)
+		local icone = Instance.new("TextLabel")
+		icone.Name = "Icone"
+		icone.LayoutOrder = 0
+		icone.Size = UDim2.new(1, 0, 0.3, 0)
+		icone.BackgroundTransparency = 0
+		icone.BackgroundColor3 = GRIS_LIBRE
+		icone.BorderSizePixel = 0
+		icone.Text = "🏠"
+		icone.TextScaled = true
+		icone.TextColor3 = Color3.new(1, 1, 1)
+		icone.Font = (Style and Style.police) or Charte.police
+		icone.Visible = false
+		local carre = Instance.new("UIAspectRatioConstraint")
+		carre.AspectRatio = 1
+		carre.Parent = icone
+		local rond = Instance.new("UICorner")
+		rond.CornerRadius = UDim.new(0.5, 0)
+		rond.Parent = icone
+		local bord = Instance.new("UIStroke")
+		bord.Name = "Bordure"
+		bord.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		bord.Thickness = 3
+		bord.Color = CONTOUR
+		bord.Parent = icone
+		local marge = Instance.new("UIPadding")
+		marge.PaddingTop = UDim.new(0.17, 0)
+		marge.PaddingBottom = UDim.new(0.17, 0)
+		marge.PaddingLeft = UDim.new(0.17, 0)
+		marge.PaddingRight = UDim.new(0.17, 0)
+		marge.Parent = icone
+		icone.Parent = gui
+		return icone
+	end
+
 	-- crée (une seule fois) le nom géant et le compte à rebours flottants au-dessus de l'Entree
 	local function etiquettesDe(index)
 		local e = etiquettes[index]
@@ -174,15 +215,25 @@ function M.demarrer(ctx)
 		if enseigne then
 			hauteurNom = math.max(hauteurNom, enseigne.Position.Y + demiHauteur(enseigne) - entree.Position.Y + 5)
 		end
-		local _, lignesNom = Style.etiquette(entree, {
+		local nomGui, lignesNom = Style.etiquette(entree, {
 			{ texte = "BASE LIBRE", couleur = GRIS_LIBRE, titre = true, contour = 4, nom = "Nom" },
 		}, {
 			Name = "NomGeant",
-			largeur = 32,
-			hauteurLigne = 6,
+			largeur = NOM_LARGEUR,
+			hauteurLigne = NOM_HAUTEUR,
 			StudsOffset = Vector3.new(0, hauteurNom, 0),
 			MaxDistance = 250,
 		})
+		local icone = creerIcone(nomGui)
+		-- le nom repasse après la pastille dans l'ordre des enfants (même ordre que l'affichage)
+		lignesNom[1].Parent = nil
+		lignesNom[1].Parent = nomGui
+		-- dégradé vertical clair -> foncé sur le nom (texte blanc teinté)
+		local degrade = Instance.new("UIGradient")
+		degrade.Name = "Degrade"
+		degrade.Rotation = 90
+		degrade.Color = ColorSequence.new(Color3.new(1, 1, 1))
+		degrade.Parent = lignesNom[1]
 		local compteGui, lignesCompte = Style.etiquette(entree, {
 			{ texte = "", titre = true, contour = 4, nom = "Compte" },
 		}, {
@@ -193,7 +244,10 @@ function M.demarrer(ctx)
 			MaxDistance = 150,
 		})
 		compteGui.Enabled = false
-		e = { nom = lignesNom[1], compteGui = compteGui, compte = lignesCompte[1] }
+		e = {
+			nom = lignesNom[1], icone = icone, degrade = degrade, hauteurNom = hauteurNom,
+			compteGui = compteGui, compte = lignesCompte[1],
+		}
 		etiquettes[index] = e
 		return e
 	end
@@ -211,34 +265,187 @@ function M.demarrer(ctx)
 		local e = etiquettesDe(index)
 		if e then
 			local gui = e.nom.Parent
+			local estGui = gui and gui:IsA("BillboardGui")
 			if proprietaires[index] then
+				local couleur = couleurBase(index)
 				e.nom.Text = texte
-				e.nom.TextColor3 = couleurBase(index)
-				-- le nom du propriétaire est géant et visible de loin
-				if gui and gui:IsA("BillboardGui") then
-					gui.Size = UDim2.new(32, 0, 6, 0)
+				-- texte blanc sous un dégradé lumière -> couleur de la base -> ombre : du volume, lisible de loin
+				e.nom.TextColor3 = Color3.new(1, 1, 1)
+				e.degrade.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Charte.lumiere(couleur)),
+					ColorSequenceKeypoint.new(0.55, couleur),
+					ColorSequenceKeypoint.new(1, Charte.ombre(couleur)),
+				})
+				e.icone.BackgroundColor3 = couleur
+				e.icone.Visible = true
+				-- le nom du propriétaire est géant et visible de loin, la pastille 🏠 posée au-dessus
+				local total = NOM_HAUTEUR + ICONE_HAUTEUR
+				e.icone.Size = UDim2.new(1, 0, ICONE_HAUTEUR / total, 0)
+				e.nom.Size = UDim2.new(1, 0, NOM_HAUTEUR / total, 0)
+				if estGui then
+					gui.Size = UDim2.new(NOM_LARGEUR, 0, total, 0)
+					gui.StudsOffset = Vector3.new(0, e.hauteurNom + ICONE_HAUTEUR / 2, 0)
 					gui.MaxDistance = 250
 				end
 			else
 				e.nom.Text = "BASE LIBRE"
 				e.nom.TextColor3 = GRIS_LIBRE
+				e.degrade.Color = ColorSequence.new(Color3.new(1, 1, 1))
+				e.icone.Visible = false
+				e.nom.Size = UDim2.new(1, 0, 1, 0)
 				-- une base libre reste discrète pour ne pas encombrer la vue
-				if gui and gui:IsA("BillboardGui") then
-					gui.Size = UDim2.new(12, 0, 2.2, 0)
+				if estGui then
+					gui.Size = UDim2.new(LIBRE_LARGEUR, 0, LIBRE_HAUTEUR, 0)
+					gui.StudsOffset = Vector3.new(0, e.hauteurNom, 0)
 					gui.MaxDistance = 90
 				end
 			end
 		end
 	end
 
-	-- compte à rebours « 🔒 45 » au-dessus de l'Entree pendant le verrou
+	-- ===== laser de l'entrée : faisceaux rouges (Beam) tendus d'un poteau à l'autre =====
+	local NB_FAISCEAUX = 6
+	local ALERTE_FIN = 10 -- secondes restantes à partir desquelles le halo clignote
+	local TEXTURE_LASER = "rbxasset://textures/particles/sparkles_main.dds"
+	local ROUGE_LASER = Charte.alerte
+	local COEUR_LASER = Charte.lumiere(Charte.alerte)
+	local lasers = {} -- index -> { entree, coeurs = {Beam}, halos = {Beam}, etincelles = {ParticleEmitter}, lueur = PointLight }
+
+	local function attache(part, nom, position)
+		local a = Instance.new("Attachment")
+		a.Name = nom
+		a.Position = position
+		a.Parent = part
+		return a
+	end
+
+	local function faisceau(part, nom, a0, a1, props)
+		local b = Instance.new("Beam")
+		b.Name = nom
+		b.Attachment0 = a0
+		b.Attachment1 = a1
+		b.FaceCamera = true
+		b.Segments = 1
+		b.LightEmission = 1
+		b.LightInfluence = 0
+		b.Enabled = false
+		for cle, valeur in pairs(props) do b[cle] = valeur end
+		b.Parent = part
+		return b
+	end
+
+	-- crée (une seule fois) le laser dans l'Entree ; tout est éteint tant que la base n'est pas verrouillée
+	local function laserDe(index)
+		local l = lasers[index]
+		if l and l.entree.Parent then return l end
+		local entree = partDe(index, "Entree")
+		if not entree then return nil end
+		for _, enfant in ipairs(entree:GetChildren()) do
+			if string.sub(enfant.Name, 1, 5) == "Laser" then enfant:Destroy() end
+		end
+		l = { entree = entree, coeurs = {}, halos = {}, etincelles = {} }
+		local demiX = entree.Size.X / 2
+		local demiY = entree.Size.Y / 2
+		local bas, hautLaser = -demiY + 0.9, demiY - 1.5
+		local pas = (hautLaser - bas) / (NB_FAISCEAUX - 1)
+		local transparenceHalo = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.25),
+			NumberSequenceKeypoint.new(0.5, 0.55),
+			NumberSequenceKeypoint.new(1, 0.25),
+		})
+		for k = 1, NB_FAISCEAUX do
+			local y = bas + (k - 1) * pas
+			local a0 = attache(entree, "LaserG" .. k, Vector3.new(-demiX, y, 0))
+			local a1 = attache(entree, "LaserD" .. k, Vector3.new(demiX, y, 0))
+			-- cœur fin presque blanc, puis halo rouge pailleté qui défile (sens alterné d'une ligne à l'autre)
+			table.insert(l.coeurs, faisceau(entree, "LaserCoeur" .. k, a0, a1, {
+				Color = ColorSequence.new(COEUR_LASER),
+				Transparency = NumberSequence.new(0.05),
+				Width0 = 0.16,
+				Width1 = 0.16,
+				Brightness = 3,
+			}))
+			local sens = 1
+			if k % 2 == 0 then sens = -1 end
+			table.insert(l.halos, faisceau(entree, "LaserHalo" .. k, a0, a1, {
+				Color = ColorSequence.new(ROUGE_LASER),
+				Transparency = transparenceHalo,
+				Width0 = 0.85,
+				Width1 = 0.85,
+				Texture = TEXTURE_LASER,
+				TextureMode = Enum.TextureMode.Wrap,
+				TextureLength = 1.6,
+				TextureSpeed = 2.2 * sens,
+				Brightness = 2,
+			}))
+		end
+		-- étincelles aux deux émetteurs (à mi-hauteur, contre chaque poteau)
+		for _, cote in ipairs({ -1, 1 }) do
+			local source = attache(entree, "LaserSource" .. cote, Vector3.new(cote * demiX, (bas + hautLaser) / 2, 0))
+			local p = Instance.new("ParticleEmitter")
+			p.Name = "LaserEtincelles"
+			p.Texture = TEXTURE_LASER
+			p.Color = ColorSequence.new(COEUR_LASER, ROUGE_LASER)
+			p.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 0) })
+			p.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
+			p.Lifetime = NumberRange.new(0.3, 0.6)
+			p.Speed = NumberRange.new(1, 3)
+			p.SpreadAngle = Vector2.new(180, 180)
+			p.Rate = 14
+			p.LightEmission = 1
+			p.LightInfluence = 0
+			p.Enabled = false
+			p.Parent = source
+			table.insert(l.etincelles, p)
+		end
+		-- lueur rouge sur le sol et les poteaux
+		local lueur = Instance.new("PointLight")
+		lueur.Name = "LaserLueur"
+		lueur.Range = 16
+		lueur.Brightness = 3
+		lueur.Color = ROUGE_LASER
+		lueur.Shadows = false
+		lueur.Enabled = false
+		lueur.Parent = entree
+		l.lueur = lueur
+		lasers[index] = l
+		return l
+	end
+
+	-- allume / éteint le laser ; dans les dernières secondes, le halo clignote pour prévenir
+	local function majLaser(index, actif, reste)
+		local l = laserDe(index)
+		if not l then return end
+		local halo = actif
+		if actif and reste and reste <= ALERTE_FIN then
+			halo = math.floor(reste * 2) % 2 == 0
+		end
+		for _, b in ipairs(l.coeurs) do
+			if b.Enabled ~= actif then b.Enabled = actif end
+		end
+		for _, b in ipairs(l.halos) do
+			if b.Enabled ~= halo then b.Enabled = halo end
+		end
+		for _, p in ipairs(l.etincelles) do
+			if p.Enabled ~= actif then p.Enabled = actif end
+		end
+		if l.lueur.Enabled ~= halo then l.lueur.Enabled = halo end
+	end
+
+	-- compte à rebours « 🔒 45 » au-dessus de l'Entree pendant le verrou (rouge dans les dernières secondes)
 	local function majCompte(index)
+		local reste = (finVerrou[index] or 0) - maintenant()
+		if reste > 0 then
+			majLaser(index, true, reste)
+		end
 		local e = etiquettesDe(index)
 		if not e then return end
-		local reste = (finVerrou[index] or 0) - maintenant()
 		if reste > 0 then
 			local texte = "🔒 " .. math.ceil(reste)
 			if e.compte.Text ~= texte then e.compte.Text = texte end
+			local couleur = Color3.new(1, 1, 1)
+			if reste <= ALERTE_FIN then couleur = ROUGE_LASER end
+			if e.compte.TextColor3 ~= couleur then e.compte.TextColor3 = couleur end
 			if not e.compteGui.Enabled then e.compteGui.Enabled = true end
 		elseif e.compteGui.Enabled then
 			e.compteGui.Enabled = false
@@ -255,11 +462,137 @@ function M.demarrer(ctx)
 		return math.max(0, math.min(EMPLACEMENTS_MAX, n))
 	end
 
+	-- ===== emplacements verrouillés : podium éteint, pierre opaque, cadenas sur le plateau =====
+	local apparencePiece = {} -- BasePart (socle / anneau) -> { Color, Transparency, Material }
+	local piecesE = {}        -- index -> { [numero] = { socles = {parts}, anneau = part|nil } }
+	local PIERRE_SOCLE = Charte.ombre and Charte.ombre(Charte.pierre) or Charte.pierre
+
+	local function partsDe(inst)
+		local liste = {}
+		if inst:IsA("BasePart") then
+			table.insert(liste, inst)
+		end
+		for _, d in ipairs(inst:GetDescendants()) do
+			if d:IsA("BasePart") then table.insert(liste, d) end
+		end
+		return liste
+	end
+
+	local function centreDe(inst)
+		if inst:IsA("BasePart") then return inst.Position end
+		if inst:IsA("Model") then return inst:GetPivot().Position end
+		return nil
+	end
+
+	-- associe chaque Socle / Anneau du Decor à son E<n> (attribut Emplacement ; sinon le plus proche en XZ)
+	local function piecesEmplacements(index, m, dossierE)
+		if piecesE[index] then return piecesE[index] end
+		local table_ = {}
+		for numero = 1, EMPLACEMENTS_MAX do table_[numero] = { socles = {}, anneau = nil } end
+		local decor = m:FindFirstChild("Decor")
+		if decor then
+			local centresE = {}
+			for numero = 1, EMPLACEMENTS_MAX do
+				local e = dossierE:FindFirstChild("E" .. numero)
+				if e and e:IsA("BasePart") then centresE[numero] = e.Position end
+			end
+			for _, enfant in ipairs(decor:GetChildren()) do
+				if enfant.Name == "Socle" or enfant.Name == "Anneau" then
+					local numero = enfant:GetAttribute("Emplacement")
+					if type(numero) ~= "number" or not table_[numero] then
+						numero = nil
+						local c = centreDe(enfant)
+						if c then
+							local meilleur = 1.5
+							for n, ce in pairs(centresE) do
+								local d = Vector2.new(c.X - ce.X, c.Z - ce.Z).Magnitude
+								if d < meilleur then meilleur, numero = d, n end
+							end
+						end
+						if numero then enfant:SetAttribute("Emplacement", numero) end
+					end
+					if numero then
+						if enfant.Name == "Socle" then
+							for _, p in ipairs(partsDe(enfant)) do table.insert(table_[numero].socles, p) end
+						elseif enfant:IsA("BasePart") then
+							table_[numero].anneau = enfant
+						end
+					end
+				end
+			end
+		end
+		piecesE[index] = table_
+		return table_
+	end
+
+	local function memoriser(p)
+		if not apparencePiece[p] then
+			apparencePiece[p] = { Color = p.Color, Transparency = p.Transparency, Material = p.Material }
+		end
+		return apparencePiece[p]
+	end
+
+	local function restaurer(p)
+		local o = apparencePiece[p]
+		if o then
+			p.Color = o.Color
+			p.Transparency = o.Transparency
+			p.Material = o.Material
+		end
+	end
+
+	-- cadenas peint sur le dessus du plateau (créé une fois, activé / coupé ensuite)
+	local function cadenas(e)
+		local gui = e:FindFirstChild("Cadenas")
+		if gui then return gui end
+		if not Style or not Style.texte then return nil end
+		gui = Instance.new("SurfaceGui")
+		gui.Name = "Cadenas"
+		gui.Face = Enum.NormalId.Top
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 50
+		gui.LightInfluence = 0.4
+		gui.ZOffset = 1
+		gui.Enabled = false
+		local fond = Instance.new("Frame")
+		fond.Name = "Fond"
+		fond.AnchorPoint = Vector2.new(0.5, 0.5)
+		fond.Position = UDim2.fromScale(0.5, 0.5)
+		fond.Size = UDim2.fromScale(0.78, 0.78)
+		fond.BackgroundColor3 = Style.couleurs.fond or Charte.encre
+		fond.BackgroundTransparency = 0.15
+		fond.BorderSizePixel = 0
+		fond.Parent = gui
+		if Style.coins then Style.coins(fond, 36) end
+		if Style.bordure then Style.bordure(fond, 6, Style.couleurs.contour) end
+		Style.texte(fond, {
+			Name = "Icone",
+			Text = "🔒",
+			titre = true,
+			contour = 4,
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.fromScale(0.5, 0.06),
+			Size = UDim2.fromScale(0.8, 0.6),
+		})
+		Style.texte(fond, {
+			Name = "Legende",
+			Text = "VERROUILLÉ",
+			titre = true,
+			contour = 4,
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.fromScale(0.5, 0.94),
+			Size = UDim2.fromScale(0.9, 0.24),
+		})
+		gui.Parent = e
+		return gui
+	end
+
 	local function majEmplacements(index)
 		local m = trouverModele(index)
 		if not m then return end
 		local dossierE = m:FindFirstChild("Emplacements")
 		if not dossierE then return end
+		local pieces = piecesEmplacements(index, m, dossierE)
 		local n = nombreEmplacements(proprietaires[index])
 		for numero = 1, EMPLACEMENTS_MAX do
 			local e = dossierE:FindFirstChild("E" .. numero)
@@ -270,14 +603,32 @@ function M.demarrer(ctx)
 				local origine = apparenceE[e]
 				local debloque = numero <= n
 				e:SetAttribute("Debloque", debloque)
+				local lot = pieces[numero]
+				local anneau = lot and lot.anneau
+				if anneau then memoriser(anneau) end
+				if lot then for _, p in ipairs(lot.socles) do memoriser(p) end end
+				local gui = cadenas(e)
 				if debloque then
 					e.Color = origine.Color
 					e.Transparency = origine.Transparency
 					e.Material = origine.Material
+					if anneau then restaurer(anneau) end
+					if lot then for _, p in ipairs(lot.socles) do restaurer(p) end end
+					if gui then gui.Enabled = false end
 				else
+					-- plateau de pierre opaque, bandeau lumineux éteint, socle assombri : une place à acheter
 					e.Color = Charte.pierre
-					e.Transparency = math.max(origine.Transparency, 0.6)
+					e.Transparency = origine.Transparency
 					e.Material = Enum.Material.SmoothPlastic
+					if anneau then
+						anneau.Color = Charte.pierre
+						anneau.Material = Enum.Material.SmoothPlastic
+						anneau.Transparency = apparencePiece[anneau].Transparency
+					end
+					if lot then
+						for _, p in ipairs(lot.socles) do p.Color = PIERRE_SOCLE end
+					end
+					if gui then gui.Enabled = true end
 				end
 			end
 		end
@@ -293,14 +644,16 @@ function M.demarrer(ctx)
 		end
 		local o = apparenceEntree[index]
 		if verrouillee then
-			entree.Material = Enum.Material.Neon
-			entree.Color = Charte.alerte
-			entree.Transparency = 0.3
+			-- voile de champ de force rouge à peine visible : les faisceaux laser font l'essentiel
+			entree.Material = Enum.Material.ForceField
+			entree.Color = ROUGE_LASER
+			entree.Transparency = 0.6
 		else
 			entree.Material = o.Material
 			entree.Color = o.Color
 			entree.Transparency = o.Transparency
 		end
+		majLaser(index, verrouillee, (finVerrou[index] or 0) - maintenant())
 	end
 
 	local function invitesVerrou(index)

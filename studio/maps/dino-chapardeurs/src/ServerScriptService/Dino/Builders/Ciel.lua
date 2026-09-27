@@ -1,6 +1,8 @@
 -- Constructeur Ciel : éclairage de Dino Chapardeurs (Lighting uniquement, aucune part).
--- Style « simulateur Roblox » (voir STYLE.md) : plein jour lumineux la plupart du temps, ciel bleu
--- clair, brume presque nulle, ombres douces. Cycle jour/nuit très lent calé sur l'heure serveur,
+-- Version 2 (STYLE.md §4) : rendu « Future » des jeux Roblox soignés. Plein jour chaud et lumineux
+-- la plupart du temps (vers 14 h), ombres douces mais nettes, reflets d'environnement complets,
+-- Atmosphere légère bleu clair avec voile lointain, Bloom discret, rayons de soleil, couleurs vives
+-- et flou de profondeur très léger au loin. Cycle jour/nuit très lent calé sur l'heure serveur,
 -- avec une nuit courte et claire. Ambiances vives pendant les événements (Eruption, PluieDeMeteores, LuneDoree).
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
@@ -13,13 +15,13 @@ local DEFAUTS = {
 	dureeNuit = 240,       -- dont secondes de nuit (courte : 4 min)
 	heureLever = 6,
 	heureCoucher = 20,
-	midiDebut = 13,        -- plateau de plein jour : l'heure reste entre midiDebut et midiFin
-	midiFin = 14,
+	midiDebut = 13.6,      -- plateau de plein jour : l'heure reste entre midiDebut et midiFin (autour de 14 h)
+	midiFin = 14.4,
 	partMatin = 0.07,      -- part du jour passée à monter du lever au plateau
 	partSoir = 0.07,       -- part du jour passée à descendre du plateau au coucher
 	dureeTransition = 2.5, -- secondes de fondu lors d'un changement d'événement
 	pas = 0.25,            -- secondes entre deux mises à jour du cycle
-	latitude = 12,         -- soleil haut, ombres courtes et lisibles
+	latitude = 23,         -- soleil haut de l'après-midi : ombres courtes, légèrement portées
 }
 
 local function reglage(ctx, cle)
@@ -33,6 +35,10 @@ end
 
 local function mul(c, k)
 	return Color3.new(math.min(1, c.R * k), math.min(1, c.G * k), math.min(1, c.B * k))
+end
+
+local function rgb(r, v, b)
+	return Color3.fromRGB(r, v, b)
 end
 
 local function lerpNombre(a, b, t)
@@ -57,111 +63,129 @@ local function retirerClasse(parent, classe)
 	end
 end
 
+-- groupes de propriétés d'une ambiance (chacun correspond à un objet de Lighting)
+local GROUPES = { "lighting", "atmosphere", "clouds", "bloom", "correction", "rayons", "profondeur" }
+
 -- ===== les ambiances =====
--- chaque ambiance donne les propriétés cibles de Lighting, Atmosphere, Clouds, Bloom et ColorCorrection.
--- Règle du style : jamais sombre, jamais brumeux ; les couleurs viennent de la Charte et du Style.
+-- chaque ambiance donne les propriétés cibles de Lighting, Atmosphere, Clouds, Bloom, ColorCorrection,
+-- SunRays et DepthOfField. Règle du style : jamais sombre ; un voile lointain léger donne de la
+-- profondeur sans jamais cacher le terrain de jeu.
 local function ambiances(C, S)
 	local blanc = Color3.new(1, 1, 1)
 	if S and S.couleurs and S.couleurs.texte then
 		blanc = S.couleurs.texte
 	end
-	-- bleu ciel clair des simulateurs, tiré de la gemme de la Charte
-	local bleuCiel = C.gemme:Lerp(blanc, 0.45)
+	-- bleu ciel clair des jeux soignés (légèrement tiré de la gemme de la Charte)
+	local bleuCiel = rgb(196, 224, 246):Lerp(C.gemme, 0.08)
+	local bleuVoile = rgb(214, 232, 248)
 	local bleuNuit = C.nuit:Lerp(C.gemme, 0.45)
+	-- chaleur de l'après-midi
+	local chaud = C.creme:Lerp(C.sable, 0.35)
+
+	-- flou de profondeur : nul de près, à peine visible sur l'horizon
+	local profondeurStandard = { FarIntensity = 0.08, NearIntensity = 0, FocusDistance = 200, InFocusRadius = 50 }
 
 	local A = {}
 
-	-- plein jour : lumière chaude et forte, ciel bleu net, couleurs saturées
+	-- plein jour (14 h) : lumière chaude et forte, ciel bleu clair, voile lointain léger
 	A.Jour = {
 		lighting = {
 			Brightness = 3,
-			Ambient = mul(C.creme, 0.62),
-			OutdoorAmbient = mul(C.creme:Lerp(bleuCiel, 0.2), 0.85),
-			ColorShift_Top = mul(C.sable, 0.5),
-			ColorShift_Bottom = mul(C.herbe, 0.1),
-			ExposureCompensation = 0.15,
+			Ambient = mul(chaud, 0.52),
+			OutdoorAmbient = mul(chaud:Lerp(bleuCiel, 0.15), 0.62),
+			ColorShift_Top = mul(C.sable:Lerp(C.dore, 0.2), 0.45),
+			ColorShift_Bottom = mul(C.herbe, 0.08),
+			ExposureCompensation = 0,
 		},
 		atmosphere = {
-			Density = 0.18,
-			Offset = 0,
+			Density = 0.28,
+			Offset = 0.25,
 			Color = bleuCiel,
-			Decay = bleuCiel:Lerp(blanc, 0.3),
-			Glare = 0,
-			Haze = 0,
+			Decay = bleuVoile:Lerp(C.sable, 0.25),
+			Glare = 0.2,
+			Haze = 1.2,
 		},
-		clouds = { Cover = 0.5, Density = 0.4, Color = blanc },
-		bloom = { Intensity = 0.3, Size = 22, Threshold = 1.8 },
-		correction = { Brightness = 0.04, Contrast = 0.1, Saturation = 0.35, TintColor = blanc:Lerp(C.sable, 0.06) },
+		clouds = { Cover = 0.46, Density = 0.38, Color = blanc },
+		bloom = { Intensity = 0.5, Size = 24, Threshold = 1.3 },
+		correction = { Brightness = 0.02, Contrast = 0.1, Saturation = 0.15, TintColor = blanc:Lerp(C.sable, 0.05) },
+		rayons = { Intensity = 0.06, Spread = 0.45 },
+		profondeur = profondeurStandard,
 	}
 
 	-- lever et coucher : or chaud, toujours lumineux
 	A.Crepuscule = {
 		lighting = {
 			Brightness = 2.6,
-			Ambient = mul(C.dore:Lerp(C.creme, 0.55), 0.6),
-			OutdoorAmbient = mul(C.lave:Lerp(C.creme, 0.55), 0.8),
+			Ambient = mul(C.dore:Lerp(C.creme, 0.55), 0.55),
+			OutdoorAmbient = mul(C.lave:Lerp(C.creme, 0.55), 0.72),
 			ColorShift_Top = mul(C.dore:Lerp(C.lave, 0.4), 0.7),
 			ColorShift_Bottom = mul(C.violet, 0.1),
-			ExposureCompensation = 0.15,
-		},
-		atmosphere = {
-			Density = 0.22,
-			Offset = 0,
-			Color = C.dore:Lerp(bleuCiel, 0.45),
-			Decay = C.lave:Lerp(C.dore, 0.5),
-			Glare = 0.3,
-			Haze = 0.3,
-		},
-		clouds = { Cover = 0.5, Density = 0.45, Color = C.dore:Lerp(blanc, 0.55) },
-		bloom = { Intensity = 0.4, Size = 24, Threshold = 1.6 },
-		correction = { Brightness = 0.04, Contrast = 0.1, Saturation = 0.4, TintColor = blanc:Lerp(C.dore, 0.1) },
-	}
-
-	-- nuit courte et claire : bleu lumineux, on voit tout le terrain
-	A.Nuit = {
-		lighting = {
-			Brightness = 1.6,
-			Ambient = mul(bleuNuit:Lerp(blanc, 0.35), 0.75),
-			OutdoorAmbient = mul(bleuNuit:Lerp(blanc, 0.4), 0.95),
-			ColorShift_Top = mul(C.gemme, 0.3),
-			ColorShift_Bottom = mul(C.violet, 0.12),
-			ExposureCompensation = 0.4,
-		},
-		atmosphere = {
-			Density = 0.18,
-			Offset = 0,
-			Color = bleuNuit,
-			Decay = bleuNuit:Lerp(C.violet, 0.3),
-			Glare = 0,
-			Haze = 0,
-		},
-		clouds = { Cover = 0.4, Density = 0.3, Color = bleuNuit:Lerp(blanc, 0.55) },
-		bloom = { Intensity = 0.45, Size = 24, Threshold = 1.4 },
-		correction = { Brightness = 0.06, Contrast = 0.08, Saturation = 0.3, TintColor = blanc:Lerp(C.gemme, 0.1) },
-	}
-
-	-- éruption : ciel orange vif, lumière rouge-or, sans brume sombre
-	A.Eruption = {
-		heure = 17.4,
-		lighting = {
-			Brightness = 2.8,
-			Ambient = mul(C.lave:Lerp(C.creme, 0.45), 0.7),
-			OutdoorAmbient = mul(C.lave:Lerp(C.dore, 0.4), 0.85),
-			ColorShift_Top = C.lave,
-			ColorShift_Bottom = mul(C.alerte, 0.35),
 			ExposureCompensation = 0.1,
 		},
 		atmosphere = {
 			Density = 0.3,
-			Offset = 0,
+			Offset = 0.2,
+			Color = C.dore:Lerp(bleuCiel, 0.5),
+			Decay = C.lave:Lerp(C.dore, 0.55),
+			Glare = 0.6,
+			Haze = 1.6,
+		},
+		clouds = { Cover = 0.5, Density = 0.42, Color = C.dore:Lerp(blanc, 0.55) },
+		bloom = { Intensity = 0.6, Size = 26, Threshold = 1.2 },
+		correction = { Brightness = 0.02, Contrast = 0.12, Saturation = 0.22, TintColor = blanc:Lerp(C.dore, 0.1) },
+		rayons = { Intensity = 0.12, Spread = 0.6 },
+		profondeur = profondeurStandard,
+	}
+
+	-- nuit courte et claire : bleu lumineux, on voit tout le terrain, torches mises en valeur
+	A.Nuit = {
+		lighting = {
+			Brightness = 1.4,
+			Ambient = mul(bleuNuit:Lerp(blanc, 0.35), 0.62),
+			OutdoorAmbient = mul(bleuNuit:Lerp(blanc, 0.4), 0.82),
+			ColorShift_Top = mul(C.gemme, 0.3),
+			ColorShift_Bottom = mul(C.violet, 0.12),
+			ExposureCompensation = 0.35,
+		},
+		atmosphere = {
+			Density = 0.26,
+			Offset = 0.2,
+			Color = bleuNuit,
+			Decay = bleuNuit:Lerp(C.violet, 0.3),
+			Glare = 0,
+			Haze = 0.8,
+		},
+		clouds = { Cover = 0.4, Density = 0.3, Color = bleuNuit:Lerp(blanc, 0.55) },
+		bloom = { Intensity = 0.65, Size = 26, Threshold = 1.1 },
+		correction = { Brightness = 0.04, Contrast = 0.1, Saturation = 0.12, TintColor = blanc:Lerp(C.gemme, 0.1) },
+		rayons = { Intensity = 0.02, Spread = 0.4 },
+		profondeur = profondeurStandard,
+	}
+
+	-- éruption : ciel orange vif, lumière rouge-or, voile chaud sans noirceur
+	A.Eruption = {
+		heure = 17.4,
+		lighting = {
+			Brightness = 2.8,
+			Ambient = mul(C.lave:Lerp(C.creme, 0.45), 0.62),
+			OutdoorAmbient = mul(C.lave:Lerp(C.dore, 0.4), 0.78),
+			ColorShift_Top = C.lave,
+			ColorShift_Bottom = mul(C.alerte, 0.35),
+			ExposureCompensation = 0.05,
+		},
+		atmosphere = {
+			Density = 0.36,
+			Offset = 0.2,
 			Color = C.lave:Lerp(C.dore, 0.35),
 			Decay = C.alerte:Lerp(C.lave, 0.4),
-			Glare = 0.5,
-			Haze = 0.6,
+			Glare = 0.8,
+			Haze = 2.2,
 		},
 		clouds = { Cover = 0.65, Density = 0.55, Color = C.lave:Lerp(C.dore, 0.5) },
-		bloom = { Intensity = 0.6, Size = 28, Threshold = 1.3 },
-		correction = { Brightness = 0.03, Contrast = 0.14, Saturation = 0.5, TintColor = blanc:Lerp(C.lave, 0.2) },
+		bloom = { Intensity = 0.75, Size = 28, Threshold = 1.15 },
+		correction = { Brightness = 0.02, Contrast = 0.16, Saturation = 0.3, TintColor = blanc:Lerp(C.lave, 0.18) },
+		rayons = { Intensity = 0.14, Spread = 0.7 },
+		profondeur = { FarIntensity = 0.12, NearIntensity = 0, FocusDistance = 200, InFocusRadius = 50 },
 	}
 
 	-- pluie de météores : nuit violette très étoilée, bien éclairée
@@ -169,24 +193,26 @@ local function ambiances(C, S)
 		heure = 22,
 		etoiles = 8000,
 		lighting = {
-			Brightness = 1.8,
-			Ambient = mul(C.violet:Lerp(blanc, 0.35), 0.7),
-			OutdoorAmbient = mul(C.violet:Lerp(C.gemme, 0.3), 0.95),
+			Brightness = 1.7,
+			Ambient = mul(C.violet:Lerp(blanc, 0.35), 0.62),
+			OutdoorAmbient = mul(C.violet:Lerp(C.gemme, 0.3), 0.85),
 			ColorShift_Top = C.violet,
 			ColorShift_Bottom = mul(C.gemme, 0.25),
-			ExposureCompensation = 0.4,
+			ExposureCompensation = 0.35,
 		},
 		atmosphere = {
-			Density = 0.2,
-			Offset = 0,
+			Density = 0.26,
+			Offset = 0.2,
 			Color = C.violet:Lerp(C.gemme, 0.2),
 			Decay = C.violet:Lerp(C.alerte, 0.25),
-			Glare = 0.2,
-			Haze = 0,
+			Glare = 0.3,
+			Haze = 0.6,
 		},
 		clouds = { Cover = 0.3, Density = 0.25, Color = C.violet:Lerp(blanc, 0.5) },
-		bloom = { Intensity = 0.7, Size = 28, Threshold = 1.1 },
-		correction = { Brightness = 0.06, Contrast = 0.12, Saturation = 0.55, TintColor = blanc:Lerp(C.violet, 0.2) },
+		bloom = { Intensity = 0.85, Size = 28, Threshold = 1 },
+		correction = { Brightness = 0.04, Contrast = 0.12, Saturation = 0.3, TintColor = blanc:Lerp(C.violet, 0.18) },
+		rayons = { Intensity = 0.03, Spread = 0.4 },
+		profondeur = profondeurStandard,
 	}
 
 	-- lune dorée : nuit baignée d'une lumière d'or éclatante, lune géante
@@ -195,45 +221,53 @@ local function ambiances(C, S)
 		lune = 28,
 		lighting = {
 			Brightness = 2,
-			Ambient = mul(C.dore:Lerp(blanc, 0.3), 0.7),
-			OutdoorAmbient = mul(C.dore:Lerp(C.creme, 0.3), 0.9),
+			Ambient = mul(C.dore:Lerp(blanc, 0.3), 0.62),
+			OutdoorAmbient = mul(C.dore:Lerp(C.creme, 0.3), 0.82),
 			ColorShift_Top = C.dore,
 			ColorShift_Bottom = mul(C.lave, 0.2),
-			ExposureCompensation = 0.4,
+			ExposureCompensation = 0.35,
 		},
 		atmosphere = {
-			Density = 0.2,
-			Offset = 0,
+			Density = 0.26,
+			Offset = 0.2,
 			Color = C.dore:Lerp(bleuNuit, 0.35),
 			Decay = C.dore:Lerp(C.lave, 0.25),
-			Glare = 0.4,
-			Haze = 0,
+			Glare = 0.6,
+			Haze = 0.8,
 		},
 		clouds = { Cover = 0.35, Density = 0.3, Color = C.dore:Lerp(blanc, 0.4) },
-		bloom = { Intensity = 0.8, Size = 30, Threshold = 1.1 },
-		correction = { Brightness = 0.06, Contrast = 0.12, Saturation = 0.5, TintColor = blanc:Lerp(C.dore, 0.25) },
+		bloom = { Intensity = 0.9, Size = 30, Threshold = 1 },
+		correction = { Brightness = 0.04, Contrast = 0.12, Saturation = 0.28, TintColor = blanc:Lerp(C.dore, 0.22) },
+		rayons = { Intensity = 0.08, Spread = 0.6 },
+		profondeur = profondeurStandard,
 	}
 
 	return A
 end
 
--- mélange de deux ambiances (nombres et couleurs)
+-- mélange de deux ambiances (nombres et couleurs) ; un groupe absent d'un côté est repris tel quel
 local function melanger(a, b, t)
 	local r = {}
-	for _, groupe in ipairs({ "lighting", "atmosphere", "clouds", "bloom", "correction" }) do
+	for _, groupe in ipairs(GROUPES) do
 		local ga, gb = a[groupe], b[groupe]
-		local g = {}
-		for cle, va in pairs(ga) do
-			local vb = gb[cle]
-			if type(va) == "number" and type(vb) == "number" then
-				g[cle] = lerpNombre(va, vb, t)
-			elseif typeof(va) == "Color3" and typeof(vb) == "Color3" then
-				g[cle] = va:Lerp(vb, t)
-			else
-				g[cle] = va
+		if ga and gb then
+			local g = {}
+			for cle, va in pairs(ga) do
+				local vb = gb[cle]
+				if type(va) == "number" and type(vb) == "number" then
+					g[cle] = lerpNombre(va, vb, t)
+				elseif typeof(va) == "Color3" and typeof(vb) == "Color3" then
+					g[cle] = va:Lerp(vb, t)
+				else
+					g[cle] = va
+				end
 			end
+			r[groupe] = g
+		elseif ga then
+			r[groupe] = ga
+		elseif gb then
+			r[groupe] = gb
 		end
-		r[groupe] = g
 	end
 	return r
 end
@@ -265,15 +299,24 @@ function M.construire(ctx)
 	local pas = math.max(0.05, reglage(ctx, "pas"))
 
 	-- ===== réglages généraux de Lighting =====
+	-- chaque propriété à part : si l'une est refusée (ex. Technology hors Studio), les autres passent
+	local generaux = {
+		GlobalShadows = true,
+		ShadowSoftness = 0.25,
+		GeographicLatitude = reglage(ctx, "latitude"),
+		EnvironmentDiffuseScale = 1,
+		EnvironmentSpecularScale = 1,
+		FogStart = 0,
+		FogEnd = 100000,
+		ClockTime = 14,
+	}
+	for cle, valeur in pairs(generaux) do
+		pcall(function()
+			Lighting[cle] = valeur
+		end)
+	end
 	pcall(function()
-		Lighting.GlobalShadows = true
-		Lighting.ShadowSoftness = 0.7
-		Lighting.GeographicLatitude = reglage(ctx, "latitude")
-		Lighting.EnvironmentDiffuseScale = 0.8
-		Lighting.EnvironmentSpecularScale = 0.3
-		Lighting.FogStart = 0
-		Lighting.FogEnd = 100000
-		Lighting.ClockTime = 13.5
+		Lighting.Technology = Enum.Technology.Future
 	end)
 
 	-- ===== objets de ciel =====
@@ -282,17 +325,19 @@ function M.construire(ctx)
 	nettoyer(Lighting, "DinoBloom")
 	nettoyer(Lighting, "DinoCouleurs")
 	nettoyer(Lighting, "DinoRayons")
+	nettoyer(Lighting, "DinoProfondeur")
 
 	local atmosphere = Instance.new("Atmosphere")
 	atmosphere.Name = "DinoAtmosphere"
 	atmosphere.Parent = Lighting
 
+	-- ciel clair : skybox par défaut de Roblox (bleu net), soleil net et lune ronde
 	local ciel = Instance.new("Sky")
 	ciel.Name = "DinoCiel"
 	pcall(function()
-		ciel.StarCount = 4000
-		ciel.SunAngularSize = 16
-		ciel.MoonAngularSize = 14
+		ciel.StarCount = 3000
+		ciel.SunAngularSize = 12
+		ciel.MoonAngularSize = 11
 		ciel.CelestialBodiesShown = true
 	end)
 	ciel.Parent = Lighting
@@ -307,13 +352,17 @@ function M.construire(ctx)
 
 	local rayons = Instance.new("SunRaysEffect")
 	rayons.Name = "DinoRayons"
-	pcall(function()
-		rayons.Intensity = 0.04
-		rayons.Spread = 0.5
-	end)
 	rayons.Parent = Lighting
 
-	-- nuages dans le Terrain : petits cumulus blancs bien découpés
+	-- flou très léger au loin seulement (NearIntensity = 0 : le jeu reste net autour du joueur)
+	local profondeur = nil
+	pcall(function()
+		profondeur = Instance.new("DepthOfFieldEffect")
+		profondeur.Name = "DinoProfondeur"
+		profondeur.Parent = Lighting
+	end)
+
+	-- nuages dans le Terrain : cumulus blancs épars, le ciel reste bien bleu
 	local nuages = nil
 	pcall(function()
 		local terrain = workspace:FindFirstChildOfClass("Terrain") or workspace.Terrain
@@ -335,6 +384,8 @@ function M.construire(ctx)
 		clouds = nuages,
 		bloom = bloom,
 		correction = correction,
+		rayons = rayons,
+		profondeur = profondeur,
 	}
 
 	-- ===== le cycle jour/nuit =====
@@ -451,16 +502,16 @@ function M.construire(ctx)
 		libreA = os.clock() + transition
 		if nom == "" then
 			pcall(function()
-				ciel.StarCount = 4000
-				ciel.MoonAngularSize = 14
+				ciel.StarCount = 3000
+				ciel.MoonAngularSize = 11
 			end)
 			local heure = heureDuCycle()
 			fondre(ambianceCycle(heure), heure)
 		else
 			local amb = A[nom]
 			pcall(function()
-				ciel.StarCount = amb.etoiles or 4000
-				ciel.MoonAngularSize = amb.lune or 14
+				ciel.StarCount = amb.etoiles or 3000
+				ciel.MoonAngularSize = amb.lune or 11
 			end)
 			fondre(amb, heureEvenement(amb))
 		end
