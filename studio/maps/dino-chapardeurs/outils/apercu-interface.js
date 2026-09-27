@@ -7,8 +7,8 @@
 const fs = require("fs");
 const path = require("path");
 const PROJET = path.resolve(__dirname, "..");
-const SORTIE_BANC = path.join(__dirname, "banc", "sortie");
-const SORTIE = path.join(PROJET, "Apercu-Interface.html");
+const SORTIE_BANC = path.resolve(process.argv[2] || path.join(__dirname, "banc", "sortie"));
+const SORTIE = path.resolve(process.argv[3] || path.join(PROJET, "Apercu-Interface.html"));
 const ETATS = [
   ["hud", "🏠 Dans sa base"], ["alerte-vol", "🚨 On me vole !"], ["boutique", "🛒 Boutique"],
   ["dinodex", "📖 Dinodex"], ["renaissance", "♻️ Renaissance"],

@@ -353,7 +353,13 @@ document.getElementById("replier").onclick = e => {
   ui.classList.toggle("replie");
   e.target.textContent = ui.classList.contains("replie") ? "+" : "–";
 };
-VUES.tapis();
+// vue imposée par l'adresse : #cible=x,y,z&dist=80&haut=0.6 (utilisé par outils/photo.mjs)
+const parametres = new URLSearchParams(location.hash.slice(1));
+if (parametres.get("cible")) {
+  const [cx, cy, cz] = parametres.get("cible").split(",").map(Number);
+  viser(cx, cy, cz, Number(parametres.get("dist") || 80), Number(parametres.get("haut") || 0.6));
+  document.getElementById("ui").style.display = "none";
+} else VUES.tapis();
 addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); rendu.setSize(innerWidth, innerHeight); composeur.setSize(innerWidth, innerHeight); });
 rendu.setAnimationLoop(() => {
   orbite.update();
