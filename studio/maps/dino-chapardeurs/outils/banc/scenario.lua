@@ -427,6 +427,15 @@ for _, d in ipairs(dinosDe(A)) do if d:GetAttribute("Etat") == "Enclos" then enc
 controle("3 dinos installés dans la base", enclos == 3, enclos)
 controle("revenu par seconde", (A:GetAttribute("RevenuParSeconde") or 0) > 0, tostring(A:GetAttribute("RevenuParSeconde")))
 controle("Dinodex : espèce découverte", achetes[1] and A:GetAttribute("Index_" .. tostring(achetes[1]:GetAttribute("Espece"))) == true, "")
+-- pour les photos : quelques dinos de plus dans la base de Testeur (les deux rangées face à face)
+for _, espece in ipairs({ "Rex", "Tricera", "Stego", "Raptor", "Ankylo" }) do
+	serveur(function()
+		local d = busServeur.demander("CreerDino", espece, "Normal")
+		local n = busServeur.demander("ReserverEmplacement", A)
+		if d and n then busServeur.demander("PlacerDino", d, A, n) end
+	end)
+end
+avancer(0.5)
 if EXPORTER then EXPORTER("pendant") end
 -- vitrine (photos des modeleurs) : un exemplaire de chaque gabarit aligné en l'air (y = 60) au-dessus de la Place, par rareté
 if EXPORTER and stock and stock:FindFirstChild("Dinos") then

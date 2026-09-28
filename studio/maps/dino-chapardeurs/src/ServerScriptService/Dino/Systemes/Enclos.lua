@@ -331,6 +331,53 @@ function M.demarrer(ctx)
 		end
 	end
 
+	local ajusterEmplacement
+	-- ===== un dino tient dans son emplacement : dos au muret, tourné vers l'allée, réduit s'il est trop grand =====
+	local LARGEUR_EMPLACEMENT = 6.5  -- écart entre deux podiums d'une rangée (7) moins une marge
+	local LONGUEUR_EMPLACEMENT = 18  -- de la rangée jusqu'au milieu de l'allée
+	local RECUL = 2                  -- l'arrière du dino dépasse du centre du podium vers le muret
+
+	local function boiteLocale(dino)
+		local pivot = dino:GetPivot()
+		local mn, mx
+		for _, p in ipairs(dino:GetDescendants()) do
+			if p:IsA("BasePart") and p.Transparency < 1 then
+				local cfp = pivot:ToObjectSpace(p.CFrame)
+				local d = p.Size / 2
+				for _, sx in ipairs({ -1, 1 }) do
+					for _, sy in ipairs({ -1, 1 }) do
+						for _, sz in ipairs({ -1, 1 }) do
+							local c = cfp * Vector3.new(sx * d.X, sy * d.Y, sz * d.Z)
+							if mn then
+								mn = Vector3.new(math.min(mn.X, c.X), math.min(mn.Y, c.Y), math.min(mn.Z, c.Z))
+								mx = Vector3.new(math.max(mx.X, c.X), math.max(mx.Y, c.Y), math.max(mx.Z, c.Z))
+							else
+								mn, mx = c, c
+							end
+						end
+					end
+				end
+			end
+		end
+		return mn, mx
+	end
+
+	-- renvoie la CFrame du pivot : le dino (qui regarde vers -Z local) avance depuis le podium vers l'allée
+	ajusterEmplacement = function(dino, cf)
+		local mn, mx = boiteLocale(dino)
+		if not mn then return cf end
+		local largeur, longueur = mx.X - mn.X, mx.Z - mn.Z
+		local f = math.min(1, LARGEUR_EMPLACEMENT / math.max(largeur, 0.1), LONGUEUR_EMPLACEMENT / math.max(longueur, 0.1))
+		if f < 0.999 then
+			local okE = pcall(function() dino:ScaleTo(dino:GetScale() * f) end)
+			if okE then
+				mn, mx = mn * f, mx * f
+			end
+		end
+		local centreX = (mn.X + mx.X) / 2
+		return cf * CFrame.new(-centreX, 0, -(mx.Z - RECUL))
+	end
+
 	local function placer(dino, joueur, numero)
 		if not vivant(dino) or not estJoueur(joueur) or not joueur.Parent then return false end
 		if type(numero) ~= "number" then return false end
@@ -366,6 +413,8 @@ function M.demarrer(ctx)
 		if type(dino:GetAttribute("Stock")) ~= "number" then
 			dino:SetAttribute("Stock", 0)
 		end
+		local okAjuste, cfAjuste = pcall(ajusterEmplacement, dino, cf)
+		if okAjuste and cfAjuste then cf = cfAjuste end
 		local ok = pcall(function() dino:PivotTo(cf) end)
 		if not ok then return false end
 		pcall(formerEtiquette, dino, true)

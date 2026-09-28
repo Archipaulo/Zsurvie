@@ -114,7 +114,7 @@ côté Tapis). Enfants **obligatoires** et nommés exactement :
 | `Entree` | barrière de l'entrée (laser) : Transparency 1 et CanCollide false par défaut |
 | `BoutonVerrou` | gros bouton avec l'invite **« Verrouiller »** |
 | `Collecte` | dalle de collecte (marcher dessus = encaisser) |
-| `Emplacements` | Folder de parts `E1` … `E12` (podiums) ; un dino se pose au centre du dessus, regard vers l'entrée |
+| `Emplacements` | Folder de parts `E1` … `E12` (podiums) en 2 rangées de 6 le long des murets gauche et droit (E1 gauche, E2 droite au 1er rang côté entrée…) ; les dinos, dos au muret, se font face de part et d'autre de l'allée centrale et sont réduits pour tenir dans leur emplacement (Systemes/Enclos) |
 | `Enseigne` | panneau avec SurfaceGui « Affiche » > TextLabel « Titre » (nom du propriétaire) |
 | `Apparition` | part invisible où le propriétaire (ré)apparaît |
 

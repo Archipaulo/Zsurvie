@@ -110,7 +110,11 @@ function M.demarrer(ctx)
 		local e = dossierE:FindFirstChild("E" .. numero)
 		if not e or not e:IsA("BasePart") then return nil end
 		local haut = e.Position + Vector3.new(0, demiHauteur(e), 0)
-		return CFrame.lookAt(haut, haut + Vector3.new(0, 0, versTapis(index)))
+		-- les deux rangées se font face : chaque dino regarde vers l'allée centrale de la base
+		local centre = Plan.bases[index].centre
+		local sens = 1
+		if haut.X > centre.X then sens = -1 end
+		return CFrame.lookAt(haut, haut + Vector3.new(sens, 0, 0))
 	end
 
 	-- juste devant l'entrée, côté Tapis

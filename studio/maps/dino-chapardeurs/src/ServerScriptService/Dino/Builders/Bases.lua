@@ -3,7 +3,7 @@
 -- sur 44 x 50 avec rampe d'entrée de la même teinte, allée dans l'ombre de la couleur, murets de brique peints sous
 -- couvertine d'ardoise, piliers d'angle arrondis coiffés d'une lanterne, portique de métal peint éclairé par deux spots,
 -- enseigne encadrée lisible des deux côtés, gros bouton de verrou rouge sur socle de métal, dalle de collecte en tôle verte,
--- 12 podiums carrés aux arêtes arrondies (ombre de la couleur) à plateau de métal coloré et bandeau lumineux carré,
+-- 12 podiums (2 rangées de 6 le long des murs, face à face) carrés aux arêtes arrondies à plateau de métal et bandeau lumineux,
 -- point d'apparition au fond, plantes et caisses contre les murs.
 -- Repère local d'une base : x en travers, z positif vers le Tapis (l'entrée). Les bases du sud sont tournées de 180°.
 -- Emprise (CONTRAT §10) : le rectangle 44 x 50 de chaque base, rien entre elles. Budget : 170 parts par base.
@@ -416,19 +416,22 @@ function M.construire(ctx)
 		})
 		texteFace(collecte, "Top", "Marquage", "Signe", "$", 20)
 
-		-- ===== 12 podiums : 3 rangées de 4, E1 au premier rang (côté entrée) =====
+		-- ===== 12 podiums : 2 rangées de 6 le long des murs gauche et droit, face à face de part et d'autre de l'allée =====
+		-- E1 (gauche) et E2 (droite) au premier rang côté entrée, puis E3/E4… vers le fond (les 8 premiers sont débloqués d'office)
 		-- socle carré aux arêtes arrondies dans l'ombre de la couleur, bandeau lumineux carré au ras du dessus,
-		-- plateau de métal E<n> dans la couleur claire de la base (tout reste carré : pas d'effet « bouche d'égout »)
+		-- plateau de métal E<n> dans la couleur claire de la base
 		local emplacements = Outils.dossier(modele, "Emplacements")
-		local colonnes = 4
+		local colonnes = 2
 		local rangees = math.ceil(NB_EMPLACEMENTS / colonnes)
-		local zPremier = 9
+		local zPremier = 13 -- premier rang derrière le bouton de verrou et la dalle de collecte
+		local PAS_RANGEE = 7
+		local X_RANGEE = demiL - 4 -- plateaux à 4 studs de l'axe des murets latéraux
 		local HAUT_SOCLE = 1.3
 		for numero = 1, NB_EMPLACEMENTS do
 			local col = (numero - 1) % colonnes
 			local rang = math.floor((numero - 1) / colonnes)
-			local x = (col - (colonnes - 1) / 2) * ECART_PODIUMS
-			local z = zPremier - rang * ECART_PODIUMS
+			local x = (col == 0) and -X_RANGEE or X_RANGEE
+			local z = zPremier - rang * PAS_RANGEE
 			local propsSocle = {
 				Name = "Socle",
 				Size = Vector3.new(5.2, HAUT_SOCLE, 5.2),
@@ -460,7 +463,7 @@ function M.construire(ctx)
 			})
 			plaque:SetAttribute("Debloque", numero <= 8)
 		end
-		local zDernier = zPremier - (rangees - 1) * ECART_PODIUMS
+		local zDernier = zPremier - (rangees - 1) * PAS_RANGEE
 
 		-- ===== apparition du propriétaire, au fond =====
 		local zApparition = math.max(-demiP + 6, zDernier - 9)
