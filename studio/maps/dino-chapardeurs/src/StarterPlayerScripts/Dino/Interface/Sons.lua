@@ -157,7 +157,14 @@ function M.demarrer(ctx)
 
 	local groupe = Instance.new("SoundGroup")
 	groupe.Name = "Effets"
-	groupe.Volume = VOLUME_GENERAL
+	-- réglage du joueur (panneau ⚙️ Réglages) : 0..1
+	local function majVolume()
+		local v = ctx.joueur:GetAttribute("VolumeEffets")
+		if type(v) ~= "number" then v = 1 end
+		groupe.Volume = VOLUME_GENERAL * math.clamp(v, 0, 1)
+	end
+	majVolume()
+	ctx.joueur:GetAttributeChangedSignal("VolumeEffets"):Connect(majVolume)
 	groupe.Parent = dossier
 	-- même salle que la musique et des aigus adoucis : bruitages et piano se fondent
 	local salle = Instance.new("ReverbSoundEffect")

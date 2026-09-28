@@ -684,6 +684,28 @@ if EXPORTER_UI then EXPORTER_UI("boutique") end
 local vuBottes = false
 for _, t in ipairs(panneau.textes) do if string.find(t, "Bottes") then vuBottes = true end end
 controle("panneau Boutique affiché", vuBottes, #panneau.textes .. " textes")
+-- ⚙️ réglages : volumes musique / effets, appliqués et sauvegardés
+do
+	local pg = A:FindFirstChild("PlayerGui")
+	local bouton = pg and pg:FindFirstChild("BoutonReglages", true)
+	controle("réglages : bouton ⚙️ présent", bouton ~= nil, "")
+	if bouton then banc.obtenirSignal(bouton, "Activated"):FireCote("client") end
+	avancer(0.5)
+	local panneauR = pg and pg:FindFirstChild("PanneauReglages", true)
+	controle("réglages : panneau ouvert", panneauR ~= nil and panneauR.Visible, "")
+	if EXPORTER_UI then EXPORTER_UI("reglages") end
+	commeClient(function() Reseau().Reglages:FireServer({ musique = 0.3, effets = 0.55 }) end)
+	avancer(1)
+	controle("réglages : volumes enregistrés", A:GetAttribute("VolumeMusique") == 0.3 and A:GetAttribute("VolumeEffets") == 0.55,
+		tostring(A:GetAttribute("VolumeMusique")) .. " / " .. tostring(A:GetAttribute("VolumeEffets")))
+	local ss = game:GetService("SoundService")
+	local gm = ss:FindFirstChild("DinoMusique") and ss.DinoMusique:FindFirstChild("Musique")
+	local ge = ss:FindFirstChild("DinoSons") and ss.DinoSons:FindFirstChild("Effets")
+	avancer(1.5)
+	controle("réglages : volumes appliqués aux sons", gm and ge and gm.Volume < 0.2 and math.abs(ge.Volume - 0.5 * 0.55) < 0.01,
+		(gm and string.format("%.2f", gm.Volume) or "?") .. " / " .. (ge and string.format("%.2f", ge.Volume) or "?"))
+	if panneauR then panneauR.Visible = false end
+end
 activer(inviteSur(racine, "Index"), A)
 avancer(0.5)
 instantane("panneau Dinodex ouvert")

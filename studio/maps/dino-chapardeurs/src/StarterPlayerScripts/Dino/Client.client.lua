@@ -52,7 +52,7 @@ end)
 
 local ORDRE = {
 	"HUD", "Base", "Vol", "Batte", "Boutique", "Renaissance", "Index", "Mobile", "Effets", "AnimationsDecor", "AnimationsDinos",
-	"Sons", "Musique", "Tutoriel",
+	"Sons", "Musique", "Reglages", "Tutoriel",
 }
 local dossier = script.Parent:WaitForChild("Interface")
 local vus = {}

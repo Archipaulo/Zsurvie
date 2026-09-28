@@ -1,10 +1,10 @@
 -- Les RemoteEvents du jeu, rangés dans ReplicatedStorage.DinoReseau.
--- Client -> serveur : Acheter(nomObjet), Renaissance(), Frapper(), Collecter()
+-- Client -> serveur : Acheter(nomObjet), Renaissance(), Frapper(), Collecter(), Reglages({ musique = 0..1, effets = 0..1 })
 -- Serveur -> client : Effet(genre, position, donnees), Notification(texte, genre)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Reseau = {}
-Reseau.NOMS = { "Acheter", "Renaissance", "Frapper", "Collecter", "Effet", "Notification" }
+Reseau.NOMS = { "Acheter", "Renaissance", "Frapper", "Collecter", "Reglages", "Effet", "Notification" }
 
 function Reseau.serveur()
 	local dossier = ReplicatedStorage:FindFirstChild("DinoReseau")

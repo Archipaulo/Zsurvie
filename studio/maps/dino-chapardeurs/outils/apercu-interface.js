@@ -11,7 +11,7 @@ const SORTIE_BANC = path.resolve(process.argv[2] || path.join(__dirname, "banc",
 const SORTIE = path.resolve(process.argv[3] || path.join(PROJET, "Apercu-Interface.html"));
 const ETATS = [
   ["hud", "🏠 Dans sa base"], ["alerte-vol", "🚨 On me vole !"], ["boutique", "🛒 Boutique"],
-  ["dinodex", "📖 Dinodex"], ["renaissance", "♻️ Renaissance"],
+  ["dinodex", "📖 Dinodex"], ["renaissance", "♻️ Renaissance"], ["reglages", "⚙️ Réglages"],
 ].filter(([n]) => fs.existsSync(path.join(SORTIE_BANC, `ui-${n}.json`)));
 const donnees = {};
 for (const [n] of ETATS) donnees[n] = JSON.parse(fs.readFileSync(path.join(SORTIE_BANC, `ui-${n}.json`), "utf8"));

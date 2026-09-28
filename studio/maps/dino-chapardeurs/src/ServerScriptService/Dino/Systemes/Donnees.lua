@@ -15,7 +15,9 @@ local ATTENTE_BASE = 15
 local ATTENTE_FERMETURE = 25
 local MAX_CLES = 200
 
-local CHAMPS_NOMBRES = { "Argent", "Renaissances", "Vols", "BonusIndex", "Serie", "DerniereConnexion", "CoffreOuvert", "Etage" }
+local CHAMPS_NOMBRES = { "Argent", "Renaissances", "Vols", "BonusIndex", "Serie", "DerniereConnexion", "CoffreOuvert", "Etage", "VolumeMusique", "VolumeEffets" }
+-- réglages du joueur (0..1) : pleins par défaut
+local CHAMPS_VOLUME = { VolumeMusique = true, VolumeEffets = true }
 
 local function estFini(n)
 	return type(n) == "number" and n == n and n ~= math.huge and n ~= -math.huge
@@ -208,6 +210,8 @@ function M.demarrer(ctx)
 				joueur:SetAttribute(nom, valeur)
 			elseif nom == "Argent" then
 				joueur:SetAttribute(nom, argentDepart)
+			elseif CHAMPS_VOLUME[nom] then
+				joueur:SetAttribute(nom, 1)
 			else
 				joueur:SetAttribute(nom, 0)
 			end
@@ -383,6 +387,24 @@ function M.demarrer(ctx)
 			task.wait(0.2)
 		end
 	end)
+
+	-- ===== réglages du joueur (volumes musique / effets), sauvegardés avec sa progression =====
+	local dernierReglage = {}
+	if ctx.Reseau and ctx.Reseau.Reglages then
+		ctx.Reseau.Reglages.OnServerEvent:Connect(function(joueur, reglages)
+			if type(reglages) ~= "table" then return end
+			local maintenant = os.clock()
+			if dernierReglage[joueur] and maintenant - dernierReglage[joueur] < 0.2 then return end
+			dernierReglage[joueur] = maintenant
+			for cle, nom in pairs({ musique = "VolumeMusique", effets = "VolumeEffets" }) do
+				local v = reglages[cle]
+				if type(v) == "number" and v == v then
+					joueur:SetAttribute(nom, math.clamp(math.floor(v * 100 + 0.5) / 100, 0, 1))
+				end
+			end
+		end)
+		game:GetService("Players").PlayerRemoving:Connect(function(joueur) dernierReglage[joueur] = nil end)
+	end
 end
 
 return M

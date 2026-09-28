@@ -58,8 +58,14 @@ function M.demarrer(ctx)
 	local vitesse = 1
 	local volumeCible = VOLUME
 
+	-- réglage du joueur (panneau ⚙️ Réglages) : 0..1
+	local function reglage()
+		local v = joueur:GetAttribute("VolumeMusique")
+		if type(v) ~= "number" then return 1 end
+		return math.clamp(v, 0, 1)
+	end
 	local function appliquerVolume(duree)
-		local v = volumeCible
+		local v = volumeCible * reglage()
 		if coupee then v = 0 end
 		pcall(function()
 			TweenService:Create(groupe, TweenInfo.new(duree or 1.2, Enum.EasingStyle.Sine), { Volume = v }):Play()
@@ -178,7 +184,7 @@ function M.demarrer(ctx)
 		Bus.ecouter("Ducking", function(force, duree)
 			if coupee then return end
 			force = math.clamp(tonumber(force) or 0.5, 0, 1)
-			local bas = volumeCible * (1 - force)
+			local bas = volumeCible * reglage() * (1 - force)
 			pcall(function()
 				local t = TweenService:Create(groupe, TweenInfo.new(0.08), { Volume = bas })
 				t:Play()
@@ -215,6 +221,7 @@ function M.demarrer(ctx)
 		appliquerVolume(0.4)
 		majBouton()
 	end)
+	joueur:GetAttributeChangedSignal("VolumeMusique"):Connect(function() appliquerVolume(0.15) end)
 	majBouton()
 	appliquerVolume(2)
 end
