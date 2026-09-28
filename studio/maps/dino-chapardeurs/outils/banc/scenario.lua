@@ -436,6 +436,28 @@ for _, espece in ipairs({ "Rex", "Tricera", "Stego", "Raptor", "Ankylo" }) do
 	end)
 end
 avancer(0.5)
+-- chaque dino de la base a les pieds posés sur son podium (bas du modèle au niveau du plateau, centre au-dessus)
+do
+	local malPoses, verifies = {}, 0
+	for _, d in ipairs(dinosDe(A)) do
+		if d:GetAttribute("Etat") == "Enclos" and bA then
+			local plaque = bA.Emplacements:FindFirstChild("E" .. tostring(d:GetAttribute("Emplacement")))
+			local mn, mx = banc.boite(banc.partsDe(d))
+			if plaque and mn then
+				verifies = verifies + 1
+				local dessus = plaque.Position.Y + plaque.Size.Y / 2
+				local centre = (mn + mx) / 2
+				local l = plaque.CFrame:PointToObjectSpace(centre)
+				local surLePlateau = math.abs(mn.Y - dessus) < 0.15
+				local auDessus = math.abs(l.X) <= plaque.Size.X / 2 and math.abs(l.Z) <= plaque.Size.Z / 2
+				if not (surLePlateau and auDessus) then
+					table.insert(malPoses, d:GetAttribute("Espece") .. string.format(" (écart vertical %.2f)", mn.Y - dessus))
+				end
+			end
+		end
+	end
+	controle("dinos posés sur leur podium", verifies > 0 and #malPoses == 0, verifies .. " vérifiés " .. table.concat(malPoses, ", "))
+end
 if EXPORTER then EXPORTER("pendant") end
 -- vitrine (photos des modeleurs) : un exemplaire de chaque gabarit aligné en l'air (y = 60) au-dessus de la Place, par rareté
 if EXPORTER and stock and stock:FindFirstChild("Dinos") then

@@ -849,6 +849,12 @@ methode("Model", "ScaleTo", function(self, e)
 		donnees[p].props.CFrame = pivot * (CFrame.new(pos) * local_.Rotation)
 		donnees[p].props.Size = p.Size * f
 	end
+	-- comme Roblox : le pivot reste en place (le décalage de pivot de la PrimaryPart est mis à l'échelle)
+	local pp = d.props.PrimaryPart
+	if pp and donnees[pp] and donnees[pp].props.PivotOffset then
+		local o = donnees[pp].props.PivotOffset
+		donnees[pp].props.PivotOffset = CFrame.new(o.Position * f) * o.Rotation
+	end
 	d.echelle = e
 end)
 methode("Model", "BreakJoints", function() end)

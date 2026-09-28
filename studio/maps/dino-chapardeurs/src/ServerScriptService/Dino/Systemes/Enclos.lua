@@ -333,8 +333,8 @@ function M.demarrer(ctx)
 
 	local ajusterEmplacement
 	-- ===== un dino tient sur son podium : centré dessus, tourné vers l'allée, réduit une fois s'il est trop grand =====
-	local LARGEUR_EMPLACEMENT = 6.4  -- un dino ne dépasse pas la largeur du podium (pas des rangées : 7)
-	local LONGUEUR_EMPLACEMENT = 12  -- ni trop en longueur : il reste bien posé sur son podium
+	local LARGEUR_EMPLACEMENT = 6.4  -- largeur d'une place dans la rangée (pas : 6,8) : seule vraie contrainte
+	local LONGUEUR_EMPLACEMENT = 13  -- plateau de 12 de long : les pattes avant et arrière restent dessus
 
 	local function boiteLocale(dino)
 		local pivot = dino:GetPivot()
@@ -370,13 +370,16 @@ function M.demarrer(ctx)
 		if f < 0.999 then
 			local okE = pcall(function() dino:ScaleTo(dino:GetScale() * f) end)
 			if okE then
-				mn, mx = mn * f, mx * f
+				-- remesure après la mise à l'échelle (le pivot peut bouger selon la façon dont elle est appliquée)
+				local mn2, mx2 = boiteLocale(dino)
+				if mn2 then mn, mx = mn2, mx2 end
 			end
 		end
 		-- centré sur le podium (le centre de sa boîte, pas son pivot, tombe au milieu du plateau)
 		local centreX = (mn.X + mx.X) / 2
 		local centreZ = (mn.Z + mx.Z) / 2
-		return cf * CFrame.new(-centreX, 0, -centreZ)
+		-- pieds posés exactement sur le plateau (le bas de la boîte au niveau du dessus du podium)
+		return cf * CFrame.new(-centreX, -mn.Y, -centreZ)
 	end
 
 	local function placer(dino, joueur, numero)

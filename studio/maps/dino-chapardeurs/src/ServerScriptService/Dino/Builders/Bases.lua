@@ -423,8 +423,8 @@ function M.construire(ctx)
 		local emplacements = Outils.dossier(modele, "Emplacements")
 		local colonnes = 2
 		local rangees = math.ceil(NB_EMPLACEMENTS / colonnes)
-		local zPremier = 13 -- premier rang derrière le bouton de verrou et la dalle de collecte
-		local PAS_RANGEE = 7
+		local zPremier = 13.2 -- premier rang derrière le bouton de verrou et la dalle de collecte
+		local PAS_RANGEE = 6.8
 		local X_RANGEE = demiL - 9 -- podiums éloignés des murets, plus près de l'allée centrale
 		local HAUT_SOCLE = 1.3
 		for numero = 1, NB_EMPLACEMENTS do
@@ -434,7 +434,7 @@ function M.construire(ctx)
 			local z = zPremier - rang * PAS_RANGEE
 			local propsSocle = {
 				Name = "Socle",
-				Size = Vector3.new(6.4, HAUT_SOCLE, 6.4),
+				Size = Vector3.new(12.4, HAUT_SOCLE, 6.2), -- long dans le sens du dino (tourné vers l'allée)
 				CFrame = ici(x, H + HAUT_SOCLE / 2, z),
 				Color = couleurSombre,
 				Material = Mat.Slate,
@@ -446,7 +446,7 @@ function M.construire(ctx)
 			-- reste 0,05 sous celui du socle (pas de faces confondues)
 			part(Outils.bloc, decor, {
 				Name = "Anneau",
-				Size = Vector3.new(6.6, 0.28, 6.6),
+				Size = Vector3.new(12.6, 0.28, 6.4),
 				CFrame = ici(x, H + HAUT_SOCLE - 0.05 - 0.14, z),
 				Color = couleur,
 				Material = Mat.Neon,
@@ -456,7 +456,7 @@ function M.construire(ctx)
 			}, true)
 			local plaque = part(Outils.bloc, emplacements, {
 				Name = "E" .. numero,
-				Size = Vector3.new(5.6, 0.3, 5.6),
+				Size = Vector3.new(12, 0.3, 5.8),
 				CFrame = ici(x, H + HAUT_SOCLE + 0.15, z),
 				Color = couleurClaire,
 				Material = Mat.Metal,
