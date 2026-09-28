@@ -1,9 +1,10 @@
 -- Constructeur Falaises : falaises de terrain Roblox (Rock, Slate, dessus Grass) sculptées en terrasses irrégulières
 -- sur les bords du monde, et un sentier d'escalade en parts (rochers d'ardoise arrondis, marches en planches)
 -- jusqu'à la plateforme du coffre caché (le coffre est posé par Systemes/Recompenses).
--- Emprise (CONTRAT §10) : bandes |x| 168..190, z -190..-168 et z 150..165, plus le sentier et la plateforme.
--- Rendu V2 : la roche est prolongée en terrain jusqu'au bord de l'herbe du Sol (±200) et un arrière-pays de collines
--- ferme l'horizon de 200 à 240 (tout est hors des murs invisibles, à Plan.monde.bord ; aucune part, seulement du terrain).
+-- Plan v2 (CONTRAT §10) : les 4 bandes Plan.falaises (est, ouest, nord, sud), plus le sentier et la plateforme dont le
+-- dessus est exactement à Plan.coffre. La falaise la plus proche du coffre se creuse en une anse (sol d'herbe, paroi
+-- haute au fond) où grimpe le sentier, à l'abri des rondeurs de roche. Au-delà des murs invisibles, un arrière-pays de
+-- collines (terrain seulement, aucune part) ferme l'horizon. Aucune coordonnée en dur : tout vient de Plan.
 local M = {}
 
 local BUDGET = 350 -- parts au maximum pour ce constructeur (le terrain ne compte pas)
@@ -97,6 +98,33 @@ function M.construire(ctx)
 		return p
 	end
 
+	-- petites particules d'ambiance (peu nombreuses : effets légers), jamais bloquantes
+	local function particules(p, props)
+		if not p then
+			return
+		end
+		pcall(function()
+			local e = Instance.new("ParticleEmitter")
+			e.Name = props.nom or "Particules"
+			e.Rate = props.rate or 2
+			e.Lifetime = NumberRange.new(props.vie[1], props.vie[2])
+			e.Speed = NumberRange.new(props.vitesse[1], props.vitesse[2])
+			e.SpreadAngle = props.angle or Vector2.new(20, 20)
+			e.Color = ColorSequence.new(props.couleur, props.couleur2 or props.couleur)
+			e.Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, props.taille),
+				NumberSequenceKeypoint.new(1, props.taille * 0.2),
+			})
+			e.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.2),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			e.LightEmission = props.lueur or 0.8
+			e.Acceleration = props.acceleration or Vector3.new(0, 0, 0)
+			e.Parent = p
+		end)
+	end
+
 	local function signe(v)
 		if v < 0 then
 			return -1
@@ -104,16 +132,59 @@ function M.construire(ctx)
 		return 1
 	end
 
-	local coffre = Plan.coffre or Vector3.new(160, 22, -158)
-	local SX = signe(coffre.X)       -- côté de la falaise la plus proche (est si x > 0)
-	local SENS = 1                   -- le sentier descend vers le centre du monde (en z)
-	if coffre.Z > 0 then
-		SENS = -1
+	local coffre = Plan.coffre
+	local SX = 1   -- côté de la falaise la plus proche (est si x > 0)
+	local SENS = 1 -- le sentier descend vers le centre du monde (en z)
+	if coffre then
+		SX = signe(coffre.X)
+		if coffre.Z > 0 then
+			SENS = -1
+		end
 	end
-	local DEMI = 6 -- demi-côté de la plateforme
+	local DEMI = 6    -- demi-côté de la plateforme
+	local COTE = 4.5  -- côté d'une marche du sentier
+
+	-- tracé du sentier (calculé d'avance : la falaise se creuse autour de lui)
+	local marches = {}
+	if coffre then
+		local nb = math.ceil(coffre.Y / MONTEE) - 1
+		if nb >= 1 then
+			local montee = coffre.Y / (nb + 1)
+			local pas = COTE + ECART
+			for k = 1, nb do
+				local rang = nb - k -- 0 pour la marche la plus haute (au bord de la plateforme)
+				local z = coffre.Z + SENS * (DEMI + ECART + COTE / 2 + rang * pas)
+				-- zigzag léger vers la falaise pour un air naturel
+				local x = coffre.X + SX * 0.5
+				if rang % 2 == 1 then
+					x = coffre.X + SX * 3
+				end
+				marches[k] = { x = x, z = z, dessus = k * montee }
+			end
+		end
+	end
+
+	-- l'anse du sentier (monde) : de la face de la falaise jusqu'à xFond (côté extérieur), de zMin à zMax
+	local CREUX = nil
+	if coffre then
+		local fond = coffre.X * SX + DEMI + 2.5
+		local zA = coffre.Z - SENS * (DEMI + 2.5)
+		local zB = coffre.Z + SENS * (DEMI + 2.5)
+		for _, mk in ipairs(marches) do
+			fond = math.max(fond, mk.x * SX + COTE / 2 + 2.5)
+		end
+		if marches[1] then
+			zB = marches[1].z + SENS * (COTE / 2 + 7) -- place pour le panneau et les torches du pied
+		end
+		CREUX = { fond = fond, zMin = math.min(zA, zB), zMax = math.max(zA, zB) }
+	end
+	local RAMPE = 12 -- la paroi de l'anse rejoint la falaise normale sur 12 studs
 
 	-- ===== 1. plateforme du coffre (dessus exactement à Plan.coffre.Y) =====
 	local function construirePlateforme()
+		if not coffre then
+			return
+		end
 		local m = Outils.modele(dossier, "PlateformeCoffre")
 		local cx, cz, haut = coffre.X, coffre.Z, coffre.Y
 
@@ -141,6 +212,12 @@ function M.construire(ctx)
 		}, 0.4, POUTRE)
 		if dalle then
 			m.PrimaryPart = dalle
+			-- quelques paillettes dorées qui montent de la plateforme : on la repère d'en bas
+			particules(dalle, {
+				nom = "Paillettes", rate = 3, vie = { 1.5, 2.5 }, vitesse = { 1.5, 3 },
+				angle = Vector2.new(40, 40), couleur = Charte.dore, couleur2 = Charte.gemme, taille = 0.35,
+				acceleration = Vector3.new(0, 0.6, 0),
+			})
 			-- étiquette géante flottante, lisible de loin (et sur mobile)
 			if Style and Style.etiquette then
 				Style.etiquette(dalle, {
@@ -243,25 +320,17 @@ function M.construire(ctx)
 	-- ===== 2. sentier d'escalade : rochers d'ardoise et marches en planches, montées <= MONTEE, écarts <= ECART =====
 	local premiereMarche = nil
 	local function construireSentier()
-		local m = Outils.modele(dossier, "Sentier")
-		local cx, cz, haut = coffre.X, coffre.Z, coffre.Y
-		local nbMarches = math.ceil(haut / MONTEE) - 1
-		if nbMarches < 1 then
-			premiereMarche = Vector3.new(cx, 0, cz + SENS * (DEMI + 4))
+		if not coffre then
 			return
 		end
-		local montee = haut / (nbMarches + 1)
-		local cote = 4.5
-		local pas = cote + ECART
-		for k = 1, nbMarches do
-			local rang = nbMarches - k -- 0 pour la marche la plus haute (au bord de la plateforme)
-			local z = cz + SENS * (DEMI + ECART + cote / 2 + rang * pas)
-			-- zigzag léger vers la falaise pour un air naturel
-			local x = cx + SX * 0.5
-			if rang % 2 == 1 then
-				x = cx + SX * 3
-			end
-			local dessus = k * montee
+		local m = Outils.modele(dossier, "Sentier")
+		if #marches < 1 then
+			premiereMarche = Vector3.new(coffre.X, 0, coffre.Z + SENS * (DEMI + 4))
+			return
+		end
+		local cote = COTE
+		for k, mk in ipairs(marches) do
+			local x, z, dessus = mk.x, mk.z, mk.dessus
 			local rot = CFrame.Angles(0, math.rad(rng:NextNumber(-6, 6)), 0)
 			if k % 2 == 1 then
 				-- rocher d'ardoise aux arêtes arrondies, mousse qui déborde côté falaise
@@ -389,6 +458,12 @@ function M.construire(ctx)
 			if flamme then
 				Outils.animer(flamme, "pulse", 1.4 + i * 0.2)
 				Outils.lumiere(flamme, { Range = 14, Brightness = 1.4, Color = FLAMME })
+				-- quelques braises qui s'envolent
+				particules(flamme, {
+					nom = "Braises", rate = 4, vie = { 0.6, 1.2 }, vitesse = { 1.5, 3 },
+					angle = Vector2.new(15, 15), couleur = FLAMME, couleur2 = Charte.dore, taille = 0.25,
+					acceleration = Vector3.new(0, 2, 0),
+				})
 			end
 		end
 	end
@@ -478,8 +553,36 @@ function M.construire(ctx)
 		local dc = (cp - bande.avant) * bande.sens
 		return math.max(0, dc + math.sqrt(R * R - da * da))
 	end
-	-- une boule de rayon r posée en pos reste-t-elle hors du disque du volcan ?
+	-- profondeur minimale d'une tranche [s0, s1] pour laisser libre l'anse du sentier (falaise du côté du coffre),
+	-- avec un raccord progressif (RAMPE) de part et d'autre
+	local function creux(bande, s0, s1)
+		if not CREUX or bande.axe ~= "z" or bande.sens ~= SX then
+			return 0
+		end
+		local da = 0
+		if s1 < CREUX.zMin then
+			da = CREUX.zMin - s1
+		elseif s0 > CREUX.zMax then
+			da = s0 - CREUX.zMax
+		end
+		if da >= RAMPE then
+			return 0
+		end
+		local plein = CREUX.fond - bande.avant * bande.sens
+		local k = 1 - da / RAMPE
+		return math.max(0, plein * k * k * (3 - 2 * k))
+	end
+	-- une boule de rayon r posée en pos reste-t-elle hors du disque du volcan et de l'anse du sentier ?
 	local function libre(pos, r)
+		if CREUX then
+			local xIn = pos.X * SX
+			local xMin = CREUX.fond - 40
+			local dx = math.max(0, xMin - xIn, xIn - CREUX.fond)
+			local dz = math.max(0, CREUX.zMin - pos.Z, pos.Z - CREUX.zMax)
+			if math.sqrt(dx * dx + dz * dz) < r + 3 then
+				return false
+			end
+		end
 		if not VOLCAN_OK then
 			return true
 		end
@@ -515,7 +618,14 @@ function M.construire(ctx)
 		local liste = {}
 		for i = 1, n do
 			local s0 = a0 + (i - 1) * l
-			liste[i] = { a0 = s0, a1 = s0 + l, a = s0 + l / 2, l = l, vmin = horsVolcan(bande, s0 - 1, s0 + l + 1, 0.5) }
+			local c = creux(bande, s0 - 1, s0 + l + 1)
+			local vmin = math.max(horsVolcan(bande, s0 - 1, s0 + l + 1, 0.5), c)
+			-- fond : profondeur où s'arrête le gradin (reculé quand la face recule, sans sortir de la bande)
+			local fond = bande.arriere
+			if vmin > 0 then
+				fond = math.min(bande.profondeur - 1, math.max(bande.arriere, vmin + 7))
+			end
+			liste[i] = { a0 = s0, a1 = s0 + l, a = s0 + l / 2, l = l, vmin = vmin, creux = c, fond = fond }
 		end
 		return liste
 	end
@@ -539,16 +649,21 @@ function M.construire(ctx)
 			end
 			local y = math.max(yPied + 4, o.hauteur(s.a))
 			y = math.min(PLAFOND, y)
-			local pied = math.max(s.vmin, math.min(o.dMax, math.max(dMin, o.dBase + o.bruitD(s.a))))
-			local arete = math.min(pied + rng:NextNumber(3, 5), AR - 1)
+			local fond = s.fond or AR
+			local dMax = math.max(o.dMax, s.vmin)
+			local pied = math.max(s.vmin, math.min(dMax, math.max(dMin, o.dBase + o.bruitD(s.a))))
+			local arete = math.max(pied + 1, math.min(pied + rng:NextNumber(3, 5), fond - 1))
 			local yBas = yPied - 4
 			local angle = rng:NextNumber(-0.14, 0.14)
+			if s.creux > 0 then
+				angle = angle * 0.4 -- paroi de l'anse : presque droite, rien ne déborde sur le sentier
+			end
 			-- pente avant et premier mètre de roche : tournés autour de l'arête
 			penteT(bande, s.a, s.l + RECOUVRE, arete, pied, arete, yBas, y, angle, o.materiau)
 			blocT(bande, s.a, s.l + RECOUVRE, arete, arete, arete + 4, yBas, y, angle, o.materiau)
 			-- le reste du gradin, droit (aucune fente entre tranches), puis l'herbe en retrait de l'arête
-			blocT(bande, s.a, s.l + 0.1, 0, arete + 3, AR, yBas, y, 0, o.materiau)
-			blocT(bande, s.a, s.l + 0.1, 0, arete + 1, AR, y - HERBE_T, y + 0.1, 0, herbe)
+			blocT(bande, s.a, s.l + 0.1, 0, arete + 3, fond, yBas, y, 0, o.materiau)
+			blocT(bande, s.a, s.l + 0.1, 0, arete + 1, fond, y - HERBE_T, y + 0.1, 0, herbe)
 			res[i] = { a0 = s.a0, a1 = s.a1, d = arete, pied = pied, y = y, yBas = yBas, yPied = yPied, angle = angle }
 		end
 
@@ -559,14 +674,18 @@ function M.construire(ctx)
 			for g = 1, #tr, 3 do
 				local g1 = math.min(#tr, g + 2)
 				local yMin = math.huge
+				local dDos = AR - 0.5
 				for i = g, g1 do
 					yMin = math.min(yMin, res[i].y)
+					dDos = math.max(dDos, tr[i].vmin + 1) -- jamais devant la paroi de l'anse
 				end
 				local aC = (tr[g].a0 + tr[g1].a1) / 2
 				local larg = tr[g1].a1 - tr[g].a0 + 0.1
 				local yDos = math.max(6, math.min(yMin - 3, 17)) -- rejoint le pied de l'arrière-pays (≈ 17)
-				blocT(bande, aC, larg, 0, AR - 0.5, D, -4, yDos, 0, o.materiau)
-				penteT(bande, aC, larg, 0, AR - 0.5, D, yDos - 0.5, yMin, 0, o.materiau, true)
+				if D - dDos >= 1 then
+					blocT(bande, aC, larg, 0, dDos, D, -4, yDos, 0, o.materiau)
+					penteT(bande, aC, larg, 0, dDos, D, yDos - 0.5, yMin, 0, o.materiau, true)
+				end
 			end
 		end
 
@@ -607,6 +726,10 @@ function M.construire(ctx)
 		for _, s in ipairs(tr) do
 			if s.vmin > 0 then
 				proche = true
+			end
+			-- sol d'herbe de l'anse (au-delà de l'herbe du Sol), posé avant la roche
+			if s.creux > 0 then
+				blocT(bande, s.a, s.l + 0.1, 0, 0, s.creux + 1, -4, 0, 0, Mat.Grass)
 			end
 		end
 
@@ -902,16 +1025,41 @@ function M.construire(ctx)
 		end
 	end
 
-	-- profondeur 32 (Est, Ouest, Nord) et 50 (Sud) : la roche couvre l'herbe du Sol jusqu'à ±200 ;
-	-- Est/Ouest vont de z -200 à 200 et Nord/Sud débordent à |x| = 176 pour fermer les coins.
-	local BANDES = {
-		{ nom = "FalaiseEst", axe = "z", avant = 168, sens = 1, profondeur = 32, a0 = -200, a1 = 200, hMin = HAUTEUR_MIN + 2, hMax = HAUTEUR_MAX },
-		{ nom = "FalaiseOuest", axe = "z", avant = -168, sens = -1, profondeur = 32, a0 = -200, a1 = 200, hMin = HAUTEUR_MIN + 2, hMax = HAUTEUR_MAX },
-		{ nom = "FalaiseNord", axe = "x", avant = -168, sens = -1, profondeur = 32, a0 = -176, a1 = 176, hMin = HAUTEUR_MIN + 4, hMax = HAUTEUR_MAX },
-		{ nom = "FalaiseSud", axe = "x", avant = 150, sens = 1, profondeur = 50, a0 = -176, a1 = 176, hMin = HAUTEUR_MIN, hMax = math.max(HAUTEUR_MIN, HAUTEUR_MAX - 6) },
-	}
+	-- les 4 bandes de Plan.falaises : face tournée vers le monde, profondeur jusqu'aux murs invisibles.
+	-- Est/Ouest couvrent toute leur longueur (coins compris) ; Nord/Sud débordent de 4 studs dans Est/Ouest
+	-- pour fermer les coins sans fente.
+	local F = Plan.falaises or {}
+	local BANDES = {}
+	if F.est then
+		table.insert(BANDES, { nom = "FalaiseEst", axe = "z", avant = F.est.xMin, sens = 1, profondeur = F.est.xMax - F.est.xMin,
+			a0 = F.est.zMin, a1 = F.est.zMax, hMin = HAUTEUR_MIN + 2, hMax = HAUTEUR_MAX })
+	end
+	if F.ouest then
+		table.insert(BANDES, { nom = "FalaiseOuest", axe = "z", avant = F.ouest.xMax, sens = -1, profondeur = F.ouest.xMax - F.ouest.xMin,
+			a0 = F.ouest.zMin, a1 = F.ouest.zMax, hMin = HAUTEUR_MIN + 2, hMax = HAUTEUR_MAX })
+	end
+	local function etendueX(b)
+		local x0, x1 = b.xMin, b.xMax
+		if F.ouest then
+			x0 = math.max(x0, F.ouest.xMax - 4)
+		end
+		if F.est then
+			x1 = math.min(x1, F.est.xMin + 4)
+		end
+		return x0, x1
+	end
+	if F.nord then
+		local x0, x1 = etendueX(F.nord)
+		table.insert(BANDES, { nom = "FalaiseNord", axe = "x", avant = F.nord.zMax, sens = -1, profondeur = F.nord.zMax - F.nord.zMin,
+			a0 = x0, a1 = x1, hMin = HAUTEUR_MIN + 4, hMax = HAUTEUR_MAX })
+	end
+	if F.sud then
+		local x0, x1 = etendueX(F.sud)
+		table.insert(BANDES, { nom = "FalaiseSud", axe = "x", avant = F.sud.zMin, sens = 1, profondeur = F.sud.zMax - F.sud.zMin,
+			a0 = x0, a1 = x1, hMin = HAUTEUR_MIN, hMax = math.max(HAUTEUR_MIN, HAUTEUR_MAX - 6) })
+	end
 	for _, bande in ipairs(BANDES) do
-		bande.arriere = bande.profondeur - 8
+		bande.arriere = math.max(14, bande.profondeur - 8)
 	end
 
 	local function construireBande(bande)
@@ -940,10 +1088,11 @@ function M.construire(ctx)
 			local h = math.floor(brut[i] * 0.5 + (g + d) * 0.25 + 0.5)
 			local h0 = h
 			-- falaise haute derrière la plateforme du coffre, et assez haute pour la cascade de la rivière
-			if bande.axe == "z" and signe(bande.avant) == SX and a1 > coffre.Z - 16 and a0 < coffre.Z + 16 then
+			if coffre and bande.axe == "z" and bande.sens == SX and a1 > coffre.Z - 16 and a0 < coffre.Z + 16 then
 				h = math.max(h, math.floor(coffre.Y + 10))
 			end
-			if bande.nom == "FalaiseEst" and a1 > 129 and a0 < 147 then
+			local riv = Plan.riviere
+			if riv and bande.nom == "FalaiseEst" and riv.zMin and a1 > riv.zMin - 4 and a0 < riv.zMax + 4 then
 				h = math.max(h, 27)
 			end
 			-- derrière le Volcan : un mur de roche haut (30 studs et plus) qui ferme l'horizon
@@ -968,14 +1117,18 @@ function M.construire(ctx)
 		end
 	end
 
-	-- ===== 4. arrière-pays : collines de roche hors des murs invisibles (de 200 à 240), l'horizon est toujours de la roche =====
+	-- ===== 4. arrière-pays : collines de roche derrière les murs invisibles (40 studs), l'horizon est toujours de la roche =====
 	local function construireArrierePays()
 		local PROF = 40
+		if not (F.est and F.ouest and F.nord and F.sud) then
+			return
+		end
+		local xE, xO, zN, zS = F.est.xMax, F.ouest.xMin, F.nord.zMin, F.sud.zMax
 		local cotes = {
-			{ axe = "z", avant = 200, sens = 1, a0 = -240, a1 = 240 },
-			{ axe = "z", avant = -200, sens = -1, a0 = -240, a1 = 240 },
-			{ axe = "x", avant = -200, sens = -1, a0 = -200, a1 = 200 },
-			{ axe = "x", avant = 200, sens = 1, a0 = -200, a1 = 200 },
+			{ axe = "z", avant = xE, sens = 1, a0 = zN - PROF, a1 = zS + PROF },
+			{ axe = "z", avant = xO, sens = -1, a0 = zN - PROF, a1 = zS + PROF },
+			{ axe = "x", avant = zN, sens = -1, a0 = xO, a1 = xE },
+			{ axe = "x", avant = zS, sens = 1, a0 = xO, a1 = xE },
 		}
 		for _, bande in ipairs(cotes) do
 			-- une seule rampe de roche par côté (pas de marches ni de dents de scie), de 18 à 42 studs vers l'extérieur

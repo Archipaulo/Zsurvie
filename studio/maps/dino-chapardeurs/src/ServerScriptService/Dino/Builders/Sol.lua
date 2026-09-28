@@ -1,46 +1,49 @@
--- Constructeur Sol (version 2, STYLE.md §4) : le sol de tout le monde en TERRAIN Roblox.
--- Herbe Grass vert vif cartoon (dessus exactement à Y = 0, épaisseur 8, brins d'herbe activés),
--- plaques d'herbe touffue (LeafyGrass) en périphérie, terre battue (Ground) sous les bâtiments,
--- allées de sable (Sand) au ras de l'herbe, calées sur la grille de 4 studs du terrain :
--- promenade le long du Tapis, seuils des Bases, couloirs entre les Bases, traverses, parvis de
--- la Place, du Cratère, de la Nurserie et de la Fin du tapis, liens vers Comptoir et Autel, plages
--- de la rivière. Bordures de galets (parts Cobblestone, dessus à 0,3) le long des allées,
--- quelques galets sur la plage et des fleurs plates sur l'herbe touffue. Murs invisibles au bord.
+-- Constructeur Sol (plan v2 « plus d'air », STYLE.md §4) : le sol de tout Plan.monde en TERRAIN Roblox.
+-- Herbe Grass vert vif (dessus à Y = 0, brins d'herbe activés), sous-bois d'herbe touffue (LeafyGrass) sous
+-- les jungles et plaques touffues fleuries en périphérie, terre battue (Ground) sous les bâtiments.
+-- Réseau de chemins de sable (Sand) au ras de l'herbe, tout calculé depuis Plan :
+--   promenades de part et d'autre du Tapis sur toute sa longueur, terminées en demi-lune devant la Nurserie
+--   et la Grande Porte ; allées entre les Bases (Plan.allees) jusqu'aux chemins de ronde derrière les Bases ;
+--   contre-allées le long des Bases extrêmes ; liaison Tapis <-> Place par l'allée x = 0 ; anneau de la Place,
+--   liens vers le Comptoir et l'Autel ; parvis du Cratère ; sentier vers la rivière et ses plages.
+-- Sentiers de terre (Ground) avec pas japonais vers le Volcan et vers les plages.
+-- Bordures de galets posées automatiquement là où un chemin de sable touche l'herbe (ouvertures aux croisements).
+-- Murs invisibles aux bords (Plan.monde.bord, bordNord, bordSud).
 local M = {}
 
--- réglages par défaut (surchargés par Equilibrage.sol s'il existe)
+-- réglages par défaut (surchargés par Equilibrage.sol s'il existe) : largeurs et marges, jamais de position
 local DEFAUTS = {
-	budget = 250,          -- parts au maximum pour ce constructeur
-	epaisseur = 8,         -- épaisseur du terrain d'herbe
-	marge = 10,            -- l'herbe dépasse les murs invisibles de cette marge
-	dessusAllee = 0.06,    -- dessus des allées (au ras de l'herbe)
-	dessusTerre = 0.04,    -- dessus de la terre battue sous les bâtiments
-	dessusTouffue = 0.02,  -- dessus des plaques d'herbe touffue
-	zPromenade = 12,       -- promenade de sable le long du Tapis : |z| <= zPromenade
-	xPromenade = 120,
-	demiCouloir = 4,       -- couloirs entre les Bases : c - 4 .. c + 4
-	couloirLoin = 72,      -- les couloirs rejoignent les traverses à |z| = 72
-	traverseLoin = 80,     -- traverses : 72 <= |z| <= 80
-	xTraverse = 60,
-	rayonParvis = 24,      -- parvis de sable autour de la Place
-	rayonParvisCratere = 20,
-	rayonParvisNurserie = 16,
-	demiLien = 4,          -- liens Place -> Comptoir et Place -> Autel
-	demiSeuil = 4,         -- seuils de sable devant l'entrée de chaque Base
-	zPlageSud = 122,       -- plages : de zPlageSud au bord de la rivière, et de l'autre rive à zPlageNord
-	zPlageNord = 152,
+	budget = 340,           -- parts au maximum pour ce constructeur
+	epaisseur = 8,          -- épaisseur du terrain d'herbe
+	marge = 12,             -- l'herbe dépasse les murs invisibles de cette marge
+	dessusAllee = 0.06,     -- dessus des allées de sable (au ras de l'herbe)
+	dessusSentier = 0.05,   -- dessus des sentiers de terre
+	dessusTerre = 0.04,     -- dessus de la terre battue sous les bâtiments
+	dessusTouffue = 0.02,   -- dessus des plaques d'herbe touffue
+	margeJungle = 2,        -- la demi-lune des bouts du Tapis s'arrête à cette distance des jungles
+	ecartRonde = 3,         -- herbe entre le fond des Bases et le chemin de ronde
+	largeurRonde = 8,       -- chemin de ronde derrière les Bases
+	ecartContre = 2,        -- herbe entre les Bases extrêmes et la contre-allée
+	largeurContre = 10,     -- contre-allées le long des Bases extrêmes
+	anneauPlace = 6,        -- l'anneau de sable dépasse la Place de ... studs
+	anneauCratere = 6,      -- parvis du Cratère : rayon + ...
+	demiLien = 6,           -- liens Place -> Comptoir / Autel, Cratère -> chemin de ronde
+	margeBatiment = 3,      -- sable autour du Comptoir et de l'Autel
+	demiRiviere = 5,        -- sentier Place -> rivière
+	plage = 6,              -- plage nord de la rivière (vers la Place)
+	demiSentier = 3.5,      -- sentiers de terre (Volcan, plages)
 	largeurBordure = 1,
-	hauteurBordure = 0.5,  -- enfoncée de 0,2 : dessus à 0,3
-	segment = 24,          -- longueur maximale d'une pierre de bordure droite
-	segmentArc = 8,        -- corde maximale d'une pierre de bordure en arc
-	jointure = 0.25,       -- petit joint entre deux pierres
-	hauteurMur = 60,
+	hauteurBordure = 0.5,   -- enfoncée de 0,2 : dessus à 0,3
+	pas = 1,                -- pas d'échantillonnage des bords de chemin
+	segment = 16,           -- longueur maximale d'une pierre de bordure droite
+	segmentArc = 7,         -- corde maximale d'une pierre de bordure en arc
+	jointure = 0.3,         -- petit joint entre deux pierres
+	hauteurMur = 80,
 	epaisseurMur = 4,
-	touffues = 18,         -- plaques d'herbe touffue en périphérie
-	fleursParPlaque = 2,   -- de 1 à fleursParPlaque + 1 fleurs par plaque
-	galetsPlage = 26,
-	xPeripherie = 110,     -- périphérie : au-delà de |x|
-	zPeripherieNord = -92, -- ou au nord de cette ligne
+	touffues = 22,          -- plaques d'herbe touffue en périphérie
+	fleursParPlaque = 2,    -- de 1 à fleursParPlaque + 1 fleurs par plaque
+	galetsPlage = 24,
+	pasJaponais = 4.5,      -- écart entre deux pas japonais sur un sentier
 	graine = 2026,
 }
 
@@ -58,7 +61,7 @@ function M.construire(ctx)
 	local Outils = ctx.Outils
 	local Plan = ctx.Plan
 	local dossier = ctx.dossier
-	if not (Charte and Outils and Plan and dossier) then
+	if not (Charte and Outils and Plan and dossier and Plan.monde) then
 		return
 	end
 
@@ -83,56 +86,278 @@ function M.construire(ctx)
 
 	-- ===== palette =====
 	local herbe = hex("6BD64A", Charte.herbe)
-	local touffue = herbe:Lerp(Charte.jungle, 0.45)
-	local terre = Charte.terre:Lerp(Charte.sable, 0.45)
-	local sable = Charte.sable:Lerp(Charte.terre, 0.08)
+	local touffue = herbe:Lerp(Charte.jungle, 0.5)
+	local terre = Charte.terre:Lerp(Charte.sable, 0.35)
+	local sable = Charte.sable:Lerp(Charte.terre, 0.06)
 	local pierre = Charte.pierre:Lerp(Charte.creme, 0.5)
-	local teintesPierre = { pierre, pierre:Lerp(Charte.creme, 0.18), pierre:Lerp(Charte.ombre(pierre), 0.35) }
-
-	local monde = Plan.monde
-	local bord = monde.bord or 190
-	local EP = reglage(ctx, "epaisseur")
-	local marge = reglage(ctx, "marge")
-	local couloirs = (Plan.decor and Plan.decor.couloirs) or { Vector3.new(-56, 0, 0), Vector3.new(0, 0, 0), Vector3.new(56, 0, 0) }
-	local place = Plan.place
-	local comptoir = Plan.comptoir
-	local autel = Plan.autel
-	local cratere = Plan.cratere
+	local teintesPierre = { pierre, pierre:Lerp(Charte.creme, 0.2), pierre:Lerp(Charte.ombre(pierre), 0.4) }
 
 	local M_HERBE = Enum.Material.Grass
 	local M_TOUFFUE = Enum.Material.LeafyGrass
 	local M_TERRE = Enum.Material.Ground
 	local M_SABLE = Enum.Material.Sand
 
-	local terrainOk = Outils.terrainBloc ~= nil and Outils.terrainCylindre ~= nil
+	-- ===== lecture du Plan =====
+	local monde = Plan.monde
+	local bordX = monde.bord or math.max(math.abs(monde.min.X), math.abs(monde.max.X)) + 13
+	local bordN = monde.bordNord or (monde.min.Z - 13)
+	local bordS = monde.bordSud or (monde.max.Z + 13)
+	local tapis = Plan.tapis
+	local promenade = Plan.promenade or { zMin = (tapis and tapis.emprise) or 9.5, zMax = 27 }
+	local base = Plan.base or { largeur = 44, profondeur = 50 }
+	local bases = Plan.bases or {}
+	local allees = Plan.allees
+	local place = Plan.place
+	local comptoir = Plan.comptoir
+	local autel = Plan.autel
+	local cratere = Plan.cratere
+	local volcan = Plan.volcan
+	local riviere = Plan.riviere
+	local nurserie = Plan.nurserie
+	local finTapis = Plan.finTapis
+	local falaises = Plan.falaises or {}
+	local decor = Plan.decor or {}
+	local demiBX = base.largeur / 2
+	local demiBZ = base.profondeur / 2
 
-	-- remplissages au ras du sol : dessus à `dessus`, 4 studs d'épaisseur (une couche de voxels)
-	local function plaque(x0, x1, z0, z1, materiau, dessus)
-		if x1 - x0 <= 0 or z1 - z0 <= 0 then
-			return
+	-- limites de la zone jouable (intérieur des falaises)
+	local xJeuMin = (falaises.ouest and falaises.ouest.xMax) or monde.min.X
+	local xJeuMax = (falaises.est and falaises.est.xMin) or monde.max.X
+	local zJeuMin = (falaises.nord and falaises.nord.zMax) or monde.min.Z
+	local zJeuMax = (falaises.sud and falaises.sud.zMin) or monde.max.Z
+
+	-- étendue des Bases (x) et de leurs rangées (|z|)
+	local xBasesMax, zBasesFond = 0, promenade.zMax + base.profondeur
+	for _, b in ipairs(bases) do
+		xBasesMax = math.max(xBasesMax, math.abs(b.centre.X) + demiBX)
+		zBasesFond = math.max(zBasesFond, math.abs(b.centre.Z) + demiBZ)
+	end
+
+	-- ===== les zones : chemins (sable / terre) et obstacles (bâtiments, eau, falaises) =====
+	-- rect : {x0, x1, z0, z1} ; disque : {x, z, r} ; ruban : segment (ax, az) -> (bx, bz) de demi-largeur l, bouts ronds
+	local chemins = {}   -- dans l'ordre de remplissage
+	local obstacles = {}
+
+	local function rect(x0, x1, z0, z1, mat, bordure)
+		local z = { g = "rect", x0 = math.min(x0, x1), x1 = math.max(x0, x1), z0 = math.min(z0, z1), z1 = math.max(z0, z1), mat = mat, bordure = bordure }
+		return z
+	end
+	local function disque(x, z, r, mat, bordure)
+		return { g = "disque", x = x, z = z, r = r, mat = mat, bordure = bordure }
+	end
+	local function ruban(ax, az, bx, bz, l, mat)
+		return { g = "ruban", ax = ax, az = az, bx = bx, bz = bz, l = l, mat = mat, bordure = false }
+	end
+	local function chemin(zone)
+		table.insert(chemins, zone)
+		return zone
+	end
+	local function obstacle(zone)
+		table.insert(obstacles, zone)
+		return zone
+	end
+
+	-- vrai si (x, z) est dans la zone agrandie de m (m < 0 : rétrécie)
+	local function dedans(zone, x, z, m)
+		m = m or 0
+		if zone.g == "rect" then
+			return x >= zone.x0 - m and x <= zone.x1 + m and z >= zone.z0 - m and z <= zone.z1 + m
+		elseif zone.g == "disque" then
+			local dx, dz = x - zone.x, z - zone.z
+			local r = zone.r + m
+			return r > 0 and dx * dx + dz * dz <= r * r
+		else
+			local vx, vz = zone.bx - zone.ax, zone.bz - zone.az
+			local L2 = vx * vx + vz * vz
+			local t = 0
+			if L2 > 0 then
+				t = math.max(0, math.min(1, ((x - zone.ax) * vx + (z - zone.az) * vz) / L2))
+			end
+			local px, pz = zone.ax + vx * t - x, zone.az + vz * t - z
+			local r = zone.l + m
+			return r > 0 and px * px + pz * pz <= r * r
 		end
-		local h = 4 + dessus
-		Outils.terrainBloc(CFrame.new((x0 + x1) / 2, dessus - h / 2, (z0 + z1) / 2), Vector3.new(x1 - x0, h, z1 - z0), materiau)
 	end
-	local function disque(x, z, rayon, materiau, dessus)
-		local h = 4 + dessus
-		Outils.terrainCylindre(CFrame.new(x, dessus - h / 2, z), h, rayon, materiau)
+	local function dansListe(liste, x, z, m, sauf)
+		for _, zone in ipairs(liste) do
+			if zone ~= sauf and dedans(zone, x, z, m) then
+				return true
+			end
+		end
+		return false
 	end
 
-	-- ===== 1. le terrain =====
+	-- --- obstacles ---
+	for _, b in ipairs(bases) do
+		obstacle(rect(b.centre.X - demiBX, b.centre.X + demiBX, b.centre.Z - demiBZ, b.centre.Z + demiBZ))
+	end
+	if tapis then
+		obstacle(rect(tapis.debut.X, tapis.fin.X, -tapis.emprise, tapis.emprise))
+	end
+	if nurserie then obstacle(disque(nurserie.centre.X, nurserie.centre.Z, nurserie.rayon)) end
+	if finTapis then obstacle(disque(finTapis.centre.X, finTapis.centre.Z, finTapis.rayon)) end
+	if place then obstacle(disque(place.centre.X, place.centre.Z, place.rayon)) end
+	if comptoir then
+		obstacle(rect(comptoir.centre.X - comptoir.taille.X / 2, comptoir.centre.X + comptoir.taille.X / 2,
+			comptoir.centre.Z - comptoir.taille.Z / 2, comptoir.centre.Z + comptoir.taille.Z / 2))
+	end
+	if autel then obstacle(disque(autel.centre.X, autel.centre.Z, autel.rayon)) end
+	if cratere then obstacle(disque(cratere.centre.X, cratere.centre.Z, cratere.rayon)) end
+	if volcan then obstacle(disque(volcan.centre.X, volcan.centre.Z, volcan.rayon)) end
+	if riviere then obstacle(rect(riviere.xMin, riviere.xMax, riviere.zMin, riviere.zMax)) end
+	for _, f in pairs(falaises) do
+		obstacle(rect(f.xMin, f.xMax, f.zMin, f.zMax))
+	end
+
+	-- --- sentiers de terre (remplis en premier : le sable les recouvre aux jonctions) ---
+	local dSentier = reglage(ctx, "demiSentier")
+	local sentiers = {}
+	local zRondeA = zBasesFond + reglage(ctx, "ecartRonde")
+	local zRondeB = zRondeA + reglage(ctx, "largeurRonde")
+	local xContreA = xBasesMax + reglage(ctx, "ecartContre")
+	local xContreB = xContreA + reglage(ctx, "largeurContre")
+	local xContre = (xContreA + xContreB) / 2
+	local rCratere = 0
+	if cratere then
+		rCratere = cratere.rayon + reglage(ctx, "anneauCratere")
+	end
+	-- vers le pied du Volcan, depuis le parvis du Cratère
+	if cratere and volcan then
+		local zA = cratere.centre.Z - rCratere + 2
+		local zB = volcan.centre.Z + volcan.rayon
+		if zA > zB then
+			table.insert(sentiers, chemin(ruban(cratere.centre.X, zA, volcan.centre.X, zB, dSentier, M_TERRE)))
+		end
+	end
+	-- vers les plages : des coins sud du chemin de ronde, en biais vers la rivière
+	local zPlageA, zPlageB
+	if riviere then
+		zPlageA = riviere.zMin - reglage(ctx, "plage")
+		zPlageB = riviere.zMin + 2
+		if decor.jungleOuest then
+			zPlageA = math.min(zPlageA, decor.jungleOuest.max.Z)
+		end
+		for _, s in ipairs({ -1, 1 }) do
+			local ax, az = s * xContre, (zRondeA + zRondeB) / 2
+			local bx = s * math.min(xContreB + (zPlageA - az) * 0.35, xJeuMax - 30)
+			table.insert(sentiers, chemin(ruban(ax, az, bx, zPlageA + 1, dSentier, M_TERRE)))
+		end
+	end
+
+	-- --- chemins de sable (bordés de galets) ---
+	-- promenades des deux côtés du Tapis (et dessous), en « stade » : demi-lunes devant Nurserie et Grande Porte
+	local zP = promenade.zMax
+	local xBout = xContreB + zP
+	if nurserie then xBout = math.abs(nurserie.centre.X) end
+	if finTapis then xBout = math.max(xBout, math.abs(finTapis.centre.X)) end
+	local margeJ = reglage(ctx, "margeJungle")
+	if decor.jungleOuest then
+		xBout = math.min(xBout, math.abs(decor.jungleOuest.max.X) - margeJ - zP)
+	end
+	if decor.jungleEst then
+		xBout = math.min(xBout, math.abs(decor.jungleEst.min.X) - margeJ - zP)
+	end
+	chemin(rect(-xBout, xBout, -zP, zP, M_SABLE, true))
+	chemin(disque(-xBout, 0, zP, M_SABLE, true))
+	chemin(disque(xBout, 0, zP, M_SABLE, true))
+
+	-- allées entre les Bases, de la promenade au chemin de ronde (nord et sud)
+	if allees then
+		for _, ax in ipairs(allees.x) do
+			local l = allees.largeur / 2
+			chemin(rect(ax - l, ax + l, allees.zMin - 1, zRondeA + 1, M_SABLE, true))
+			chemin(rect(ax - l, ax + l, -zRondeA - 1, -allees.zMin + 1, M_SABLE, true))
+		end
+	end
+	-- chemins de ronde derrière les Bases et contre-allées le long des Bases extrêmes
+	chemin(rect(-xContreB, xContreB, zRondeA, zRondeB, M_SABLE, true))
+	chemin(rect(-xContreB, xContreB, -zRondeB, -zRondeA, M_SABLE, true))
+	for _, s in ipairs({ -1, 1 }) do
+		chemin(rect(s * xContreA, s * xContreB, zP - 1, zRondeA + 1, M_SABLE, true))
+		chemin(rect(s * xContreA, s * xContreB, -zRondeA - 1, -zP + 1, M_SABLE, true))
+	end
+
+	-- la Place : anneau, liens vers le Comptoir et l'Autel, sentier vers la rivière
+	local dLien = reglage(ctx, "demiLien")
+	local mBat = reglage(ctx, "margeBatiment")
+	local rPlace = 0
+	if place then
+		rPlace = place.rayon + reglage(ctx, "anneauPlace")
+		chemin(disque(place.centre.X, place.centre.Z, rPlace, M_SABLE, true))
+		-- l'allée x = 0 rejoint déjà le chemin de ronde ; si l'anneau ne le touche pas, on prolonge
+		if place.centre.Z - rPlace > zRondeB then
+			chemin(rect(place.centre.X - dLien, place.centre.X + dLien, zRondeB - 1, place.centre.Z - rPlace + 2, M_SABLE, true))
+		end
+		if comptoir then
+			local cx = comptoir.centre.X + comptoir.taille.X / 2
+			chemin(rect(cx - 1, place.centre.X - rPlace + 3, comptoir.centre.Z - dLien, comptoir.centre.Z + dLien, M_SABLE, true))
+			chemin(rect(comptoir.centre.X - comptoir.taille.X / 2 - mBat, comptoir.centre.X + comptoir.taille.X / 2 + mBat,
+				comptoir.centre.Z - comptoir.taille.Z / 2 - mBat, comptoir.centre.Z + comptoir.taille.Z / 2 + mBat, M_SABLE, true))
+		end
+		if autel then
+			chemin(rect(place.centre.X + rPlace - 3, autel.centre.X - autel.rayon + 1, autel.centre.Z - dLien, autel.centre.Z + dLien, M_SABLE, true))
+			chemin(disque(autel.centre.X, autel.centre.Z, autel.rayon + mBat, M_SABLE, true))
+		end
+		if riviere then
+			local dR = reglage(ctx, "demiRiviere")
+			chemin(rect(place.centre.X - dR, place.centre.X + dR, place.centre.Z + rPlace - 3, zPlageA + 1, M_SABLE, true))
+		end
+	end
+	-- plages de la rivière (sans bordure : le sable se fond dans l'herbe)
+	if riviere then
+		chemin(rect(xJeuMin, xJeuMax, zPlageA, zPlageB, M_SABLE, false))
+		chemin(rect(xJeuMin, xJeuMax, riviere.zMax - 2, zJeuMax + 2, M_SABLE, false))
+	end
+	-- le Cratère : parvis relié au chemin de ronde nord
+	if cratere then
+		chemin(disque(cratere.centre.X, cratere.centre.Z, rCratere, M_SABLE, true))
+		local zHaut = cratere.centre.Z + rCratere - 2
+		if zHaut < -zRondeB then
+			chemin(rect(cratere.centre.X - dLien, cratere.centre.X + dLien, zHaut, -zRondeB + 1, M_SABLE, true))
+		end
+	end
+
+	-- ===== remplissages de terrain =====
+	local terrainOk = Outils.terrainBloc ~= nil and Outils.terrainCylindre ~= nil
+	local EP = reglage(ctx, "epaisseur")
+	local marge = reglage(ctx, "marge")
+
+	-- une couche au ras du sol : dessus à `dessus`, 4 studs d'épaisseur (une couche de voxels)
+	local function remplirZone(zone, materiau, dessus)
+		local h = 4 + dessus
+		local y = dessus - h / 2
+		if zone.g == "rect" then
+			if zone.x1 - zone.x0 > 0 and zone.z1 - zone.z0 > 0 then
+				Outils.terrainBloc(CFrame.new((zone.x0 + zone.x1) / 2, y, (zone.z0 + zone.z1) / 2), Vector3.new(zone.x1 - zone.x0, h, zone.z1 - zone.z0), materiau)
+			end
+		elseif zone.g == "disque" then
+			Outils.terrainCylindre(CFrame.new(zone.x, y, zone.z), h, zone.r, materiau)
+		else
+			local dx, dz = zone.bx - zone.ax, zone.bz - zone.az
+			local L = math.sqrt(dx * dx + dz * dz)
+			if L > 0 then
+				local a = math.atan2(dz, dx)
+				Outils.terrainBloc(CFrame.new((zone.ax + zone.bx) / 2, y, (zone.az + zone.bz) / 2) * CFrame.Angles(0, -a, 0), Vector3.new(L, h, 2 * zone.l), materiau)
+			end
+			Outils.terrainCylindre(CFrame.new(zone.ax, y, zone.az), h, zone.l, materiau)
+			Outils.terrainCylindre(CFrame.new(zone.bx, y, zone.bz), h, zone.l, materiau)
+		end
+	end
+
+	local alea = Outils.aleatoire(reglage(ctx, "graine"))
+
+	-- 1. l'herbe sur tout le monde, jusqu'au-delà des murs invisibles
 	local ok, err = pcall(function()
 		if not terrainOk then
-			-- Outils sans terrain : une seule dalle d'herbe de secours
 			part(Outils.bloc, dossier, {
 				Name = "SolSecours",
-				Size = Vector3.new(2 * bord, EP, 2 * bord),
-				CFrame = CFrame.new(0, -EP / 2, 0),
+				Size = Vector3.new(2 * bordX, EP, bordS - bordN),
+				CFrame = CFrame.new(0, -EP / 2, (bordN + bordS) / 2),
 				Color = herbe,
 				Material = Enum.Material.Grass,
 			})
 			return
 		end
-
 		Outils.couleurTerrain(M_HERBE, herbe)
 		Outils.couleurTerrain(M_TOUFFUE, touffue)
 		Outils.couleurTerrain(M_TERRE, terre)
@@ -140,29 +365,156 @@ function M.construire(ctx)
 		pcall(function()
 			workspace.Terrain.Decoration = true
 		end)
-
-		-- herbe sur tout le monde, jusqu'au-delà des murs invisibles
-		local xA = math.min(monde.min.X, -bord) - marge
-		local xB = math.max(monde.max.X, bord) + marge
-		local zA = math.min(monde.min.Z, -bord) - marge
-		local zB = math.max(monde.max.Z, bord) + marge
+		local xA, xB = -bordX - marge, bordX + marge
+		local zA, zB = bordN - marge, bordS + marge
 		Outils.terrainBloc(CFrame.new((xA + xB) / 2, -EP / 2, (zA + zB) / 2), Vector3.new(xB - xA, EP, zB - zA), M_HERBE)
 	end)
 	if not ok then
 		warn("[Dino] Sol, terrain : " .. tostring(err))
 	end
 
-	-- ===== 2. les murs invisibles =====
+	-- 2. sous-bois d'herbe touffue sous les jungles, au bord festonné
+	ok, err = pcall(function()
+		if not terrainOk then return end
+		local d = reglage(ctx, "dessusTouffue")
+		for _, nom in ipairs({ "jungleOuest", "jungleEst", "jungleNord" }) do
+			local j = decor[nom]
+			if j then
+				local zone = rect(j.min.X, j.max.X, j.min.Z, j.max.Z)
+				remplirZone(zone, M_TOUFFUE, d)
+				-- festons sur les bords tournés vers le centre du monde
+				local cx, cz = (j.min.X + j.max.X) / 2, (j.min.Z + j.max.Z) / 2
+				local bordsInt = {}
+				if math.abs(cx) > math.abs(cz) then
+					local xi = j.max.X
+					if cx > 0 then xi = j.min.X end
+					table.insert(bordsInt, { xi, j.min.Z, xi, j.max.Z })
+				else
+					table.insert(bordsInt, { j.min.X, j.max.Z, j.max.X, j.max.Z })
+				end
+				for _, b in ipairs(bordsInt) do
+					local long = math.sqrt((b[3] - b[1]) ^ 2 + (b[4] - b[2]) ^ 2)
+					local n = math.floor(long / 14)
+					for i = 1, n do
+						local t = (i - 0.5) / n
+						local x = b[1] + (b[3] - b[1]) * t + alea:NextNumber(-3, 3)
+						local z = b[2] + (b[4] - b[2]) * t + alea:NextNumber(-3, 3)
+						local r = alea:NextNumber(4, 8)
+						if not dansListe(chemins, x, z, r + 2) and not dansListe(obstacles, x, z, r) then
+							remplirZone(disque(x, z, r), M_TOUFFUE, d)
+						end
+					end
+				end
+			end
+		end
+	end)
+	if not ok then
+		warn("[Dino] Sol, sous-bois : " .. tostring(err))
+	end
+
+	-- une place est « libre » (herbe sans rien) si elle est dans la zone jouable, loin des chemins et des obstacles
+	local function libre(x, z, m)
+		m = m or 3
+		if x < xJeuMin + m or x > xJeuMax - m or z < zJeuMin + m or z > zJeuMax - m then return false end
+		if dansListe(chemins, x, z, m) then return false end
+		if dansListe(obstacles, x, z, m) then return false end
+		return true
+	end
+	-- la périphérie : hors du cœur de jeu (Bases, promenades, chemins de ronde)
+	local function peripherie(x, z)
+		return math.abs(x) > xContreB + 8 or math.abs(z) > zRondeB + 8
+	end
+
+	-- 3. plaques d'herbe touffue en périphérie (fleurs posées plus loin)
+	local plaques = {}
+	ok, err = pcall(function()
+		if not terrainOk then return end
+		local voulues = reglage(ctx, "touffues")
+		local d = reglage(ctx, "dessusTouffue")
+		local essais = 0
+		while #plaques < voulues and essais < 2000 do
+			essais = essais + 1
+			local x = alea:NextNumber(xJeuMin, xJeuMax)
+			local z = alea:NextNumber(zJeuMin, zJeuMax)
+			local r = alea:NextNumber(5, 11)
+			local bon = peripherie(x, z) and libre(x, z, r + 2)
+			if bon then
+				for _, p in ipairs(plaques) do
+					if (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z) < (p.r + r + 8) * (p.r + r + 8) then
+						bon = false
+						break
+					end
+				end
+			end
+			if bon then
+				remplirZone(disque(x, z, r), M_TOUFFUE, d)
+				-- une ou deux plaques satellites pour casser le rond
+				for _ = 1, alea:NextInteger(1, 2) do
+					local a = alea:NextNumber(0, 2 * math.pi)
+					local r2 = r * alea:NextNumber(0.4, 0.65)
+					local x2, z2 = x + math.cos(a) * r * 0.9, z + math.sin(a) * r * 0.9
+					if libre(x2, z2, r2 + 1) then
+						remplirZone(disque(x2, z2, r2), M_TOUFFUE, d)
+					end
+				end
+				table.insert(plaques, { x = x, z = z, r = r })
+			end
+		end
+	end)
+	if not ok then
+		warn("[Dino] Sol, herbe touffue : " .. tostring(err))
+	end
+
+	-- 4. les chemins : sentiers de terre puis allées de sable (dans l'ordre de la liste)
+	ok, err = pcall(function()
+		if not terrainOk then return end
+		local dA = reglage(ctx, "dessusAllee")
+		local dS = reglage(ctx, "dessusSentier")
+		for _, zone in ipairs(chemins) do
+			if zone.mat == M_TERRE then
+				remplirZone(zone, M_TERRE, dS)
+			else
+				remplirZone(zone, M_SABLE, dA)
+			end
+		end
+	end)
+	if not ok then
+		warn("[Dino] Sol, chemins : " .. tostring(err))
+	end
+
+	-- 5. terre battue sous les bâtiments (pas de brins d'herbe à travers les dalles)
+	ok, err = pcall(function()
+		if not terrainOk then return end
+		local d = reglage(ctx, "dessusTerre")
+		for _, b in ipairs(bases) do
+			local c = b.centre
+			remplirZone(rect(c.X - demiBX + 1, c.X + demiBX - 1, c.Z - demiBZ + 1, c.Z + demiBZ - 1), M_TERRE, d)
+		end
+		if comptoir then
+			local c, t = comptoir.centre, comptoir.taille
+			remplirZone(rect(c.X - t.X / 2 + 0.5, c.X + t.X / 2 - 0.5, c.Z - t.Z / 2 + 0.5, c.Z + t.Z / 2 - 0.5), M_TERRE, d)
+		end
+		if autel then
+			remplirZone(disque(autel.centre.X, autel.centre.Z, autel.rayon), M_TERRE, d)
+		end
+	end)
+	if not ok then
+		warn("[Dino] Sol, terre battue : " .. tostring(err))
+	end
+
+	-- 6. les murs invisibles
 	ok, err = pcall(function()
 		local murs = Outils.dossier(dossier, "Murs")
 		local H = reglage(ctx, "hauteurMur")
 		local e = reglage(ctx, "epaisseurMur")
-		local long = 2 * bord + 2 * e
+		local longX = 2 * bordX + 2 * e
+		local longZ = bordS - bordN + 2 * e
+		local zMilieu = (bordN + bordS) / 2
 		local defs = {
-			{ Vector3.new(e, H, long), Vector3.new(-bord - e / 2, H / 2, 0) },
-			{ Vector3.new(e, H, long), Vector3.new(bord + e / 2, H / 2, 0) },
-			{ Vector3.new(long, H, e), Vector3.new(0, H / 2, -bord - e / 2) },
-			{ Vector3.new(long, H, e), Vector3.new(0, H / 2, bord + e / 2) },
+			{ Vector3.new(e, H, longZ), Vector3.new(-bordX - e / 2, H / 2, zMilieu) },
+			{ Vector3.new(e, H, longZ), Vector3.new(bordX + e / 2, H / 2, zMilieu) },
+			{ Vector3.new(longX, H, e), Vector3.new(0, H / 2, bordN - e / 2) },
+			{ Vector3.new(longX, H, e), Vector3.new(0, H / 2, bordS + e / 2) },
 		}
 		for _, d in ipairs(defs) do
 			part(Outils.bloc, murs, {
@@ -181,182 +533,11 @@ function M.construire(ctx)
 		warn("[Dino] Sol, murs : " .. tostring(err))
 	end
 
-	-- ===== zones occupées (allées, bâtiments) : la périphérie décorée les évite =====
-	local zP = reglage(ctx, "zPromenade")
-	local xP = reglage(ctx, "xPromenade")
-	local dC = reglage(ctx, "demiCouloir")
-	local zCL = reglage(ctx, "couloirLoin")
-	local zTL = reglage(ctx, "traverseLoin")
-	local xT = reglage(ctx, "xTraverse")
-	local rParvis = reglage(ctx, "rayonParvis")
-	local rCratere = reglage(ctx, "rayonParvisCratere")
-	local rNurserie = reglage(ctx, "rayonParvisNurserie")
-	local dL = reglage(ctx, "demiLien")
-	local dS = reglage(ctx, "demiSeuil")
-	local zPlageSud = reglage(ctx, "zPlageSud")
-	local zPlageNord = reglage(ctx, "zPlageNord")
-	local zRivA, zRivB = 131, 145
-	if Plan.riviere then
-		zRivA = Plan.riviere.z - Plan.riviere.largeur / 2
-		zRivB = Plan.riviere.z + Plan.riviere.largeur / 2
-	end
-	local base = Plan.base
-	local demiBX = ((base and base.largeur) or 44) / 2
-	local demiBZ = ((base and base.profondeur) or 50) / 2
-
-	local function dansDisque(x, z, centre, rayon)
-		local dx, dz = x - centre.X, z - centre.Z
-		return dx * dx + dz * dz <= rayon * rayon
-	end
-
-	local function libre(x, z)
-		if math.abs(x) >= 186 or math.abs(z) >= 186 then return false end
-		if z > zPlageSud - 2 then return false end
-		if math.abs(z) <= zP + 3 and math.abs(x) <= xP + 3 then return false end
-		if Plan.nurserie and dansDisque(x, z, Plan.nurserie.centre, rNurserie + 3) then return false end
-		if Plan.finTapis and dansDisque(x, z, Plan.finTapis.centre, rNurserie + 3) then return false end
-		for _, b in ipairs(Plan.bases or {}) do
-			if math.abs(x - b.centre.X) <= demiBX + 3 and math.abs(z - b.centre.Z) <= demiBZ + 3 then return false end
-		end
-		for _, c in ipairs(couloirs) do
-			if math.abs(x - c.X) <= dC + 3 and math.abs(z) <= zTL + 3 then return false end
-		end
-		if math.abs(math.abs(z) - (zCL + zTL) / 2) <= (zTL - zCL) / 2 + 3 and math.abs(x) <= xT + 3 then return false end
-		if place and dansDisque(x, z, place.centre, rParvis + 4) then return false end
-		if cratere and dansDisque(x, z, cratere.centre, rCratere + 4) then return false end
-		if comptoir then
-			if math.abs(x - comptoir.centre.X) <= comptoir.taille.X / 2 + 4 and math.abs(z - comptoir.centre.Z) <= comptoir.taille.Z / 2 + 4 then return false end
-		end
-		if autel and dansDisque(x, z, autel.centre, autel.rayon + 4) then return false end
-		if Plan.volcan and dansDisque(x, z, Plan.volcan.centre, Plan.volcan.rayon + 8) then return false end
-		return true
-	end
-
-	local xPeri = reglage(ctx, "xPeripherie")
-	local zPeriNord = reglage(ctx, "zPeripherieNord")
-	local function peripherie(x, z)
-		return math.abs(x) >= xPeri or z <= zPeriNord
-	end
-
-	local alea = Outils.aleatoire(reglage(ctx, "graine"))
-
-	-- ===== 3. plaques d'herbe touffue en périphérie (et leurs fleurs, posées plus loin) =====
-	local plaques = {}
-	ok, err = pcall(function()
-		if not terrainOk then return end
-		local voulues = reglage(ctx, "touffues")
-		local dessus = reglage(ctx, "dessusTouffue")
-		local essais = 0
-		while #plaques < voulues and essais < 1500 do
-			essais = essais + 1
-			local x = alea:NextNumber(-184, 184)
-			local z = alea:NextNumber(-184, zPlageSud)
-			local r = alea:NextNumber(5, 11)
-			local bon = peripherie(x, z) and libre(x, z)
-				and libre(x + r, z) and libre(x - r, z) and libre(x, z + r) and libre(x, z - r)
-			if bon then
-				for _, p in ipairs(plaques) do
-					if (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z) < (p.r + r + 6) * (p.r + r + 6) then
-						bon = false
-						break
-					end
-				end
-			end
-			if bon then
-				disque(x, z, r, M_TOUFFUE, dessus)
-				-- une petite plaque satellite pour casser le rond
-				local a = alea:NextNumber(0, 2 * math.pi)
-				local r2 = r * alea:NextNumber(0.45, 0.65)
-				local x2, z2 = x + math.cos(a) * r * 0.9, z + math.sin(a) * r * 0.9
-				if libre(x2, z2) then
-					disque(x2, z2, r2, M_TOUFFUE, dessus)
-				end
-				table.insert(plaques, { x = x, z = z, r = r })
-			end
-		end
-	end)
-	if not ok then
-		warn("[Dino] Sol, herbe touffue : " .. tostring(err))
-	end
-
-	-- ===== 4. terre battue sous les bâtiments (pas de brins d'herbe à travers les dalles) =====
-	ok, err = pcall(function()
-		if not terrainOk then return end
-		local d = reglage(ctx, "dessusTerre")
-		for _, b in ipairs(Plan.bases or {}) do
-			local c = b.centre
-			plaque(c.X - demiBX + 1, c.X + demiBX - 1, c.Z - demiBZ + 1, c.Z + demiBZ - 1, M_TERRE, d)
-		end
-		if comptoir then
-			local c, t = comptoir.centre, comptoir.taille
-			plaque(c.X - t.X / 2 + 0.5, c.X + t.X / 2 - 0.5, c.Z - t.Z / 2 + 0.5, c.Z + t.Z / 2 - 0.5, M_TERRE, d)
-		end
-		if autel then
-			disque(autel.centre.X, autel.centre.Z, autel.rayon, M_TERRE, d)
-		end
-	end)
-	if not ok then
-		warn("[Dino] Sol, terre battue : " .. tostring(err))
-	end
-
-	-- ===== 5. les allées de sable, au ras de l'herbe =====
-	ok, err = pcall(function()
-		if not terrainOk then return end
-		local d = reglage(ctx, "dessusAllee")
-		-- promenade le long du Tapis (le Tapis et ses rebords sont posés dessus)
-		plaque(-xP, xP, -zP, zP, M_SABLE, d)
-		-- parvis de la Nurserie et de la Fin du tapis
-		if Plan.nurserie then
-			disque(Plan.nurserie.centre.X, Plan.nurserie.centre.Z, rNurserie, M_SABLE, d)
-		end
-		if Plan.finTapis then
-			disque(Plan.finTapis.centre.X, Plan.finTapis.centre.Z, rNurserie, M_SABLE, d)
-		end
-		-- seuils devant l'entrée de chaque Base
-		local bi = (base and base.bordInterieur) or 18
-		for _, b in ipairs(Plan.bases or {}) do
-			local x = b.centre.X
-			if b.centre.Z > 0 then
-				plaque(x - dS, x + dS, zP, bi + 2, M_SABLE, d)
-			else
-				plaque(x - dS, x + dS, -bi - 2, -zP, M_SABLE, d)
-			end
-		end
-		-- couloirs entre les Bases et traverses (nord : vers le Cratère ; sud : vers la Place)
-		for _, c in ipairs(couloirs) do
-			plaque(c.X - dC, c.X + dC, zP, zCL, M_SABLE, d)
-			plaque(c.X - dC, c.X + dC, -zCL, -zP, M_SABLE, d)
-		end
-		plaque(-xT, xT, zCL, zTL, M_SABLE, d)
-		plaque(-xT, xT, -zTL, -zCL, M_SABLE, d)
-		-- parvis de la Place et du Cratère
-		if place then
-			disque(place.centre.X, place.centre.Z, rParvis, M_SABLE, d)
-			-- liens vers le Comptoir (ouest) et l'Autel (est)
-			if comptoir then
-				local zc = comptoir.centre.Z
-				plaque(comptoir.centre.X + comptoir.taille.X / 2 - 3, place.centre.X - rParvis + 4, zc - dL, zc + dL, M_SABLE, d)
-			end
-			if autel then
-				local zc = autel.centre.Z
-				plaque(place.centre.X + rParvis - 4, autel.centre.X - autel.rayon + 1, zc - dL, zc + dL, M_SABLE, d)
-			end
-		end
-		if cratere then
-			disque(cratere.centre.X, cratere.centre.Z, rCratere, M_SABLE, d)
-		end
-		-- plages de part et d'autre de la rivière (la rivière remplace le reste)
-		local xR = 166
-		plaque(-xR, xR, zPlageSud, zRivA, M_SABLE, d)
-		plaque(-xR, xR, zRivB, zPlageNord, M_SABLE, d)
-	end)
-	if not ok then
-		warn("[Dino] Sol, allées : " .. tostring(err))
-	end
-
-	-- ===== 6. bordures de galets le long des allées =====
+	-- 7. bordures de galets : là où un chemin de sable touche l'herbe libre (ouvertures automatiques
+	-- aux croisements, contre les Bases, les bâtiments, l'eau et les falaises)
 	local LB = reglage(ctx, "largeurBordure")
 	local HB = reglage(ctx, "hauteurBordure")
+	local PAS = reglage(ctx, "pas")
 	local SEG = reglage(ctx, "segment")
 	local SEGA = reglage(ctx, "segmentArc")
 	local JOINT = reglage(ctx, "jointure")
@@ -366,18 +547,21 @@ function M.construire(ctx)
 		local bordures = Outils.dossier(dossier, "Bordures")
 		local rang = 0
 
-		local function pierreDroite(x0, z0, x1, z1)
-			local dx, dz = x1 - x0, z1 - z0
+		-- une pierre de p à q, décalée vers l'intérieur du chemin (normale sortante n)
+		local function pierre(p, q, nx, nz)
+			local dx, dz = q[1] - p[1], q[2] - p[2]
 			local long = math.sqrt(dx * dx + dz * dz) - JOINT
-			if long <= 0.3 then
+			if long < 1 then
 				return
 			end
 			rang = rang + 1
 			local a = math.atan2(dz, dx)
+			local mx = (p[1] + q[1]) / 2 - nx * LB / 2
+			local mz = (p[2] + q[2]) / 2 - nz * LB / 2
 			part(Outils.bloc, bordures, {
 				Name = "Bordure",
 				Size = Vector3.new(long, HB, LB),
-				CFrame = CFrame.new((x0 + x1) / 2, yBordure, (z0 + z1) / 2) * CFrame.Angles(0, -a, 0),
+				CFrame = CFrame.new(mx, yBordure, mz) * CFrame.Angles(0, -a, 0),
 				Color = teintesPierre[1 + rang % #teintesPierre],
 				Material = Enum.Material.Cobblestone,
 				CanCollide = false,
@@ -387,197 +571,112 @@ function M.construire(ctx)
 			})
 		end
 
-		-- ligne droite découpée en pierres d'au plus SEG studs
-		local function ligne(x0, z0, x1, z1)
+		-- un point du bord garde sa pierre si, juste dehors, c'est de l'herbe libre, et s'il n'est pas dans un autre chemin
+		local function garder(zone, x, z, nx, nz)
+			local ox, oz = x + nx * 1.5, z + nz * 1.5
+			if ox < xJeuMin or ox > xJeuMax or oz < zJeuMin or oz > zJeuMax then return false end
+			if dansListe(chemins, ox, oz, 0) then return false end
+			if dansListe(obstacles, ox, oz, 0.5) then return false end
+			if dansListe(chemins, x, z, -0.4, zone) then return false end
+			return true
+		end
+
+		-- suit un bord échantillonné (points {x, z, nx, nz}) et pose des pierres de longueur <= maxi sur les parties gardées
+		local function poserBord(zone, points, maxi, ferme)
+			local n = #points
+			if n < 2 then return end
+			local garde = {}
+			local depart = 1
+			local toutGarde = true
+			for i = 1, n do
+				local p = points[i]
+				garde[i] = garder(zone, p[1], p[2], p[3], p[4])
+				if not garde[i] then
+					toutGarde = false
+					if ferme and depart == 1 then depart = i end
+				end
+			end
+			local function idx(k)
+				return ((k - 1) % n) + 1
+			end
+			local total = n
+			if not ferme then depart = 1 end
+			if ferme and toutGarde then total = n + 1 end
+			local debut = nil
+			local longueur = 0
+			local function fermer(fin)
+				if debut and fin ~= debut then
+					local p, q = points[idx(debut)], points[idx(fin)]
+					local nx, nz = (p[3] + q[3]) / 2, (p[4] + q[4]) / 2
+					pierre(p, q, nx, nz)
+				end
+				debut = nil
+				longueur = 0
+			end
+			for k = depart, depart + total - 1 do
+				local i = idx(k)
+				if garde[i] then
+					if not debut then
+						debut = k
+						longueur = 0
+					else
+						local p, q = points[idx(k - 1)], points[i]
+						longueur = longueur + math.sqrt((q[1] - p[1]) ^ 2 + (q[2] - p[2]) ^ 2)
+						if longueur >= maxi then
+							fermer(k)
+							debut = k
+						end
+					end
+				else
+					if debut then fermer(k - 1) end
+				end
+			end
+			if debut then fermer(depart + total - 1) end
+		end
+
+		local function segmentDroit(zone, x0, z0, x1, z1, nx, nz)
 			local dx, dz = x1 - x0, z1 - z0
 			local long = math.sqrt(dx * dx + dz * dz)
-			if long <= 0.3 then
-				return
+			local n = math.max(1, math.floor(long / PAS + 0.5))
+			local points = {}
+			for i = 0, n do
+				local t = i / n
+				table.insert(points, { x0 + dx * t, z0 + dz * t, nx, nz })
 			end
-			local n = math.max(1, math.ceil(long / SEG))
-			for i = 0, n - 1 do
-				local t0, t1 = i / n, (i + 1) / n
-				pierreDroite(x0 + dx * t0, z0 + dz * t0, x0 + dx * t1, z0 + dz * t1)
-			end
+			poserBord(zone, points, SEG, false)
 		end
 
-		-- ligne à z constant, de xa à xb, avec des ouvertures { {x0, x1}, ... } (triées)
-		local function ligneOuverte(z, xa, xb, ouvertures)
-			local x = xa
-			for _, o in ipairs(ouvertures) do
-				if o[1] > x and o[1] < xb then
-					ligne(x, z, o[1], z)
-				end
-				if o[2] > x then
-					x = o[2]
-				end
-			end
-			if xb > x then
-				ligne(x, z, xb, z)
-			end
-		end
-
-		-- arc de cercle (degrés ; x = cx + r cos a, z = cz + r sin a) en cordes d'au plus SEGA studs
-		local function arc(cx, cz, r, a0, a1)
-			local longueur = r * math.rad(a1 - a0)
-			if longueur <= 0.3 then
-				return
-			end
-			local n = math.max(1, math.ceil(longueur / SEGA))
-			for i = 0, n - 1 do
-				local b0 = math.rad(a0 + (a1 - a0) * i / n)
-				local b1 = math.rad(a0 + (a1 - a0) * (i + 1) / n)
-				pierreDroite(cx + r * math.cos(b0), cz + r * math.sin(b0), cx + r * math.cos(b1), cz + r * math.sin(b1))
-			end
-		end
-
-		-- demi-angle (degrés) sous lequel une allée de demi-largeur h entre dans un cercle de rayon r
-		local function demiAngle(h, r)
-			return math.deg(math.asin(math.min(1, h / r)))
-		end
-
-		-- promenade : ouvertures des couloirs et des seuils
-		local ouvertures = {}
-		for _, c in ipairs(couloirs) do
-			table.insert(ouvertures, { c.X - dC, c.X + dC })
-		end
-		for _, b in ipairs(Plan.bases or {}) do
-			if b.centre.Z > 0 then
-				table.insert(ouvertures, { b.centre.X - dS, b.centre.X + dS })
-			end
-		end
-		table.sort(ouvertures, function(p, q) return p[1] < q[1] end)
-		local xFinP = xP
-		if Plan.finTapis then
-			local dxN = math.sqrt(math.max(0, rNurserie * rNurserie - zP * zP))
-			xFinP = math.min(xP, Plan.finTapis.centre.X - dxN)
-		end
-		local xDebP = -xP
-		if Plan.nurserie then
-			local dxN = math.sqrt(math.max(0, rNurserie * rNurserie - zP * zP))
-			xDebP = math.max(-xP, Plan.nurserie.centre.X + dxN)
-		end
-		ligneOuverte(zP, xDebP, xFinP, ouvertures)
-		ligneOuverte(-zP, xDebP, xFinP, ouvertures)
-
-		-- parvis de la Nurserie (ouvert à l'est) et de la Fin du tapis (ouvert à l'ouest)
-		local aP = demiAngle(zP, rNurserie)
-		if Plan.nurserie then
-			arc(Plan.nurserie.centre.X, Plan.nurserie.centre.Z, rNurserie, aP, 360 - aP)
-		end
-		if Plan.finTapis then
-			arc(Plan.finTapis.centre.X, Plan.finTapis.centre.Z, rNurserie, aP - 180, 180 - aP)
-		end
-
-		-- couloirs : les bords extérieurs des couloirs extrêmes longent aussi le bout des traverses
-		local xMinC, xMaxC = 0, 0
-		for _, c in ipairs(couloirs) do
-			xMinC = math.min(xMinC, c.X)
-			xMaxC = math.max(xMaxC, c.X)
-		end
-		for _, c in ipairs(couloirs) do
-			for _, sx in ipairs({ -1, 1 }) do
-				local x = c.X + sx * dC
-				local zFin = zCL
-				if (c.X == xMinC and sx < 0) or (c.X == xMaxC and sx > 0) then
-					zFin = zTL
-				end
-				ligne(x, zP, x, zFin)
-				ligne(x, -zP, x, -zFin)
-			end
-		end
-
-		-- traverses : bord côté Tapis ouvert sur les couloirs, bord opposé ouvert sur le parvis
-		local ouvCouloirs = {}
-		for _, c in ipairs(couloirs) do
-			if c.X ~= xMinC and c.X ~= xMaxC then
-				table.insert(ouvCouloirs, { c.X - dC, c.X + dC })
-			end
-		end
-		table.sort(ouvCouloirs, function(p, q) return p[1] < q[1] end)
-		ligneOuverte(zCL, xMinC + dC, xMaxC - dC, ouvCouloirs)
-		ligneOuverte(-zCL, xMinC + dC, xMaxC - dC, ouvCouloirs)
-		if place then
-			local dz = math.abs(place.centre.Z - zTL)
-			local ox = math.sqrt(math.max(0, rParvis * rParvis - dz * dz))
-			ligneOuverte(zTL, -xT, xT, { { place.centre.X - ox, place.centre.X + ox } })
-		else
-			ligne(-xT, zTL, xT, zTL)
-		end
-		if cratere then
-			local dz = math.abs(cratere.centre.Z + zTL)
-			local ox = math.sqrt(math.max(0, rCratere * rCratere - dz * dz))
-			ligneOuverte(-zTL, -xT, xT, { { cratere.centre.X - ox, cratere.centre.X + ox } })
-		else
-			ligne(-xT, -zTL, xT, -zTL)
-		end
-
-		-- parvis de la Place : ouvert au nord (traverse), à l'ouest (Comptoir) et à l'est (Autel)
-		if place then
-			local cx, cz = place.centre.X, place.centre.Z
-			local dz = math.abs(cz - zTL)
-			local aNord = math.deg(math.atan2(-dz, math.sqrt(math.max(0, rParvis * rParvis - dz * dz))))
-			local aEst0, aEst1 = 0, 0
-			local aOuest0, aOuest1 = 180, 180
-			if autel then
-				local z0 = autel.centre.Z - dL - cz
-				local z1 = autel.centre.Z + dL - cz
-				aEst0 = math.deg(math.asin(math.max(-1, math.min(1, z0 / rParvis))))
-				aEst1 = math.deg(math.asin(math.max(-1, math.min(1, z1 / rParvis))))
-			end
-			if comptoir then
-				local z0 = comptoir.centre.Z - dL - cz
-				local z1 = comptoir.centre.Z + dL - cz
-				aOuest0 = 180 - math.deg(math.asin(math.max(-1, math.min(1, z1 / rParvis))))
-				aOuest1 = 180 - math.deg(math.asin(math.max(-1, math.min(1, z0 / rParvis))))
-			end
-			-- aNord est l'angle de la sortie nord-est (entre -90 et 0) ; la sortie nord-ouest est son symétrique
-			local aNordOuest = -180 - aNord
-			arc(cx, cz, rParvis, aNord, aEst0)
-			arc(cx, cz, rParvis, aEst1, aOuest0)
-			arc(cx, cz, rParvis, aOuest1, 360 + aNordOuest)
-
-			-- liens : bords le long du Comptoir et de l'Autel
-			if comptoir then
-				local xBord = comptoir.centre.X + comptoir.taille.X / 2
-				for _, sz in ipairs({ -1, 1 }) do
-					local z = comptoir.centre.Z + sz * dL
-					local dzc = z - cz
-					local xRing = cx - math.sqrt(math.max(0, rParvis * rParvis - dzc * dzc))
-					ligne(xBord, z, xRing, z)
+		for _, zone in ipairs(chemins) do
+			if zone.bordure then
+				if zone.g == "rect" then
+					segmentDroit(zone, zone.x0, zone.z0, zone.x1, zone.z0, 0, -1)
+					segmentDroit(zone, zone.x0, zone.z1, zone.x1, zone.z1, 0, 1)
+					segmentDroit(zone, zone.x0, zone.z0, zone.x0, zone.z1, -1, 0)
+					segmentDroit(zone, zone.x1, zone.z0, zone.x1, zone.z1, 1, 0)
+				elseif zone.g == "disque" then
+					local n = math.max(12, math.floor(2 * math.pi * zone.r / PAS))
+					local points = {}
+					for i = 1, n do
+						local a = 2 * math.pi * (i - 1) / n
+						local c, s = math.cos(a), math.sin(a)
+						table.insert(points, { zone.x + zone.r * c, zone.z + zone.r * s, c, s })
+					end
+					poserBord(zone, points, SEGA, true)
 				end
 			end
-			if autel then
-				for _, sz in ipairs({ -1, 1 }) do
-					local z = autel.centre.Z + sz * dL
-					local dzc = z - cz
-					local xRing = cx + math.sqrt(math.max(0, rParvis * rParvis - dzc * dzc))
-					local dza = z - autel.centre.Z
-					local xAutel = autel.centre.X - math.sqrt(math.max(0, autel.rayon * autel.rayon - dza * dza))
-					ligne(xRing, z, xAutel, z)
-				end
-			end
-		end
-
-		-- parvis du Cratère : ouvert au sud (traverse nord)
-		if cratere then
-			local cx, cz = cratere.centre.X, cratere.centre.Z
-			local dz = math.abs(-zTL - cz)
-			local aSud = math.deg(math.atan2(dz, math.sqrt(math.max(0, rCratere * rCratere - dz * dz))))
-			arc(cx, cz, rCratere, 180 - aSud, 360 + aSud)
 		end
 	end)
 	if not ok then
 		warn("[Dino] Sol, bordures : " .. tostring(err))
 	end
 
-	-- ===== 7. détails : galets sur les plages, fleurs sur l'herbe touffue (dessus <= 0,3) =====
+	-- 8. détails plats (dessus <= 0,3) : pas japonais sur les sentiers, galets sur les plages, fleurs
 	ok, err = pcall(function()
-		local decor = Outils.dossier(dossier, "Decor")
+		local details = Outils.dossier(dossier, "Decor")
 
 		-- disque plat posé au sol (axe du cylindre vertical)
 		local function rond(nom, diametre, epaisseur, x, z, couleur, materiau, yBas)
-			return part(Outils.cylindre, decor, {
+			return part(Outils.cylindre, details, {
 				Name = nom,
 				Size = Vector3.new(epaisseur, diametre, diametre),
 				CFrame = CFrame.new(x, (yBas or 0) + epaisseur / 2, z) * CFrame.Angles(0, 0, math.rad(90)),
@@ -590,31 +689,44 @@ function M.construire(ctx)
 			})
 		end
 
-		-- galets plats sur les plages, par petits groupes
-		local voulus = reglage(ctx, "galetsPlage")
-		local poses, essais = 0, 0
-		while poses < voulus and essais < 200 and nbParts < BUDGET do
-			essais = essais + 1
-			local x = alea:NextNumber(-150, 150)
-			local surRive = alea:NextNumber() < 0.5
-			local z
-			if surRive then
-				z = alea:NextNumber(zRivA - 5, zRivA - 1.5)
-			else
-				z = alea:NextNumber(zRivB + 1.5, math.min(zPlageNord, zRivB + 4.5))
-			end
-			local loinPlace = not (place and dansDisque(x, z, place.centre, rParvis + 2))
-			if loinPlace then
-				local n = alea:NextInteger(1, 3)
-				for _ = 1, n do
-					if poses >= voulus then
-						break
+		-- pas japonais : dalles d'ardoise en quinconce le long des sentiers de terre
+		local ecart = reglage(ctx, "pasJaponais")
+		for _, s in ipairs(sentiers) do
+			local dx, dz = s.bx - s.ax, s.bz - s.az
+			local L = math.sqrt(dx * dx + dz * dz)
+			if L > 0 then
+				local ux, uz = dx / L, dz / L
+				local n = math.floor(L / ecart)
+				for i = 1, n - 1 do
+					local cote = 0.9
+					if i % 2 == 0 then cote = -0.9 end
+					local x = s.ax + ux * ecart * i - uz * cote
+					local z = s.az + uz * ecart * i + ux * cote
+					if not dansListe(obstacles, x, z, 1) and not dansListe(chemins, x, z, 0.5, s) then
+						local couleur = teintesPierre[alea:NextInteger(1, #teintesPierre)]
+						rond("PasJaponais", alea:NextNumber(2.2, 2.8), 0.22, x, z, couleur, Enum.Material.Slate, 0.02)
 					end
-					local gx = x + alea:NextNumber(-1.6, 1.6)
-					local gz = z + alea:NextNumber(-1.2, 1.2)
-					local couleur = teintesPierre[alea:NextInteger(1, #teintesPierre)]
-					rond("Galet", alea:NextNumber(0.7, 1.8), alea:NextNumber(0.18, 0.3), gx, gz, couleur, Enum.Material.Slate, -0.02)
-					poses = poses + 1
+				end
+			end
+		end
+
+		-- galets plats sur la plage nord, par petits groupes, loin du sentier de la Place
+		if riviere and zPlageA then
+			local voulus = reglage(ctx, "galetsPlage")
+			local poses, essais = 0, 0
+			while poses < voulus and essais < 300 and nbParts < BUDGET do
+				essais = essais + 1
+				local x = alea:NextNumber(xJeuMin + 8, xJeuMax - 8)
+				local z = alea:NextNumber(zPlageA + 1, riviere.zMin - 1)
+				if not (place and math.abs(x - place.centre.X) < reglage(ctx, "demiRiviere") + 6) then
+					for _ = 1, alea:NextInteger(1, 3) do
+						if poses < voulus then
+							local couleur = teintesPierre[alea:NextInteger(1, #teintesPierre)]
+							rond("Galet", alea:NextNumber(0.7, 1.8), alea:NextNumber(0.18, 0.3),
+								x + alea:NextNumber(-1.6, 1.6), z + alea:NextNumber(-1, 1), couleur, Enum.Material.Slate, -0.02)
+							poses = poses + 1
+						end
+					end
 				end
 			end
 		end
