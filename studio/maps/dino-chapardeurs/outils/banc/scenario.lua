@@ -454,7 +454,7 @@ if EXPORTER and stock and stock:FindFirstChild("Dinos") then
 		local ok, _, taille = pcall(function() return c:GetBoundingBox() end)
 		local largeur = ok and math.max(taille.X, 4) or 8
 		c.Parent = vitrine
-		pcall(function() c:PivotTo(CFrame.new(x + largeur / 2, 60, 100) * CFrame.Angles(0, math.rad(180 + 25), 0)) end)
+		pcall(function() c:PivotTo(CFrame.new(x + largeur / 2, 60, 100) * CFrame.Angles(0, math.rad(180 + 55), 0)) end)
 		x = x + largeur + 3
 	end
 	EXPORTER("vitrine")

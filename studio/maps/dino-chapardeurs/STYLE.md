@@ -133,7 +133,7 @@ V:boite(2, 12, -6, 3, 13, -5, blanc, "Tete")              -- détails
 V:mettre(3, 12, -6, noir, "Tete")                          -- un seul cube (pupille)
 V:peindre(function(x, y, z) if y < 6 then return ventre end end, "Corps") -- motifs, dégradés
 V:symetriser()                                              -- côté droit (x > 0) recopié à gauche
-local modele = V:construire(ctx.stockage.Dinos, { nom = "Rex", origine = CFrame.new(), budget = 150 })
+local modele = V:construire(ctx.stockage.Dinos, { nom = "Rex", origine = CFrame.new(), budget = 220 })
 ```
 
 Règles : origine au sol sous le centre du dino, regard vers **-Z** ; groupes
