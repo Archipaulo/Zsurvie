@@ -513,7 +513,10 @@ function M.demarrer(ctx)
 			local nom = p.Name
 			local repos = pivot:ToObjectSpace(p.CFrame)
 			local infoPatte = PATTES[nom]
-			if infoPatte and not pattes[nom] then
+			if infoPatte and pattes[nom] then
+				-- patte voxel en plusieurs parts : toutes suivent le même groupe
+				table.insert(pattes[nom].membres, { part = p, repos = repos })
+			elseif infoPatte then
 				local a, b = extremites(repos, p.Size)
 				local haut, bas = a, b
 				if b.Y > a.Y then
@@ -534,6 +537,26 @@ function M.demarrer(ctx)
 		end
 
 		-- accessoires : rattachés à la patte du même côté dont le segment est le plus proche
+		-- patte en plusieurs parts : l'articulation est en haut de l'ensemble (hanche), au centre
+		for _, g in pairs(pattes) do
+			if #g.membres > 1 then
+				local hautY, basY, sx, sz = -math.huge, math.huge, 0, 0
+				for _, m in ipairs(g.membres) do
+					local a, b = extremites(m.repos, m.part.Size)
+					hautY = math.max(hautY, a.Y, b.Y)
+					basY = math.min(basY, a.Y, b.Y)
+					sx = sx + m.repos.Position.X
+					sz = sz + m.repos.Position.Z
+				end
+				local n = #g.membres
+				g.haut = Vector3.new(sx / n, hautY, sz / n)
+				g.bas = Vector3.new(sx / n, basY, sz / n)
+				g.avant = CFrame.new(g.haut)
+				g.apres = CFrame.new(-g.haut)
+				g.portee = (hautY - basY) * 0.8 + 0.8
+			end
+		end
+
 		for _, p in ipairs(parts) do
 			local cote = coteDe(p.Name)
 			if cote and not PATTES[p.Name] then
@@ -566,10 +589,6 @@ function M.demarrer(ctx)
 		if #queue > 0 then
 			local racine = queue[1]
 			for _, m in ipairs(queue) do
-				if m.part.Name == "Queue" then
-					racine = m
-					break
-				end
 				if m.repos.Position.Z < racine.repos.Position.Z then
 					racine = m
 				end

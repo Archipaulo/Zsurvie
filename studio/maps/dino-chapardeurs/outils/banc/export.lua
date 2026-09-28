@@ -26,9 +26,14 @@ function EXPORTER(nom)
 				for _, e in ipairs(p:GetChildren()) do
 					if e:IsA("Light") and e.Enabled then lum = 1 end
 				end
+				local surf = ""
+				local ok, ts = pcall(function() return p.TopSurface end)
+				if ok and typeof(ts) == "EnumItem" then
+					if ts.Name == "Studs" then surf = "S" elseif ts.Name == "Inlet" then surf = "I" end
+				end
 				local x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22 = c:GetComponents()
 				table.insert(parts, { r3(x), r3(y), r3(z), r3(r00), r3(r01), r3(r02), r3(r10), r3(r11), r3(r12), r3(r20), r3(r21), r3(r22),
-					r3(p.Size.X), r3(p.Size.Y), r3(p.Size.Z), hex(p.Color), r3(p.Transparency), forme, m, zone.Name, lum })
+					r3(p.Size.X), r3(p.Size.Y), r3(p.Size.Z), hex(p.Color), r3(p.Transparency), forme, m, zone.Name, lum, surf })
 			end
 		end
 	end

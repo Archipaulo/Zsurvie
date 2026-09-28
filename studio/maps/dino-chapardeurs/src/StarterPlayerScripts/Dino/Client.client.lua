@@ -11,6 +11,7 @@ local Equilibrage = require(Partage.Equilibrage)
 local Bus = require(Partage.Bus)
 local Reseau = require(Partage.Reseau)
 local Style = require(Partage.Style)
+local Voxel = require(Partage.Voxel)
 
 local joueur = Players.LocalPlayer
 local gui = Instance.new("ScreenGui")
@@ -25,6 +26,7 @@ local racine = workspace:WaitForChild("Dino")
 local ctxBase = {
 	Charte = Charte,
 	Style = Style,
+	Voxel = Voxel,
 	Outils = Outils,
 	Plan = Plan,
 	Equilibrage = Equilibrage,

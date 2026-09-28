@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /* Photographie une zone du jeu : exécute le banc d'essai, fabrique l'aperçu 3D et prend un cliché.
-   Usage : node outils/photo.mjs --cible x,y,z [--dist 80] [--haut 0.6] --sortie /chemin/photo.png [--sans-banc]
+   Usage : node outils/photo.mjs --cible x,y,z [--dist 80] [--haut 0.6] --sortie /chemin/photo.png [--sans-banc] [--vitrine]
+   --vitrine : tous les gabarits de dinos alignés en l'air (y = 60, z = 100), de x = -95 vers l'est, par rareté ; ex. --cible -40,66,100 --dist 70 --haut 0.15
    (chaque appel utilise son propre dossier temporaire : plusieurs agents peuvent l'utiliser en même temps) */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -39,7 +40,8 @@ if (process.argv.includes("--interface")) {
   fs.rmSync(tmp, { recursive: true, force: true });
   process.exit(0);
 }
-const parts = fs.existsSync(path.join(tmp, "parts-pendant.json")) ? path.join(tmp, "parts-pendant.json") : path.join(ICI, "banc", "sortie", "parts-pendant.json");
+const fichierParts = process.argv.includes("--vitrine") ? "parts-vitrine.json" : "parts-pendant.json";
+const parts = fs.existsSync(path.join(tmp, fichierParts)) ? path.join(tmp, fichierParts) : path.join(ICI, "banc", "sortie", fichierParts);
 const html = path.join(tmp, "apercu.html");
 execFileSync("node", [path.join(ICI, "apercu.js"), parts, html], { stdio: "pipe" });
 const { chromium } = await import("/opt/node22/lib/node_modules/playwright/index.mjs");

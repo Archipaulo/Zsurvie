@@ -156,7 +156,7 @@ const FAMILLES = {
   Metal: 8, DiamondPlate: 8, CorrodedMetal: 8, Foil: 8, Sand: 9, Concrete: 9, Ground: 9, Mud: 9, Salt: 9, Snow: 9, Plaster: 9,
   Cardboard: 9, Pebble: 5, CrackedLava: 10, Asphalt: 9, Ice: 0, Glacier: 0,
 };
-const RUGOSITE = { 0: 0.55, 1: 0.95, 2: 0.8, 3: 0.75, 4: 0.9, 5: 0.9, 6: 0.85, 7: 0.95, 8: 0.35, 9: 0.95, 10: 0.8 };
+const RUGOSITE = { 11: 0.45, 12: 0.5, 0: 0.55, 1: 0.95, 2: 0.8, 3: 0.75, 4: 0.9, 5: 0.9, 6: 0.85, 7: 0.95, 8: 0.35, 9: 0.95, 10: 0.8 };
 const GLSL_BRUIT = \`
 float h31(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float bruit(vec3 x){ vec3 i = floor(x); vec3 f = fract(x); f = f*f*(3.0-2.0*f);
@@ -178,22 +178,33 @@ float motif(int fam, vec3 p, vec3 n, out float emis){
   if (fam == 9) return 0.88 + 0.14*bruit(p*5.0) + 0.06*fbm(p*0.3);
   if (fam == 10) { float r = abs(fbm(p*0.35) - 0.5); emis = smoothstep(0.05, 0.0, r); return 0.35 + 0.15*bruit(p*3.0); }
   return 0.97 + 0.03*bruit(p*4.0);
+}
+// texture « Studs » / « Inlet » de Roblox : une case en relief par stud (repère local de la part)
+float plots(int fam, vec3 l, vec3 n){
+  vec3 a = abs(n); vec2 u = a.y > 0.5 ? l.xz : (a.x > 0.5 ? l.zy : l.xy);
+  vec2 c = fract(u); vec2 d = min(c, 1.0 - c); float bord = min(d.x, d.y);
+  float f = 1.0 - 0.3 * smoothstep(0.1, 0.0, bord) + 0.08 * smoothstep(0.1, 0.16, bord);
+  if (fam == 11 && n.y > 0.5) { float r = length(c - 0.5); f += 0.16 * smoothstep(0.3, 0.26, r) - 0.14 * smoothstep(0.36, 0.31, r) * smoothstep(0.26, 0.31, r); }
+  if (fam == 12) { f -= 0.15 * smoothstep(0.35, 0.3, max(abs(c.x - 0.5), abs(c.y - 0.5))); }
+  return f;
 }\`;
 function materiauProcedural(fam, opts) {
   const m = new THREE.MeshStandardMaterial(Object.assign({ color: "#ffffff", roughness: RUGOSITE[fam] ?? 0.6, metalness: fam === 8 ? 0.55 : 0.0 }, opts || {}));
   m.onBeforeCompile = sh => {
     sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\\nvarying vec3 vPm; varying vec3 vNm;")
+      .replace("#include <common>", "#include <common>\\nvarying vec3 vPm; varying vec3 vNm; varying vec3 vLoc; varying vec3 vNl;")
       .replace("#include <begin_vertex>", \`#include <begin_vertex>
         mat4 mm = modelMatrix;
         #ifdef USE_INSTANCING
           mm = modelMatrix * instanceMatrix;
         #endif
-        vPm = (mm * vec4(position, 1.0)).xyz; vNm = normalize(mat3(mm) * normal);\`);
+        vPm = (mm * vec4(position, 1.0)).xyz; vNm = normalize(mat3(mm) * normal);
+        vec3 tI = vec3(length(mm[0].xyz), length(mm[1].xyz), length(mm[2].xyz));
+        vLoc = position * tI + tI * 0.5; vNl = normal;\`);
     sh.fragmentShader = sh.fragmentShader
-      .replace("#include <common>", "#include <common>\\nvarying vec3 vPm; varying vec3 vNm;\\n" + GLSL_BRUIT)
+      .replace("#include <common>", "#include <common>\\nvarying vec3 vPm; varying vec3 vNm; varying vec3 vLoc; varying vec3 vNl;\\n" + GLSL_BRUIT)
       .replace("#include <color_fragment>", \`#include <color_fragment>
-        float emisM; float fM = motif(\${fam}, vPm, vNm, emisM);
+        float emisM = 0.0; float fM = \${fam} >= 11 ? plots(\${fam}, vLoc, vNl) : motif(\${fam}, vPm, vNm, emisM);
         diffuseColor.rgb *= fM;\`)
       .replace("#include <emissivemap_fragment>", \`#include <emissivemap_fragment>
         totalEmissiveRadiance += vec3(1.0, 0.35, 0.05) * emisM * 2.5;\`);
@@ -230,7 +241,8 @@ const zones = new Map();
 for (const p of D.parts) {
   const [x,y,z, a,b,c, d,e,f, g,h,i, sx,sy,sz, hex, tr, forme, mat, zone] = p;
   const neon = mat === "Neon", verre = tr > 0.02 || mat === "Glass" || mat === "ForceField";
-  const fam = FAMILLES[mat] ?? 0;
+  const surf = p[21] || "";
+  const fam = surf === "S" ? 11 : surf === "I" ? 12 : (FAMILLES[mat] ?? 0);
   const cle = (GEOS[forme] ? forme : "Block") + "|" + (neon ? "n" : fam) + "|" + (neon ? "n" : verre ? "v" : "o");
   if (!groupes.has(cle)) groupes.set(cle, []);
   groupes.get(cle).push(p);

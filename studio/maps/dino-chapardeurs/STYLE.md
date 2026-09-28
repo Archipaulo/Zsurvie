@@ -113,3 +113,39 @@ boutons (déjà dans `Style.bouton`), panneaux en dégradé avec ombre portée
 (`Style.panneau`), cartes en dégradé (`Style.carte`), espacements réguliers
 (UIPadding, UIListLayout), icônes plus grandes, transitions (ouverture en pop,
 fermeture en fondu), compteurs qui défilent.
+
+## 5. Les dinos en voxels (style « petits cubes »)
+
+Référence : les créatures voxel des simulateurs « Steal a … » — faites de
+centaines de petits cubes bien visibles, couleurs franches, têtes énormes,
+yeux expressifs, accessoires. Les dinos sont modélisés avec
+`ctx.Voxel` (`ReplicatedStorage/Dino/Voxel.lua`) : grille de cubes de 1 stud,
+fusionnés automatiquement en parts dont les faces portent la texture Roblox
+« Studs » (chaque case de 1 stud reste visible comme un petit cube).
+
+```lua
+local V = ctx.Voxel.nouveau()
+V:ellipsoide(0, 7, 1, 3.2, 3.2, 4.5, vert, "Corps")      -- volumes
+V:ellipsoide(0, 11, -4, 3.5, 3, 4, vert, "Tete")
+V:tube(2, 5, 2, 2, 1, 2, 1.3, vertFonce, "PatteArG")      -- membres (tube effilé : 11e argument)
+V:tube(0, 7, 5, 0, 5, 11, 2.2, vert, "Queue", 0.6)
+V:boite(2, 12, -6, 3, 13, -5, blanc, "Tete")              -- détails
+V:mettre(3, 12, -6, noir, "Tete")                          -- un seul cube (pupille)
+V:peindre(function(x, y, z) if y < 6 then return ventre end end, "Corps") -- motifs, dégradés
+V:symetriser()                                              -- côté droit (x > 0) recopié à gauche
+local modele = V:construire(ctx.stockage.Dinos, { nom = "Rex", origine = CFrame.new(), budget = 150 })
+```
+
+Règles : origine au sol sous le centre du dino, regard vers **-Z** ; groupes
+nommés `Corps` (contient la PrimaryPart), `Tete`, `PatteAvG/D`, `PatteArG/D`,
+`Queue`, `AileG/D` (animations de marche) ; **tête ≈ 40 % de la hauteur**
+(chibi), yeux de 2 x 2 à 3 x 3 cubes (blanc, pupille noire, reflet blanc),
+joues roses, bouche lisible ; volume par la couleur : cubes du haut plus clairs
+(`Charte.lumiere`), du bas plus foncés (`Charte.ombre`), ventre contrasté,
+motifs (taches, rayures, écailles) ; accessoires de couleur contrastée (crêtes,
+cornes, plaques, collerettes). Plus la rareté est haute, plus le dino est grand
+et détaillé : hauteur en cubes ≈ Commun 6-8, Rare 8-10, Épique 10-12,
+Légendaire 12-14, Mythique 14-16, Divin 15-17, Secret 16-18 ; touches `Neon`
+(yeux, cristaux, aura) à partir de Mythique, or et blanc pour Divin, cosmique
+(violet, étoiles Neon) pour Secret. Budget : **150 parts maximum par dino**
+(vérifié par `budget`), environ 1500 cubes au plus.

@@ -11,6 +11,7 @@ local Equilibrage = require(Partage.Equilibrage)
 local Bus = require(Partage.Bus)
 local Reseau = require(Partage.Reseau)
 local Style = require(Partage.Style)
+local Voxel = require(Partage.Voxel)
 
 -- ===== les dossiers communs =====
 local ancienne = workspace:FindFirstChild("Dino")
@@ -36,6 +37,7 @@ end
 local ctxBase = {
 	Charte = Charte,
 	Style = Style,
+	Voxel = Voxel,
 	Outils = Outils,
 	Plan = Plan,
 	Equilibrage = Equilibrage,

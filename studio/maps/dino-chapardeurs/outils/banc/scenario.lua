@@ -428,6 +428,38 @@ controle("3 dinos installés dans la base", enclos == 3, enclos)
 controle("revenu par seconde", (A:GetAttribute("RevenuParSeconde") or 0) > 0, tostring(A:GetAttribute("RevenuParSeconde")))
 controle("Dinodex : espèce découverte", achetes[1] and A:GetAttribute("Index_" .. tostring(achetes[1]:GetAttribute("Espece"))) == true, "")
 if EXPORTER then EXPORTER("pendant") end
+-- vitrine (photos des modeleurs) : un exemplaire de chaque gabarit aligné en l'air (y = 60) au-dessus de la Place, par rareté
+if EXPORTER and stock and stock:FindFirstChild("Dinos") then
+	local vitrine = Instance.new("Folder")
+	vitrine.Name = "Vitrine"
+	vitrine.Parent = racineJeu()
+	local liste = stock.Dinos:GetChildren()
+	local ordre = { Commun = 1, Rare = 2, Epique = 3, Legendaire = 4, Mythique = 5, Divin = 6, Secret = 7 }
+	table.sort(liste, function(a, b)
+		local ea, eb = E.especes[a.Name], E.especes[b.Name]
+		local ra, rb = ea and ordre[ea.rarete] or 9, eb and ordre[eb.rarete] or 9
+		if ra ~= rb then return ra < rb end
+		return a.Name < b.Name
+	end)
+	local socle = Instance.new("Part")
+	socle.Name = "Socle"
+	socle.Anchored = true
+	socle.Size = Vector3.new(260, 1, 30)
+	socle.CFrame = CFrame.new(20, 59.5, 100)
+	socle.Color = Color3.fromRGB(110, 200, 90)
+	socle.Parent = vitrine
+	local x = -95
+	for i, g in ipairs(liste) do
+		local c = g:Clone()
+		local ok, _, taille = pcall(function() return c:GetBoundingBox() end)
+		local largeur = ok and math.max(taille.X, 4) or 8
+		c.Parent = vitrine
+		pcall(function() c:PivotTo(CFrame.new(x + largeur / 2, 60, 100) * CFrame.Angles(0, math.rad(180 + 25), 0)) end)
+		x = x + largeur + 3
+	end
+	EXPORTER("vitrine")
+	vitrine:Destroy()
+end
 
 -- ===== 5. collecte =====
 avancer(8)
