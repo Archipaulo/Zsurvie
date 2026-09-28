@@ -466,7 +466,7 @@ do
 				local dessus = plaque.Position.Y + plaque.Size.Y / 2
 				local centre = (mn + mx) / 2
 				local l = plaque.CFrame:PointToObjectSpace(centre)
-				local surLePlateau = math.abs(mn.Y - dessus) < 0.15
+				local surLePlateau = mn.Y - dessus > -0.15 and mn.Y - dessus < 0.7 -- le rebond côté client soulève un peu
 				local auDessus = math.abs(l.X) <= plaque.Size.X / 2 and math.abs(l.Z) <= plaque.Size.Z / 2
 				if not (surLePlateau and auDessus) then
 					table.insert(malPoses, d:GetAttribute("Espece") .. string.format(" (écart vertical %.2f)", mn.Y - dessus))
@@ -475,6 +475,19 @@ do
 		end
 	end
 	controle("dinos posés sur leur podium", verifies > 0 and #malPoses == 0, verifies .. " vérifiés " .. table.concat(malPoses, ", "))
+	-- vie dans la Base (côté client) : les dinos rares ont leur lumière de rareté, et ils bougent
+	local lumieres, bouge = 0, false
+	if bA then workspace.CurrentCamera.CFrame = CFrame.lookAt(bA.Sol.Position + v3(0, 30, 40), bA.Sol.Position) end
+	for _, d in ipairs(dinosDe(A)) do
+		if d:GetAttribute("Etat") == "Enclos" and d.PrimaryPart then
+			if d.PrimaryPart:FindFirstChild("LumiereRarete") then lumieres = lumieres + 1 end
+			local y0 = d.PrimaryPart.Position.Y
+			avancer(0.25)
+			if math.abs(d.PrimaryPart.Position.Y - y0) > 0.01 then bouge = true end
+		end
+	end
+	controle("dinos animés dans la Base (rebond)", bouge, "")
+	controle("lumières de rareté dans la Base", lumieres > 0, lumieres .. " dinos éclairés")
 end
 if EXPORTER then EXPORTER("pendant") end
 -- vitrine (photos des modeleurs) : un exemplaire de chaque gabarit aligné en l'air (y = 60) au-dessus de la Place, par rareté
