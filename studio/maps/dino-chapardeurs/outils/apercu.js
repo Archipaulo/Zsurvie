@@ -265,7 +265,7 @@ for (const [cle, liste] of groupes) {
     m4.multiply(s4);
     inst.setMatrixAt(k, m4);
     coul.set("#" + hex);
-    if (genre === "n") coul.multiplyScalar(3.2); // le Neon dépasse le seuil du halo
+    if (genre === "n") coul.multiplyScalar(2.1); // le Neon dépasse le seuil du halo
     inst.setColorAt(k, coul);
   });
   if (genre === "v") inst.renderOrder = 2;
@@ -391,7 +391,7 @@ TERRAIN.forEach((t, ordre) => {
 // post-traitement : halo lumineux sur le Neon
 const composeur = new EffectComposer(rendu);
 composeur.addPass(new RenderPass(scene, camera));
-const halo = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.7, 0.45, 1.9);
+const halo = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.6, 0.4, 1.35);
 composeur.addPass(halo);
 composeur.addPass(new OutputPass());
 

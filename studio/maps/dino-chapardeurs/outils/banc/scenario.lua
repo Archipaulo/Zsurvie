@@ -524,11 +524,17 @@ do
 	local dalle = cible and bA and bA:FindFirstChild("Collectes") and bA.Collectes:FindFirstChild("C" .. tostring(cible:GetAttribute("Emplacement")))
 	local argentDalle = A:GetAttribute("Argent") or 0
 	local stockDalle = cible and cible:GetAttribute("Stock") or 0
+	local yRepos = dalle and dalle.Position.Y
+	local yEnfonce
 	if dalle then
 		placer(A, dalle.Position + v3(0, 3, 0))
 		banc.obtenirSignal(dalle, "Touched"):FireCote("serveur", A.Character.HumanoidRootPart)
-		avancer(0.5)
+		avancer(0.2)
+		yEnfonce = dalle.Position.Y
+		avancer(0.3)
 	end
+	controle("dalle verte : s'enfonce sous le propriétaire", yEnfonce and yEnfonce < yRepos - 0.1, yEnfonce and string.format("%.2f -> %.2f", yRepos, yEnfonce))
+	controle("dalle verte : néon et contour", dalle and dalle.Material == Enum.Material.Neon and #bA.Collectes:GetChildren() >= 5, "")
 	controle("dalle verte devant le podium", dalle ~= nil, cible and tostring(cible:GetAttribute("Emplacement")))
 	controle("dalle verte : encaisse l'argent de ce dino", dalle and (cible:GetAttribute("Stock") or 0) < stockDalle * 0.2 and (A:GetAttribute("Argent") or 0) > argentDalle,
 		string.format("stock %.1f -> %.1f", stockDalle, cible and (cible:GetAttribute("Stock") or 0) or -1))

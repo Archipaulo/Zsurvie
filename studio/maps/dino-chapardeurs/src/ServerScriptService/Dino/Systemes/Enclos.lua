@@ -920,7 +920,11 @@ function M.demarrer(ctx)
 	-- ===== dalles de collecte devant chaque podium =====
 	-- un rectangle vert, de la largeur du podium, côté allée ; le propriétaire marche dessus pour encaisser
 	-- l'argent de CE dino ; le montant flotte juste au-dessus de la dalle.
-	local VERT_DALLE = Charte.hex("2EE85C")
+	local VERT_DALLE = Charte.hex("25C455")   -- vert néon doux (le Neon éclaire déjà beaucoup)
+	local CADRE_DALLE = Charte.hex("1C2B22")
+	local ENFONCEMENT = 0.2                    -- de combien la dalle s'enfonce sous le pied du propriétaire
+	local INFO_ENFONCE = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local INFO_REMONTE = TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	local dalles = {}       -- [podium] = { dalle, index, numero }
 	local rebondDalle = {}  -- [dalle] = heure du dernier encaissement
 
@@ -965,24 +969,68 @@ function M.demarrer(ctx)
 		if podium.Position.X > centre.X then sens = -1 end
 		local profondeur = 2.4
 		local solY = podium.Position.Y - podium.Size.Y / 2 - 1.3 -- sous le socle du podium
+		-- cadre : 4 bordures sombres un peu plus hautes que la dalle (elle s'enfonce entre elles)
+		local largeur = podium.Size.Z
+		local cx = podium.Position.X + sens * (podium.Size.X / 2 + 0.3 + profondeur / 2)
+		local cz = podium.Position.Z
+		local BORD, HAUT_BORD = 0.3, 0.42
+		local function bord(nom, sx, sz, dx, dz)
+			local b = Instance.new("Part")
+			b.Name = nom
+			b.Anchored = true
+			b.CanCollide = false
+			b.CanQuery = false
+			b.CanTouch = false
+			b.Material = Enum.Material.Metal
+			b.Color = CADRE_DALLE
+			b.Size = Vector3.new(sx, HAUT_BORD, sz)
+			b.CFrame = CFrame.new(cx + dx, solY + HAUT_BORD / 2, cz + dz)
+			b.Parent = dossier
+			return b
+		end
+		local bords = {
+			bord("Cadre", profondeur + 2 * BORD, BORD, 0, largeur / 2 + BORD / 2),
+			bord("Cadre", profondeur + 2 * BORD, BORD, 0, -largeur / 2 - BORD / 2),
+			bord("Cadre", BORD, largeur, profondeur / 2 + BORD / 2, 0),
+			bord("Cadre", BORD, largeur, -profondeur / 2 - BORD / 2, 0),
+		}
 		local dalle = Instance.new("Part")
 		dalle.Name = "C" .. numero
 		dalle.Anchored = true
 		dalle.CanCollide = false
 		dalle.CanQuery = false
 		dalle.CanTouch = true
-		dalle.Material = Enum.Material.SmoothPlastic
+		dalle.Material = Enum.Material.Neon
 		dalle.Color = VERT_DALLE
-		dalle.Size = Vector3.new(profondeur, 0.25, podium.Size.Z)
-		dalle.CFrame = CFrame.new(podium.Position.X + sens * (podium.Size.X / 2 + 0.3 + profondeur / 2), solY + 0.125, podium.Position.Z)
+		dalle.Transparency = 0.15
+		dalle.CastShadow = false
+		dalle.Size = Vector3.new(profondeur, 0.25, largeur)
+		local repos = CFrame.new(cx, solY + HAUT_BORD - 0.05 - 0.125, cz)
+		dalle.CFrame = repos
 		dalle:SetAttribute("Emplacement", numero)
 		dalle.Parent = dossier
+		dalle.Destroying:Connect(function()
+			for _, b in ipairs(bords) do pcall(function() b:Destroy() end) end
+		end)
+		local enfoncee = false
+		local function enfoncer()
+			if enfoncee then return end
+			enfoncee = true
+			TweenService:Create(dalle, INFO_ENFONCE, { CFrame = repos * CFrame.new(0, -ENFONCEMENT, 0) }):Play()
+			task.delay(0.45, function()
+				if dalle.Parent then
+					TweenService:Create(dalle, INFO_REMONTE, { CFrame = repos }):Play()
+				end
+				enfoncee = false
+			end)
+		end
 		dalles[podium] = { dalle = dalle, index = index, numero = numero }
 		dalle.Touched:Connect(function(partie)
 			local modeleContact = partie and partie.Parent
 			if not modeleContact then return end
 			local joueur = Players:GetPlayerFromCharacter(modeleContact)
 			if not joueur or Bus.demander("JoueurDeBase", index) ~= joueur then return end
+			pcall(enfoncer) -- la dalle s'enfonce sous le pied du propriétaire
 			local maintenant = os.clock()
 			if rebondDalle[dalle] and maintenant - rebondDalle[dalle] < ANTI_REBOND then return end
 			rebondDalle[dalle] = maintenant
