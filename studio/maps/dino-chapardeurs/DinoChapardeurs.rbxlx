@@ -21875,6 +21875,109 @@ function M.demarrer(ctx)
 		enVente[dino] = nil
 	end)
 
+	-- ===== dalles de collecte devant chaque podium =====
+	-- un rectangle vert, de la largeur du podium, côté allée ; le propriétaire marche dessus pour encaisser
+	-- l'argent de CE dino ; le montant flotte juste au-dessus de la dalle.
+	local VERT_DALLE = Charte.hex("2EE85C")
+	local dalles = {}       -- [podium] = { dalle, index, numero }
+	local rebondDalle = {}  -- [dalle] = heure du dernier encaissement
+
+	local function dinoDeLaPlace(uid, numero)
+		local t = occupation[uid]
+		local entree = t and t[numero]
+		if entree ~= nil and entree ~= true and vivant(entree) and entree:GetAttribute("Etat") == "Enclos" then
+			return entree
+		end
+		return nil
+	end
+
+	local function encaisserPlace(joueur, index, numero, dalle)
+		local dino = dinoDeLaPlace(joueur.UserId, numero)
+		if not dino then return end
+		local stock = nombre(dino:GetAttribute("Stock"), 0)
+		local montant = math.floor(stock)
+		if montant < 1 then return end
+		dino:SetAttribute("Stock", stock - montant)
+		local total = Bus.demander("AjouterArgent", joueur, montant, "Collecte")
+		if total == nil then
+			dino:SetAttribute("Stock", nombre(dino:GetAttribute("Stock"), 0) + montant)
+			return
+		end
+		effet("Collecte", dalle.Position + Vector3.new(0, 1, 0), { montant = montant })
+	end
+
+	local function dalleDe(podium, index, numero)
+		local d = dalles[podium]
+		if d and d.dalle.Parent then return d.dalle end
+		local modele = modeleBase(index)
+		if not modele then return nil end
+		local dossier = modele:FindFirstChild("Collectes")
+		if not dossier then
+			dossier = Instance.new("Folder")
+			dossier.Name = "Collectes"
+			dossier.Parent = modele
+		end
+		-- côté allée : vers l'axe de la Base
+		local centre = Plan.bases[index].centre
+		local sens = 1
+		if podium.Position.X > centre.X then sens = -1 end
+		local profondeur = 2.4
+		local solY = podium.Position.Y - podium.Size.Y / 2 - 1.3 -- sous le socle du podium
+		local dalle = Instance.new("Part")
+		dalle.Name = "C" .. numero
+		dalle.Anchored = true
+		dalle.CanCollide = false
+		dalle.CanQuery = false
+		dalle.CanTouch = true
+		dalle.Material = Enum.Material.SmoothPlastic
+		dalle.Color = VERT_DALLE
+		dalle.Size = Vector3.new(profondeur, 0.25, podium.Size.Z)
+		dalle.CFrame = CFrame.new(podium.Position.X + sens * (podium.Size.X / 2 + 0.3 + profondeur / 2), solY + 0.125, podium.Position.Z)
+		dalle:SetAttribute("Emplacement", numero)
+		dalle.Parent = dossier
+		dalles[podium] = { dalle = dalle, index = index, numero = numero }
+		dalle.Touched:Connect(function(partie)
+			local modeleContact = partie and partie.Parent
+			if not modeleContact then return end
+			local joueur = Players:GetPlayerFromCharacter(modeleContact)
+			if not joueur or Bus.demander("JoueurDeBase", index) ~= joueur then return end
+			local maintenant = os.clock()
+			if rebondDalle[dalle] and maintenant - rebondDalle[dalle] < ANTI_REBOND then return end
+			rebondDalle[dalle] = maintenant
+			pcall(encaisserPlace, joueur, index, numero, dalle)
+		end)
+		return dalle
+	end
+
+	-- une dalle pour chaque podium débloqué (rez-de-chaussée et étage), retirée si son podium disparaît
+	local function majDalles()
+		for index = 1, #Plan.bases do
+			local modele = modeleBase(index)
+			local dossierE = modele and modele:FindFirstChild("Emplacements")
+			if dossierE then
+				for _, podium in ipairs(dossierE:GetChildren()) do
+					local numero = tonumber(string.match(podium.Name, "^E(%d+)$"))
+					if numero and podium:IsA("BasePart") and podium:GetAttribute("Debloque") ~= false then
+						pcall(dalleDe, podium, index, numero)
+					end
+				end
+			end
+		end
+		for podium, d in pairs(dalles) do
+			if not podium.Parent or podium:GetAttribute("Debloque") == false then
+				pcall(function() d.dalle:Destroy() end)
+				dalles[podium] = nil
+				rebondDalle[d.dalle] = nil
+			end
+		end
+	end
+	task.spawn(function()
+		while true do
+			pcall(majDalles)
+			task.wait(2)
+		end
+	end)
+
 	-- ===== stock au-dessus des podiums : pastille « 💰 $1,2K » (médaillon doré + montant vert cerné) =====
 	local function panneauDe(podium)
 		local gui = panneaux[podium]
@@ -21888,9 +21991,9 @@ function M.demarrer(ctx)
 		-- petite pastille posée devant le plateau (pas à travers les murs : AlwaysOnTop = false)
 		gui = Instance.new("BillboardGui")
 		gui.Name = "Stock"
-		gui.Size = UDim2.new(4.2, 0, 1.3, 0)
+		gui.Size = UDim2.new(5.5, 0, 1.7, 0)
 		gui.StudsOffset = Vector3.new(0, 0, 0)
-		gui.MaxDistance = 40
+		gui.MaxDistance = 70
 		gui.AlwaysOnTop = false
 		gui.LightInfluence = 0
 		gui.ClipsDescendants = false
@@ -21927,7 +22030,14 @@ function M.demarrer(ctx)
 				avant = regard.Unit * (math.max(podium.Size.X, podium.Size.Z) / 2)
 			end
 		end
-		gui.StudsOffsetWorldSpace = avant * 1.15 + Vector3.new(0, podium.Size.Y / 2 + 0.2, 0)
+		local dalle = dalleDe(podium, index, numero)
+		if dalle then
+			-- juste au-dessus de la dalle verte de ce podium
+			gui.Adornee = dalle
+			gui.StudsOffsetWorldSpace = Vector3.new(0, 2.4, 0)
+		else
+			gui.StudsOffsetWorldSpace = avant * 1.15 + Vector3.new(0, podium.Size.Y / 2 + 0.2, 0)
+		end
 		gui.Enabled = true
 		local fiche = animations[gui]
 		local texte = fiche and fiche.texte

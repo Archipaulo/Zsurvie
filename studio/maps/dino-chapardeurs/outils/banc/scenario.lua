@@ -515,6 +515,27 @@ avancer(8)
 local stockAvant = 0
 for _, d in ipairs(dinosDe(A)) do stockAvant = stockAvant + (d:GetAttribute("Stock") or 0) end
 controle("l'argent s'accumule", stockAvant > 0, stockAvant)
+-- dalle verte devant un podium : marcher dessus encaisse l'argent de CE dino
+do
+	local cible = nil
+	for _, d in ipairs(dinosDe(A)) do
+		if d:GetAttribute("Etat") == "Enclos" and (d:GetAttribute("Stock") or 0) >= 1 then cible = d break end
+	end
+	local dalle = cible and bA and bA:FindFirstChild("Collectes") and bA.Collectes:FindFirstChild("C" .. tostring(cible:GetAttribute("Emplacement")))
+	local argentDalle = A:GetAttribute("Argent") or 0
+	local stockDalle = cible and cible:GetAttribute("Stock") or 0
+	if dalle then
+		placer(A, dalle.Position + v3(0, 3, 0))
+		banc.obtenirSignal(dalle, "Touched"):FireCote("serveur", A.Character.HumanoidRootPart)
+		avancer(0.5)
+	end
+	controle("dalle verte devant le podium", dalle ~= nil, cible and tostring(cible:GetAttribute("Emplacement")))
+	controle("dalle verte : encaisse l'argent de ce dino", dalle and (cible:GetAttribute("Stock") or 0) < stockDalle * 0.2 and (A:GetAttribute("Argent") or 0) > argentDalle,
+		string.format("stock %.1f -> %.1f", stockDalle, cible and (cible:GetAttribute("Stock") or 0) or -1))
+	local panneau = cible and bA.Emplacements:FindFirstChild("E" .. tostring(cible:GetAttribute("Emplacement")))
+	panneau = panneau and panneau:FindFirstChild("Stock")
+	controle("montant flottant au-dessus de la dalle", panneau and panneau.Adornee == dalle, "")
+end
 local argentAvant = A:GetAttribute("Argent") or 0
 if bA and bA:FindFirstChild("Collecte") then
 	placer(A, bA.Collecte.Position + v3(0, 3, 0))

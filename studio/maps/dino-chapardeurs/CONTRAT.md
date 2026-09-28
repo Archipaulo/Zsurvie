@@ -122,6 +122,12 @@ Attributs posés par Systemes/Bases sur le Model : `Proprietaire` (UserId, 0),
 `NomProprietaire`, `Verrouillee` (bool), `FinVerrou` (heure serveur). Sur
 chaque `E<n>` : `Debloque` (bool, selon le nombre d'emplacements du joueur).
 
+### Dalles de collecte (Systemes/Enclos)
+
+Devant chaque podium débloqué (côté allée), une dalle verte `C<n>` de la largeur du podium
+(dossier `Collectes` de la Base) : quand le propriétaire marche dessus, il encaisse l'argent de
+CE dino ; le montant (BillboardGui « Stock ») flotte juste au-dessus de la dalle.
+
 ### Étage de la Base (Systemes/Etages)
 
 Borne « Etage » à l'entrée de chaque Base (invite réservée au propriétaire) : chaque
