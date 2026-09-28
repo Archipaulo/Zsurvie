@@ -231,40 +231,35 @@ confiance au client.
 | `Son` | n'importe qui | `"clic"`, `"achat"`, `"refus"`, `"argent"`, `"vol"`, `"alerte"`, `"frappe"`, `"verrou"`, `"rare"`, `"renaissance"`, `"decouverte"` |
 | `TutorielEtape` | Interface/Tutoriel | `numero` |
 
-## 10. Emprises (qui construit où)
+## 10. Emprises (qui construit où) — plan v2 « plus d'air »
 
-Sol à Y = 0. Ne rien construire hors de son emprise.
-- **Sol** : sol de tout `Plan.monde` (dessus à Y = 0), allées de terre (de la
-  Place vers le Tapis par les couloirs x = -56, 0, 56 entre les Bases), murs
-  invisibles à `Plan.monde.bord`. Hauteur ≤ 0,3 hors murs.
-- **Tapis** : le tapis de `Plan.tapis.debut` à `fin` (largeur 10, dessus à Y =
-  `Plan.tapis.hauteur`) et ses rebords (|z| ≤ 9,5).
-- **Nurserie** / **FinTapis** : disques de rayon 14 autour de leurs centres.
+Sol à Y = 0. **Toutes les coordonnées viennent de `Plan.lua`** (aucune position de décor en dur).
+Ne rien construire hors de son emprise. Les joueurs doivent pouvoir circuler partout : promenade
+de ~18 studs entre le Tapis et les Bases (`Plan.promenade`), allées de 22 studs entre les Bases
+(`Plan.allees`), Place de rayon 22 ; props seulement en bordure des passages.
+- **Sol** : sol de tout `Plan.monde` (terrain), chemins (promenades le long du Tapis, allées
+  entre les Bases, liaison Place ↔ Tapis, anneau de la Place), murs invisibles aux bords.
+- **Tapis** : de `Plan.tapis.debut` à `fin`, dessus à Y = `Plan.tapis.hauteur`, rebords
+  (|z| ≤ `Plan.tapis.emprise`).
+- **Nurserie** / **FinTapis** : disques de rayon `rayon` autour de leurs centres, couloir du
+  Tapis libre.
 - **Bases** : les 8 bases (voir §5), rien entre elles.
-- **Place** : disque r20 autour de `Plan.place.centre` : l'**unique**
-  SpawnLocation (8 x 8, dessus à Y = 1) au centre, une fontaine, et la borne
-  **Dinodex** avec l'invite « Index » au bord sud.
-- **Comptoir** : la boutique (26 x 18 autour de `Plan.comptoir.centre`), invite
-  « Boutique », ouverte vers la Place (+X).
-- **Autel** : disque r11 autour de `Plan.autel.centre`, invite « Renaissance »,
-  tournée vers la Place (-X).
+- **Place**, **Comptoir**, **Autel** : autour de leurs centres (`Plan.place` r22, `Plan.comptoir`,
+  `Plan.autel` r11), mêmes invites qu'avant.
 - **Cratere** : disque r16 autour de `Plan.cratere.centre`.
-- **Volcan** : disque r34 autour de `Plan.volcan.centre`, hauteur ≤ 70.
-- **Falaises** : bandes |x| 168..190, z -190..-168 et z 150..165 ; plus un
-  sentier d'escalade jusqu'à une plateforme dont le dessus est à `Plan.coffre`.
-- **Jungle** : `Plan.decor.jungleOuest/Est/Nord` limitées à |x| ≤ 166, sans
-  empiéter sur le Volcan (rayon + 6) ni les Falaises.
-- **Riviere** : bande z 131..145 sur x -166..166 (+ une cascade qui sort des
-  falaises de l'est).
-- **Fossiles** : petits props (≤ 4 de haut) dans les couloirs entre les Bases
-  (|x - c| ≤ 5 pour c = -56, 0, 56 et 20 ≤ |z| ≤ 66), dans l'anneau 21..28 de la
-  Place et de part et d'autre de la Nurserie et de la Fin du tapis (|z| 16..30).
-- **Lumieres** : torches le long du Tapis (z = ±8, tous les 16 studs) et autour
-  de la Place (r = 23, tous les 45°).
-- **Signaletique** : panneaux sur la Place (vers Comptoir, Autel, Tapis,
-  Dinodex) et à chaque bout du Tapis.
-- **Ciel** : Lighting uniquement.
-- **DinosHerbivores**, **DinosCarnivores** : ServerStorage uniquement.
+- **Volcan** : disque `Plan.volcan.rayon` autour de son centre, hauteur ≤ `Plan.volcan.hauteur`.
+- **Falaises** : les 4 bandes `Plan.falaises` + le sentier jusqu'à la plateforme dont le
+  dessus est à `Plan.coffre`.
+- **Jungle** : `Plan.decor.jungleOuest/Est/Nord`, sans empiéter sur le Volcan (rayon + 6),
+  le Cratère (rayon + 6), les Falaises ni la Rivière.
+- **Riviere** : bande `Plan.riviere` (zMin..zMax sur xMin..xMax) + cascade depuis la falaise est.
+- **Fossiles** : petits props (≤ 4 de haut) en bordure des allées entre Bases (jamais au milieu),
+  anneau r 24..30 de la Place, côtés de la Nurserie et de la Grande Porte.
+- **Lumieres** : torches le long du Tapis, côté promenade (|z| ≈ 12), et autour de la Place.
+- **Signaletique** : panneaux sur la Place et aux bouts du Tapis.
+- **Ciel** : Lighting. **Interface/Pterosaures** : ptérosaures voxel qui traversent le ciel
+  (client, altitude `Plan.ciel.altitudeVols`).
+- **DinosHerbivores**, **DinosCarnivores**, **OeufMystere** : ServerStorage uniquement.
 
 ## 11. Charte, sons, budget
 
@@ -272,4 +267,4 @@ Style jouet : blocs lisses (SmoothPlastic ; Neon pour ce qui brille), couleurs
 **uniquement** via `ctx.Charte`. Sons intégrés `rbxasset://sounds/...` seulement
 (ex. `electronicpingshort.wav`, `button.wav`, `swordslash.wav`, `uuhhh.mp3`,
 `action_jump.mp3`, `impact_water.mp3`) ; la musique a des SoundId vides à
-compléter. Budget total ~14000 parts ; chacun respecte le sien (voir sa mission).
+compléter. Budget total ~15000 parts ; chacun respecte le sien (voir sa mission).
