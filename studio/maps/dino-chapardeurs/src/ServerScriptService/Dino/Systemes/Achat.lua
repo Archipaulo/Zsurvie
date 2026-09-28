@@ -291,6 +291,8 @@ function M.demarrer(ctx)
 
 	-- repère pattes (+ accessoires), queue et ailes ; renvoie la fiche d'animation ou nil
 	local function analyserMembres(dino)
+		-- dino voxel assemblé : les membres sont animés côté client (Interface/AnimationsDinos)
+		if dino:GetAttribute("Assemble") then return nil end
 		local pivot = pivotDe(dino)
 		if not pivot then return nil end
 		local parts = partsDe(dino)

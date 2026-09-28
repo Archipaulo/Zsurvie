@@ -51,7 +51,7 @@ ProximityPromptService.PromptTriggered:Connect(function(invite, qui)
 end)
 
 local ORDRE = {
-	"HUD", "Base", "Vol", "Batte", "Boutique", "Renaissance", "Index", "Mobile", "Effets", "AnimationsDecor",
+	"HUD", "Base", "Vol", "Batte", "Boutique", "Renaissance", "Index", "Mobile", "Effets", "AnimationsDecor", "AnimationsDinos",
 	"Sons", "Musique", "Tutoriel",
 }
 local dossier = script.Parent:WaitForChild("Interface")

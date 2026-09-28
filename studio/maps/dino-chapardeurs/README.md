@@ -10,6 +10,18 @@ script au lancement : aucun modèle à importer.
 ![Les dinos sur le Tapis](captures/dinos.png)
 ![Interface avant / après le restylage](captures/avant-apres-interface.png)
 
+## 🧊 Dinos en voxels
+
+Les 20 dinos sont modélisés en petits cubes (moteur `ReplicatedStorage/Dino/Voxel.lua`,
+cubes de 1 stud fusionnés en ≈ 150-220 parts par dino, faces texturées « Studs »),
+dans le style des créatures voxel des simulateurs « Steal a … ». Chaque dino est
+soudé à sa part principale (seule ancrée) : le serveur ne déplace qu'une CFrame,
+et les pattes, la queue et les ailes sont animées côté client par des Motor6D
+(`Interface/AnimationsDinos.lua`).
+
+![Les dinos voxel](captures/dinos-voxel-vitrine.png)
+![Gros plan](captures/dinos-voxel-gros-plan.png)
+
 ## ✨ Rendu professionnel (v2)
 
 Terrain Roblox pour la nature (herbe, falaises, rivière, volcan), vrais

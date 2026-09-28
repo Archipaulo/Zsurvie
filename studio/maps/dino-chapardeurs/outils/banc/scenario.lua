@@ -444,8 +444,8 @@ if EXPORTER and stock and stock:FindFirstChild("Dinos") then
 	local socle = Instance.new("Part")
 	socle.Name = "Socle"
 	socle.Anchored = true
-	socle.Size = Vector3.new(260, 1, 30)
-	socle.CFrame = CFrame.new(20, 59.5, 100)
+	socle.Size = Vector3.new(420, 1, 40)
+	socle.CFrame = CFrame.new(100, 59.5, 100)
 	socle.Color = Color3.fromRGB(110, 200, 90)
 	socle.Parent = vitrine
 	local x = -95

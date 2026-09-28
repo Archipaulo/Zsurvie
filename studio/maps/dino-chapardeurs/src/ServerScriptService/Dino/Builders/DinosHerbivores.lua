@@ -1,47 +1,65 @@
 -- Constructeur DinosHerbivores : gabarits des espèces de la famille « Herbivore »,
 -- rangés dans ServerStorage.Dino.Dinos (clonés ensuite par Systemes/Tapis).
--- Style « petits cubes » des simulateurs « Steal a … » (STYLE.md §5) : chaque dino est
--- modélisé en voxels de 1 stud avec ctx.Voxel, fusionnés en parts à texture « Studs ».
--- Chibi : grosse tête carrée aux arêtes adoucies, jamais plus large que ce qu'elle doit laisser
--- voir (cou, collerette, carapace, plaques) ; yeux comme les carnivores (blanc, pupille noire,
--- reflet blanc), joues roses, bouche lisible ; volume par la couleur (cubes exposés vers le haut
--- plus clairs, ombres chaudes choisies à la main), grain de couleur cube par cube, ventre
--- contrasté, accessoires-signatures qui dépassent de la silhouette ; taille selon la rareté,
--- Neon dès Mythique (seulement en pointe, pour que le halo garde la forme), lumière d'aura.
--- Repère : origine au sol sous le centre du dino, regard vers -Z, x > 0 = côté droit (D).
--- Groupes nommés pour les animations (Corps, Tete, Cou, Queue, PatteAvG/D, PatteArG/D, Massue)
--- et pour les mutations (Oeil, Pupille, Reflet, Joue, Bouche : jamais recolorés ; Crete, Tache).
+-- Version 2 « petits cubes » (STYLE.md §5 corrigé) : de VRAIS ANIMAUX en voxels de 1 stud
+-- (ctx.Voxel, faces « Studs »), reconnaissables de profil à leur silhouette : corps bien visible,
+-- pattes épaisses (2 x 2 cubes au moins) détachées du corps, queue longue, cou, crêtes, cornes.
+-- Tête ≈ 30 % de la hauteur ; PETITS yeux sur les côtés du museau (1 x 2 : pupille noire + un cube
+-- blanc de reflet ; 2 x 2 seulement pour une tête d'au moins 6 cubes), bouche fine, narines.
+-- Couleurs : dessus plus clair, dessous plus foncé, ventre contrasté, motifs nets, puis « tramage »
+-- (cubes en 3 nuances plus claires ou plus foncées tirés au hasard, graine fixe) posé tant que
+-- le gabarit tient dans le budget de parts (220).
+-- Tailles selon la rareté (Commun 9-11 cubes de haut … Divin 17-19), Neon dès Mythique.
+-- Repère : origine au sol sous le centre du dino, regard vers -Z, x > 0 = côté droit (D) ;
+-- on modèle le côté droit puis V:symetriser() recopie à gauche (« …D » -> « …G »).
+-- Groupes : Corps (PrimaryPart), Cou, Tete, Queue, PatteAvG/D, PatteArG/D, Massue (animations) ;
+-- Oeil, Pupille, Reflet, Narine, Bouche (visage, jamais recoloré par les mutations) ;
+-- Crete, Corne, Tache, Cristal, Aureole (accessoires).
 local M = {}
 
-local BUDGET = 150 -- parts maximum par gabarit (vérifié par Voxel:construire)
+local BUDGET = 220 -- parts maximum par gabarit (vérifié par Voxel:construire)
+local MARGE = 3 -- parts gardées en réserve sous le budget quand on pose le tramage
+
+-- groupes jamais tramés (visage lisible, cristaux et auréole nets)
+local SANS_TRAME = { Oeil = true, Pupille = true, Reflet = true, Narine = true, Bouche = true, Cristal = true, Aureole = true }
 
 -- ===== boîte à outils commune =====
 local function kit(ctx)
 	local C = ctx.Charte
-	local K = { C = C }
-	local hex = C.hex
-	K.hex = hex
-	K.encre = hex("1E1B33")
-	K.blanc = hex("FFFFFF")
-	K.rose = hex("FF8FB1")
-	K.creme = hex("FFF4DC")
-	K.bouche = hex("7A1F3D")
-	K.langue = hex("FF6F91")
+	local K = {}
+	local function hex(h)
+		return Color3.fromRGB(tonumber(string.sub(h, 1, 2), 16), tonumber(string.sub(h, 3, 4), 16), tonumber(string.sub(h, 5, 6), 16))
+	end
+	K.hex = (C and C.hex) or hex
+	K.encre = K.hex("1E1B33")
+	K.blanc = K.hex("FFFFFF")
+	K.creme = K.hex("FFF4DC")
+	K.levre = K.hex("4A2436")
+	K.narine = K.hex("3A2233")
+	local BLANC = Color3.new(1, 1, 1)
 
-	-- les teintes d'une couleur : base, clair (dessus), foncé (dessous), très foncé (détails)
-	-- hOmbre : teinte d'ombre choisie à la main (évite les jaunes « olive »)
+	local function eclaircir(c, a)
+		return c:Lerp(BLANC, a)
+	end
+	local function assombrir(c, a)
+		return Color3.new(c.R * a, c.G * a, c.B * a)
+	end
+	K.eclaircir = eclaircir
+	K.assombrir = assombrir
+
+	-- teintes d'une couleur : b (base), c (dessus, plus clair), f (dessous, plus foncé), ff (détails)
 	function K.pal(h, hOmbre)
-		local b = hex(h)
-		local f
-		if hOmbre then
-			f = hex(hOmbre)
-		else
-			f = C.ombre(b)
-		end
-		return { b = b, c = C.lumiere(b), f = f, ff = C.ombre(f) }
+		local b = K.hex(h)
+		local f = hOmbre and K.hex(hOmbre) or assombrir(b, 0.8)
+		return { b = b, c = eclaircir(b, 0.22), f = f, ff = assombrir(f, 0.78) }
 	end
 
-	-- pavé aux arêtes adoucies (r = 0 : pavé plein ; r = 1 : arêtes retirées ; r = 2 : très arrondi)
+	-- petit hachage stable (tramage, motifs) : nombre dans [0, 1[
+	function K.hache(x, y, z, graine)
+		local s = math.sin(x * 12.9898 + y * 78.233 + z * 37.719 + (graine or 0) * 5.137) * 43758.5453
+		return s - math.floor(s)
+	end
+
+	-- pavé aux arêtes adoucies (r = 1 : arêtes retirées)
 	function K.pave(V, x1, y1, z1, x2, y2, z2, c, g, r)
 		r = r or 0
 		local xa, xb = math.min(x1, x2), math.max(x1, x2)
@@ -79,57 +97,166 @@ local function kit(ctx)
 		end
 	end
 
-	-- plaque pointue dans le plan YZ, épaisse de x1 à x2 : largeurs = demi-largeurs de chaque rangée
-	-- (du bas vers le haut). Intérieur c ; bord cBord sur la rangée du haut et une case sur deux du contour.
-	function K.plaque(V, x1, x2, yBase, zc, largeurs, c, cBord, g)
-		for i, l in ipairs(largeurs) do
-			local y = yBase + i - 1
-			for dz = -l, l do
-				local couleur = c
-				if i == #largeurs or (math.abs(dz) == l and (y + dz) % 2 == 0) then
-					couleur = cBord
-				end
-				V:boite(x1, y, zc + dz, x2, y, zc + dz, couleur, g)
-			end
-		end
-	end
-
 	-- chemin de cubes reliés par leurs faces entre des points successifs { x, y, z }
-	-- couleurDe(i) : couleur du i-ème cube posé (i à partir de 1)
 	function K.chemin(V, points, couleurDe, g)
 		local i = 0
 		local function poser(x, y, z)
-			if not V:lire(x, y, z) or V:lire(x, y, z).g == g then
-				i = i + 1
-				V:mettre(x, y, z, couleurDe(i), g)
-			end
+			i = i + 1
+			V:mettre(x, y, z, couleurDe(i), g)
 		end
 		local x, y, z = points[1][1], points[1][2], points[1][3]
 		poser(x, y, z)
 		for k = 2, #points do
 			local p = points[k]
 			while x ~= p[1] or y ~= p[2] or z ~= p[3] do
-				if x ~= p[1] then
-					x = x + (p[1] > x and 1 or -1)
-				elseif y ~= p[2] then
+				if y ~= p[2] then
 					y = y + (p[2] > y and 1 or -1)
-				else
+				elseif z ~= p[3] then
 					z = z + (p[3] > z and 1 or -1)
+				else
+					x = x + (p[1] > x and 1 or -1)
 				end
 				poser(x, y, z)
 			end
 		end
 	end
 
-	-- volume par la couleur : cube de teinte « b » sans voisin au-dessus -> clair ;
-	-- yBas (facultatif) : les cubes de teinte « b » à cette hauteur ou plus bas -> foncé
-	function K.volume(V, p, yBas)
+	-- patte épaisse : pilier l x p de y = 0 à y = h (le haut se cache dans le corps posé ensuite),
+	-- ongles crème devant le pied
+	function K.patte(V, o)
+		V:boite(o.x, 0, o.z, o.x + o.l - 1, o.h, o.z + o.p - 1, o.c, o.g)
+		if o.pied then
+			V:boite(o.x, 0, o.z, o.x + o.l - 1, 0, o.z + o.p - 1, o.pied, o.g)
+		end
+		if o.ongle then
+			local pas = math.max(1, o.l - 1)
+			for x = o.x, o.x + o.l - 1, pas do
+				V:mettre(x, 0, o.z - 1, o.ongle, o.g)
+			end
+		end
+	end
+
+	-- cube le plus à l'extérieur du côté s (1 : droite, -1 : gauche) en (y, z), dans le groupe g
+	function K.bordX(V, s, y, z, g)
+		for i = 16, 0, -1 do
+			local v = V:lire(s * i, y, z)
+			if v and (not g or v.g == g) then
+				return s * i
+			end
+		end
+		return nil
+	end
+
+	-- premier cube rencontré en venant de -Z en (x, y), jusqu'à zmax
+	function K.facade(V, x, y, zmax)
+		for z = -40, zmax or 40 do
+			if V:lire(x, y, z) then
+				return z
+			end
+		end
+		return nil
+	end
+
+	-- premier cube rencontré en venant du haut en (x, z)
+	function K.dessus(V, x, z)
+		for y = 40, 0, -1 do
+			if V:lire(x, y, z) then
+				return y
+			end
+		end
+		return nil
+	end
+
+	-- PETITS yeux sur les CÔTÉS de la tête ; (y, z) = pupille (coin bas-avant de l'œil) ;
+	-- hTete = hauteur de la tête en cubes. Tête de moins de 6 cubes : œil 1 x 2 vertical, pupille
+	-- noire en (bord, y, z) + reflet blanc en (bord, y + 1, z), rien en z + 1 (comme la référence :
+	-- 1 noir + 1 blanc). Tête d'au moins 6 cubes : 2 x 2 = 2 noirs (bas-avant, haut-arrière) + reflet
+	-- blanc en haut devant, le cube bas-arrière garde la peau. Jamais sur la façade : un cube n'est
+	-- peint que s'il a un voisin devant lui (z - 1). Le haut de l'œil (y + 1) doit être une rangée
+	-- pleine de la tête (pas la rangée du crâne aux arêtes retirées par K.tete).
+	function K.yeux(V, y, z, hTete)
+		local cases = { { 0, 0, K.encre, "Pupille" }, { 1, 0, K.blanc, "Reflet" } }
+		if (hTete or 4) >= 6 then
+			table.insert(cases, { 1, 1, K.encre, "Pupille" })
+		end
+		for _, s in ipairs({ 1, -1 }) do
+			for _, c in ipairs(cases) do
+				local yy, zz = y + c[1], z + c[2]
+				local x = K.bordX(V, s, yy, zz, "Tete")
+				if x and x ~= 0 and V:lire(x, yy, zz - 1) then
+					V:mettre(x, yy, zz, c[3], c[4])
+				end
+			end
+		end
+	end
+
+	-- bouche fine (1 cube de haut) : ligne sur les côtés du museau de z1 à z2 (et sur la façade
+	-- sur une demi-largeur largeurFace si on la donne)
+	function K.bouche(V, y, z1, z2, couleur, largeurFace)
+		couleur = couleur or K.levre
+		for _, s in ipairs({ 1, -1 }) do
+			for z = z1, z2 do
+				local x = K.bordX(V, s, y, z)
+				if x then V:mettre(x, y, z, couleur, "Bouche") end
+			end
+		end
+		if largeurFace then
+			for x = -largeurFace, largeurFace do
+				local z = K.facade(V, x, y)
+				if z then V:mettre(x, y, z, couleur, "Bouche") end
+			end
+		end
+	end
+
+	-- pavé symétrique (demi-largeur hw) de y1 à y2 et de z1 à z2, arêtes adoucies si r = 1
+	function K.bloc(V, hw, y1, y2, z1, z2, c, g, r)
+		K.pave(V, -hw, y1, z1, hw, y2, z2, c, g, r)
+	end
+
+	-- tête : pavé symétrique dont on retire les arêtes du dessus (crâne arrondi, côtés plats pour les yeux)
+	function K.tete(V, hw, y1, y2, z1, z2, c)
+		V:boite(-hw, y1, z1, hw, y2, z2, c, "Tete")
+		for x = -hw, hw do
+			V:mettre(x, y2, z1, nil)
+			V:mettre(x, y2, z2, nil)
+		end
+		for z = z1, z2 do
+			V:mettre(-hw, y2, z, nil)
+			V:mettre(hw, y2, z, nil)
+		end
+	end
+
+	-- queue (ou cou) en escalier : liste de tronçons { hw, y1, y2, z1, z2 }
+	function K.troncons(V, liste, c, g)
+		for _, t in ipairs(liste) do
+			V:boite(-t[1], t[2], t[4], t[1], t[3], t[5], c, g)
+		end
+	end
+
+	-- narines : deux cubes sur la façade du museau, en x = ±ecart, à la hauteur y, d'une nuance
+	-- plus sombre de la peau (discrètes : elles ne doivent pas passer pour des yeux)
+	function K.narines(V, y, ecart)
+		for _, s in ipairs({ 1, -1 }) do
+			local z = K.facade(V, s * ecart, y)
+			if z then
+				local v = V:lire(s * ecart, y, z)
+				V:mettre(s * ecart, y, z, assombrir(v.c.couleur, 0.62), "Narine")
+			end
+		end
+	end
+
+	-- volume par la couleur : cubes de teinte p.b sans voisin au-dessus -> clair,
+	-- sans voisin en dessous (hors sol) -> foncé ; ventre(x, y, z) -> couleur du ventre (ou nil)
+	function K.teinter(V, p, groupes, ventre)
 		local liste = {}
 		for _, v in pairs(V.grille) do
-			if v.c.couleur == p.b and v.c.materiau == nil then
-				if not V:lire(v.x, v.y + 1, v.z) then
+			if v.c.couleur == p.b and v.c.materiau == nil and (not groupes or groupes[v.g]) then
+				local cv = ventre and ventre(v.x, v.y, v.z, v)
+				if cv then
+					table.insert(liste, { v, cv })
+				elseif not V:lire(v.x, v.y + 1, v.z) then
 					table.insert(liste, { v, p.c })
-				elseif yBas and v.y <= yBas then
+				elseif v.y > 0 and not V:lire(v.x, v.y - 1, v.z) then
 					table.insert(liste, { v, p.f })
 				end
 			end
@@ -139,573 +266,748 @@ local function kit(ctx)
 		end
 	end
 
-	-- repeint les cubes d'une palette (base, clair ou foncé) quand test(x, y, z, v) est vrai
-	function K.repeindre(V, p, couleur, test, groupes)
-		V:peindre(function(x, y, z, v)
+	-- repeint les cubes des teintes d'une palette (b, c, f) quand test(x, y, z, v) est vrai
+	function K.repeindre(V, p, couleur, test, groupes, groupeNouveau)
+		for _, v in pairs(V.grille) do
 			local c = v.c.couleur
-			if (c == p.b or c == p.c or c == p.f) and v.c.materiau == nil and (not groupes or groupes[v.g]) and test(x, y, z, v) then
-				return couleur
-			end
-			return nil
-		end)
-	end
-
-	-- petit hachage stable (motifs), symétrique en x
-	function K.hache(x, y, z)
-		local h = math.abs(x) * 7 + y * 13 + z * 31 + math.abs(x * y) * 3
-		return (h % 11) / 11
-	end
-
-	-- grain de couleur cube par cube (références « Steal a … ») : quelques cubes clairs et foncés isolés
-	function K.grain(V, p, groupes)
-		K.repeindre(V, p, p.c, function(x, y, z) return K.hache(x, y, z) > 0.85 end, groupes)
-		K.repeindre(V, p, p.f, function(x, y, z, v) return v.c.couleur == p.b and K.hache(x, y + 1, z + 2) > 0.85 end, groupes)
-	end
-
-	-- peint la surface avant (premier cube rencontré en venant de -Z, jusqu'à zmax) en (x, y)
-	function K.facade(V, x, y, c, g, zmax)
-		for z = -40, zmax or 40 do
-			if V:lire(x, y, z) then
-				V:mettre(x, y, z, c, g)
-				return z
-			end
-		end
-		return nil
-	end
-
-	-- tête chibi : pavé arrondi (demi-largeur hw, bas y, hauteur h, face avant z, profondeur d)
-	-- et museau en saillie de 2 cubes de haut (o.museau = { hw, d, c, bec = couleur de la mâchoire })
-	function K.tete(V, o)
-		K.pave(V, -o.hw, o.y, o.z, o.hw, o.y + o.h - 1, o.z + o.d - 1, o.c, "Tete", 1)
-		local m = o.museau
-		if m then
-			V:boite(-m.hw, o.y, o.z - m.d, m.hw, o.y + 1, o.z, m.c or o.c, "Tete")
-			if m.bec then
-				V:boite(-m.hw, o.y, o.z - m.d, m.hw, o.y, o.z - 1, m.bec, "Tete")
+			if (c == p.b or c == p.c or c == p.f) and v.c.materiau == nil and (not groupes or groupes[v.g]) and test(v.x, v.y, v.z, v) then
+				v.c = { couleur = couleur, materiau = nil }
+				if groupeNouveau then v.g = groupeNouveau end
 			end
 		end
 	end
 
-	-- visage de la tête o (après les couleurs de volume), même langage que les carnivores :
-	-- œil de 3 de large sur t rangées : pupille noire 2 x 2 côté intérieur (colonnes xo, xo + 1),
-	-- blanc (groupe « Oeil ») sur la colonne extérieure xo + 2 et, si t = 3, sur la rangée du haut ;
-	-- reflet blanc en haut à l'intérieur de la pupille ; joues roses sous le coin extérieur ;
-	-- o.front : rangées de front laissées libres au-dessus des yeux ; sourire en U sur le museau (sauf bec)
-	function K.visage(V, o)
-		local t = o.t or 2
-		local xo = o.xo or math.max(1, o.hw - 3 - (o.ecart or 0)) -- colonne intérieure de l'œil droit
-		local yo = o.y + o.h - 1 - t - (o.front or 0)
-		local zmax = o.z + 1
-		for _, s in ipairs({ 1, -1 }) do
-			for j = 0, t - 1 do
-				for i = 0, 2 do
-					local c, g = o.blanc or K.blanc, "Oeil"
-					if i <= 1 and j <= 1 then
-						c, g = o.pupille or K.encre, "Pupille"
+	-- origine sous le centre du dino : recentre la grille en z (x est déjà symétrique)
+	function K.recentrer(V)
+		local zmin, zmax = math.huge, -math.huge
+		local liste = {}
+		for _, v in pairs(V.grille) do
+			zmin = math.min(zmin, v.z)
+			zmax = math.max(zmax, v.z)
+			table.insert(liste, v)
+		end
+		if #liste == 0 then return end
+		local dz = -math.floor((zmin + zmax) / 2 + 0.5)
+		if dz == 0 then return end
+		V.grille = {}
+		V.nombre = 0
+		for _, v in ipairs(liste) do
+			V:mettre(v.x, v.y, v.z + dz, { couleur = v.c.couleur, materiau = v.c.materiau }, v.g)
+		end
+	end
+
+	-- compteur de parts : même maillage glouton que Voxel:construire, groupe par groupe
+	local function cle(x, y, z)
+		return x .. "," .. y .. "," .. z
+	end
+	function K.compteur(V)
+		local grille = V.grille
+		local interieur = {}
+		local parGroupe = {}
+		for _, v in pairs(grille) do
+			interieur[v] = (grille[cle(v.x + 1, v.y, v.z)] and grille[cle(v.x - 1, v.y, v.z)]
+				and grille[cle(v.x, v.y + 1, v.z)] and grille[cle(v.x, v.y - 1, v.z)]
+				and grille[cle(v.x, v.y, v.z + 1)] and grille[cle(v.x, v.y, v.z - 1)]) and true or false
+			parGroupe[v.g] = parGroupe[v.g] or {}
+			table.insert(parGroupe[v.g], v)
+		end
+		for _, liste in pairs(parGroupe) do
+			table.sort(liste, function(a, b)
+				local ia, ib = interieur[a], interieur[b]
+				if ia ~= ib then return ib end
+				if a.z ~= b.z then return a.z < b.z end
+				if a.y ~= b.y then return a.y < b.y end
+				return a.x < b.x
+			end)
+		end
+		local function compter(g)
+			local liste = parGroupe[g]
+			if not liste then return 0 end
+			local pris = {}
+			local n = 0
+			local function libre(x, y, z, c)
+				local v = grille[cle(x, y, z)]
+				if not v or v.g ~= g or pris[v] then return false end
+				return (v.c.couleur == c.couleur and v.c.materiau == c.materiau) or interieur[v]
+			end
+			for _, graine in ipairs(liste) do
+				if not pris[graine] then
+					local c = graine.c
+					local x0, y0, z0 = graine.x, graine.y, graine.z
+					local x1 = x0
+					while libre(x1 + 1, y0, z0, c) do x1 = x1 + 1 end
+					local y1 = y0
+					local ok = true
+					while ok do
+						for x = x0, x1 do
+							if not libre(x, y1 + 1, z0, c) then ok = false break end
+						end
+						if ok then y1 = y1 + 1 end
 					end
-					if i == 0 and j == 1 then
-						c, g = o.reflet or K.blanc, "Reflet"
+					local z1 = z0
+					ok = true
+					while ok do
+						for x = x0, x1 do
+							for y = y0, y1 do
+								if not libre(x, y, z1 + 1, c) then ok = false break end
+							end
+							if not ok then break end
+						end
+						if ok then z1 = z1 + 1 end
 					end
-					K.facade(V, s * (xo + i), yo + j, c, g, zmax)
+					for x = x0, x1 do
+						for y = y0, y1 do
+							for z = z0, z1 do
+								pris[grille[cle(x, y, z)]] = true
+							end
+						end
+					end
+					n = n + 1
 				end
 			end
-			for x = xo + 2, xo + 3 do
-				K.facade(V, s * x, yo - 1, o.couleurJoue or K.rose, "Joue", zmax)
+			return n
+		end
+		return compter, parGroupe, interieur
+	end
+
+	-- tramage : des cubes visibles, tirés au hasard (graine fixe), prennent une nuance un peu plus
+	-- claire ou plus foncée de leur couleur ; chaque lot n'est gardé que si le gabarit reste sous
+	-- le budget de parts. Renvoie le nombre de parts prévu.
+	function K.tramer(V, budget, graine)
+		local compter, parGroupe, interieur = K.compteur(V)
+		local parG, total = {}, 0
+		local noms = {}
+		for g in pairs(parGroupe) do
+			parG[g] = compter(g)
+			total = total + parG[g]
+			table.insert(noms, g)
+		end
+		table.sort(noms)
+		local limite = budget - MARGE
+		-- candidats groupe par groupe (les plus grandes surfaces d'abord)
+		local candidats = {}
+		for _, g in ipairs(noms) do
+			if not SANS_TRAME[g] then
+				local liste = {}
+				for _, v in ipairs(parGroupe[g]) do
+					if not interieur[v] and v.c.materiau == nil then
+						table.insert(liste, v)
+					end
+				end
+				table.sort(liste, function(a, b)
+					return K.hache(a.x, a.y, a.z, graine) < K.hache(b.x, b.y, b.z, graine)
+				end)
+				table.insert(candidats, { g = g, liste = liste })
 			end
 		end
-		local m = o.museau
-		if m and not m.bec then
-			local l = m.hw - 1
-			for x = -l, l do
-				K.facade(V, x, o.y, o.bouche or K.bouche, "Bouche", zmax)
+		table.sort(candidats, function(a, b)
+			if #a.liste ~= #b.liste then return #a.liste > #b.liste end
+			return a.g < b.g
+		end)
+		local essais = 0
+		local trames = {} -- cubes déjà nuancés (jamais deux fois)
+		local posesDe = {}
+		-- deux passes : d'abord les lots bon marché (au plus 0,7 part par cube nuancé), sur tous les
+		-- groupes, puis on complète avec le reste du budget
+		for passe = 1, 2 do
+		for _, cand in ipairs(candidats) do
+			local g, liste = cand.g, cand.liste
+			-- part de tramage visée : un cube visible sur 3 au plus (effet « petits cubes » à 2-3 teintes)
+			local maxi = math.floor(#liste / 3)
+			local poses, i, taille, refus = posesDe[g] or 0, 1, 6, 0
+			while i <= #liste and poses < maxi and total < limite and essais < 200 and refus < 6 do
+				local lot = {}
+				for j = i, math.min(#liste, i + taille - 1) do
+					table.insert(lot, liste[j])
+				end
+				i = i + #lot
+				local anciens = {}
+				local modifies = {}
+				-- repeint un cube (s'il est libre, visible et encore de la couleur de base) ET son reflet
+				-- en -x : la tête, le corps, le cou et la queue sont symétriques, et une rangée x = -a..a
+				-- dont les deux bouts ont la même nuance reste une seule part (le milieu est caché)
+				local function libre(w, base)
+					return w and not anciens[w] and not trames[w] and w.g == g and not interieur[w] and w.c.materiau == nil and w.c.couleur == base
+				end
+				local function poser(w, nc)
+					anciens[w] = w.c
+					table.insert(modifies, w)
+					w.c = { couleur = nc, materiau = nil }
+					if w.x ~= 0 then
+						local m = V:lire(-w.x, w.y, w.z)
+						if libre(m, anciens[w].couleur) then
+							anciens[m] = m.c
+							table.insert(modifies, m)
+							m.c = { couleur = nc, materiau = nil }
+						end
+					end
+				end
+				for _, v in ipairs(lot) do
+					if not anciens[v] and not trames[v] then
+						local h = K.hache(v.x, v.y, v.z, graine + 17)
+						local base = v.c.couleur
+						-- trois nuances : plus claire, un peu plus foncée, nettement plus foncée
+						local nc
+						if h < 0.42 then
+							nc = eclaircir(base, 0.16)
+						elseif h < 0.76 then
+							nc = assombrir(base, 0.86)
+						else
+							nc = assombrir(base, 0.74)
+						end
+						poser(v, nc)
+						-- petit trait vertical de 1 à 3 cubes (moins cher en parts que des cubes isolés)
+						local h2 = K.hache(v.x, v.y, v.z, graine + 29)
+						local longueur = (h2 < 0.35 and 1) or (h2 < 0.7 and 2) or 3
+						for dy = 1, longueur - 1 do
+							local dessous = V:lire(v.x, v.y - dy, v.z)
+							if not libre(dessous, base) then break end
+							poser(dessous, nc)
+						end
+					end
+				end
+				essais = essais + 1
+				local n = compter(g)
+				local cher = passe == 1 and (n - parG[g]) > math.max(1, #modifies * 0.7)
+				if total - parG[g] + n <= limite and not cher then
+					total = total - parG[g] + n
+					parG[g] = n
+					poses = poses + #modifies
+					for _, v in ipairs(modifies) do
+						trames[v] = true
+					end
+				else
+					for _, v in ipairs(modifies) do
+						v.c = anciens[v]
+					end
+					if not cher then
+						refus = refus + 1
+						taille = math.max(1, math.floor(taille / 2))
+					end
+				end
 			end
-			K.facade(V, m.hw, o.y + 1, o.bouche or K.bouche, "Bouche", zmax)
-			K.facade(V, -m.hw, o.y + 1, o.bouche or K.bouche, "Bouche", zmax)
-			if o.langue then
-				K.facade(V, 0, o.y, o.langue, "Bouche", zmax)
-			end
+			posesDe[g] = poses
 		end
+		end
+		return total
 	end
 	return K
 end
 
 local ESPECES = {}
-local CORPS = { Corps = true, Queue = true, Cou = true }
-local TRONC = { Corps = true }
-local PEAU = { Corps = true, Tete = true, Queue = true, Cou = true }
 
--- ===== Commun (8 cubes de haut au plus) =====
+-- ensembles de groupes
+local function groupes(...)
+	local t = {}
+	for _, g in ipairs({ ... }) do t[g] = true end
+	return t
+end
+local PEAU = groupes("Corps", "Cou", "Tete", "Queue", "PatteAvD", "PatteAvG", "PatteArD", "PatteArG")
 
--- Galli : petit coureur à bec orange pointu, grosse tête ronde, crête rouge, queue en plumeau
-function ESPECES.Galli(V, K)
-	local p = K.pal("FFB23F", "E8872E")
-	local rouge = K.pal("FF4F5E")
-	local orange = K.pal("FF8A1F")
-	local ventre = K.hex("FFF1C9")
-	-- pattes 2 x 2 et orteils
-	V:boite(1, 0, 1, 2, 1, 2, orange.f, "PatteArD")
-	V:boite(1, 0, 0, 2, 0, 0, orange.b, "PatteArD")
-	-- corps de coureur (7 x 3 x 7), soudé à la tête par un cou
-	K.pave(V, -3, 2, -1, 3, 4, 5, p.b, "Corps", 1)
-	V:boite(-1, 3, -1, 1, 4, 0, p.b, "Corps")
-	V:boite(4, 3, 1, 4, 3, 2, p.b, "PatteAvD") -- aileron collé au flanc
-	-- queue en plumeau relevée : dépasse derrière la tête en 3/4
-	V:tube(0, 3, 5, 0, 5, 7, 1.1, p.b, "Queue", 0.6)
-	V:boite(0, 5, 7, 0, 7, 8, rouge.b, "Queue")
-	V:boite(1, 6, 7, 1, 7, 7, rouge.c, "Queue")
-	local tete = { hw = 4, y = 2, h = 5, z = -5, d = 5, c = p.b }
-	K.tete(V, tete)
-	-- crête rouge : croix peinte dans la rangée du haut et trois lobes
-	V:boite(0, 6, -4, 0, 6, -2, rouge.b, "Crete")
-	V:mettre(1, 6, -3, rouge.b, "Crete")
-	V:boite(0, 7, -4, 0, 7, -2, rouge.b, "Crete")
-	V:symetriser()
-	K.volume(V, p)
-	K.repeindre(V, p, ventre, function(x, y, z) return y <= 3 and math.abs(x) <= 1 end, TRONC)
-	K.grain(V, p, { Corps = true, Tete = true })
-	K.visage(V, tete)
-	-- bec pointu : rétrécit vers l'avant et libère les joues ; bouche et barbillon dessous
-	V:boite(-1, 3, -6, 1, 3, -6, K.hex("FF9F1C"), "Tete")
-	V:mettre(0, 3, -7, K.hex("FF9F1C"), "Tete")
-	V:mettre(0, 2, -6, K.hex("E8872E"), "Tete")
-	V:mettre(1, 2, -6, K.bouche, "Bouche")
-	V:mettre(-1, 2, -6, K.bouche, "Bouche")
-	V:mettre(0, 1, -6, rouge.b, "Tete")
+-- ventre : zone basse du tronc (Corps, Cou) dans |x| <= hw, y <= yMax, z1 <= z <= z2
+local function zoneVentre(couleur, hw, yMax, z1, z2)
+	return function(x, y, z, v)
+		if (v.g == "Corps" or v.g == "Cou") and math.abs(x) <= hw and y <= yMax and z >= z1 and z <= z2 then
+			return couleur
+		end
+		return nil
+	end
 end
 
--- Pachy : dôme jaune bosselé de violet sur une tête bleue, petit corps trapu
+-- ===== Commun (9 à 11 cubes de haut) =====
+
+-- Galli : petit « dino-autruche » orange : longues jambes fines, corps court et bas, cou fin
+-- dressé à la verticale devant le poitrail, petite tête portée en avant, bec pointu, queue en
+-- plumeau rouge
+function ESPECES.Galli(V, K)
+	local p = K.pal("FFB23F", "E0822A")
+	local rouge = K.pal("FF4F5E")
+	local bec = K.pal("FF8A1F", "D9661A")
+	local ventre = K.hex("FFF1C9")
+	-- longues jambes : cuisse emplumée sur le flanc, tibia 2 x 2 haut, pied orange à ongles crème
+	V:boite(3, 5, -1, 3, 7, 1, p.b, "PatteArD")
+	K.patte(V, { x = 1, z = 0, l = 2, p = 2, h = 5, c = p.f, g = "PatteArD", pied = bec.b, ongle = K.creme })
+	-- corps court (3 de haut) ; petits bras à griffe
+	K.bloc(V, 2, 5, 7, -2, 3, p.b, "Corps", 1)
+	V:boite(3, 6, -2, 3, 6, -1, p.b, "PatteAvD")
+	V:mettre(3, 5, -2, K.creme, "PatteAvD")
+	-- cou fin (3 de large) dressé à la verticale sur 5 cubes devant le poitrail
+	K.troncons(V, { { 1, 5, 9, -4, -3 } }, p.b, "Cou")
+	-- petite tête 3 x 3 portée en avant (vide dessous : silhouette d'autruche), bec de 3
+	K.tete(V, 1, 8, 10, -7, -4, p.b)
+	K.bloc(V, 0, 8, 9, -9, -8, bec.b, "Tete")
+	V:mettre(0, 8, -10, bec.f, "Tete")
+	-- queue fine et longue, plumeau rouge au bout
+	K.troncons(V, { { 1, 5, 7, 4, 6 }, { 1, 6, 7, 7, 8 }, { 0, 6, 7, 9, 10 } }, p.b, "Queue")
+	K.bloc(V, 1, 6, 7, 11, 11, rouge.b, "Queue")
+	V:mettre(0, 8, 11, rouge.c, "Queue")
+	V:mettre(0, 6, 12, rouge.f, "Queue")
+	V:symetriser()
+	K.teinter(V, p, PEAU, zoneVentre(ventre, 1, 5, -6, 3))
+	-- rayures foncées sur le dos et la queue
+	K.repeindre(V, p, p.f, function(x, y, z) return y >= 7 and z >= 0 and z % 3 == 0 end, groupes("Corps", "Queue"))
+	-- bec : mâchoire inférieure plus foncée (bouche)
+	V:boite(0, 8, -9, 0, 8, -8, bec.f, "Tete")
+	K.yeux(V, 8, -6, 3)
+end
+
+-- Pachy : bipède trapu bleu, tête tenue basse au niveau du dos, dôme osseux crème bombé bordé
+-- de bosses violettes, queue épaisse
 function ESPECES.Pachy(V, K)
-	local p = K.pal("5BC0FF")
-	local dome = K.pal("FFC23D", "F29A2E")
+	local p = K.pal("5BC0FF", "3B8FD6")
+	local dome = K.hex("F3E2B8")
+	local couronne = K.hex("D9C08E")
 	local bosse = K.hex("B86BFF")
 	local ventre = K.hex("DDF3FF")
-	V:boite(1, 0, 1, 2, 1, 2, p.f, "PatteArD")
-	V:boite(1, 0, 0, 2, 0, 0, K.creme, "PatteArD")
-	K.pave(V, -3, 2, 0, 3, 5, 4, p.b, "Corps", 1)
-	V:mettre(4, 3, 1, p.b, "PatteAvD")
-	V:tube(0, 3, 4, 0, 2, 8, 1.2, p.b, "Queue", 0.5)
-	local tete = { hw = 4, y = 1, h = 5, z = -5, d = 5, c = p.b, front = 1 }
-	K.tete(V, tete)
-	V:boite(-3, 1, -5, 3, 1, -5, p.b, "Tete") -- menton carré (la rangée de la bouche reste en façade)
-	-- dôme : remplace la rangée du haut de la tête, sommet à y = 7
-	K.ellipsoideSi(V, 0, 3.6, -2.5, 3.9, 3.6, 3.4, dome.b, "Crete", function(x, y, z) return y >= 5 end)
-	-- bosses violettes posées sur le dôme
-	for _, b in ipairs({ { 2, 7, -4 }, { 2, 7, -1 }, { 3, 6, -2 }, { 0, 7, -3 } }) do
-		V:mettre(b[1], b[2], b[3], bosse, "Crete")
-	end
+	-- jambes courtes et épaisses, cuisse qui renfle le flanc
+	V:boite(4, 3, 0, 5, 5, 2, p.b, "PatteArD")
+	K.patte(V, { x = 2, z = 0, l = 2, p = 2, h = 3, c = p.f, g = "PatteArD", pied = p.ff, ongle = K.creme })
+	-- corps trapu
+	K.bloc(V, 4, 3, 7, -3, 3, p.b, "Corps", 1)
+	V:boite(3, 4, -4, 3, 5, -4, p.b, "PatteAvD")
+	V:mettre(3, 3, -4, K.creme, "PatteAvD")
+	-- cou court et tête basse (le haut du crâne au niveau du dos)
+	K.troncons(V, { { 2, 5, 7, -5, -4 } }, p.b, "Cou")
+	V:boite(-2, 4, -9, 2, 7, -5, p.b, "Tete")
+	K.bloc(V, 1, 4, 5, -10, -10, p.b, "Tete")
+	K.troncons(V, { { 2, 4, 6, 4, 6 }, { 1, 4, 5, 7, 9 }, { 0, 4, 4, 10, 12 } }, p.b, "Queue")
 	V:symetriser()
-	K.volume(V, p)
-	K.volume(V, dome)
-	-- liseré violet sur le bord bas du dôme
-	local liste = {}
-	for _, v in pairs(V.grille) do
-		if v.g == "Crete" and v.y == 5 then
-			for _, d in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) do
-				local w = V:lire(v.x + d[1], 5, v.z + d[2])
-				if not w or w.g ~= "Crete" then
-					table.insert(liste, v)
-					break
-				end
+	K.teinter(V, p, PEAU, zoneVentre(ventre, 2, 4, -6, 3))
+	K.repeindre(V, p, p.f, function(x, y, z) return y >= 6 and z >= -2 and z % 3 == 1 end, groupes("Corps", "Queue"))
+	-- dôme osseux bombé sur 3 couches : y = 8 et y = 9 en 5 x 5 sans les coins (couronne plus
+	-- foncée en y = 8), y = 10 en 3 x 3 plus clair
+	for x = -2, 2 do
+		for z = -9, -5 do
+			if not (math.abs(x) == 2 and (z == -9 or z == -5)) then
+				local bord = math.abs(x) == 2 or z == -9 or z == -5
+				V:mettre(x, 8, z, bord and couronne or dome, "Crete")
+				V:mettre(x, 9, z, dome, "Crete")
 			end
 		end
 	end
-	for _, v in ipairs(liste) do
-		v.c = { couleur = bosse, materiau = nil }
+	K.bloc(V, 1, 10, 10, -8, -6, K.eclaircir(dome, 0.35), "Crete")
+	-- bosses violettes sur le bord du dôme seulement (plus rien au sommet)
+	for _, s in ipairs({ 1, -1 }) do
+		V:mettre(3 * s, 8, -8, bosse, "Crete")
+		V:mettre(3 * s, 8, -6, bosse, "Crete")
+		V:mettre(2 * s, 8, -4, bosse, "Crete")
 	end
-	K.repeindre(V, p, ventre, function(x, y, z) return y <= 3 and math.abs(x) <= 1 end, TRONC)
-	K.grain(V, p, TRONC)
-	-- front bleu clair sous le dôme
-	for x = -3, 3 do
-		K.facade(V, x, 4, p.c, "Tete", -4)
-	end
-	K.visage(V, tete)
-	-- bouche avec langue, joues aux coins de la bouche
-	K.facade(V, -1, 1, K.bouche, "Bouche", -4)
-	K.facade(V, 1, 1, K.bouche, "Bouche", -4)
-	K.facade(V, 0, 1, K.langue, "Bouche", -4)
+	K.yeux(V, 5, -8, 4)
+	K.bouche(V, 4, -10, -8, p.ff)
+	K.narines(V, 5, 1)
 end
 
--- Tricéra : collerette rose bordée de crème à picots blancs, trois cornes vers l'avant, bec pointu
+-- Tricéra : quadrupède vert, collerette rose tramée bordée d'orange à picots blancs, taches
+-- rouges, trois cornes ivoire qui dépassent devant, bec orange
 function ESPECES.Tricera(V, K)
-	local p = K.pal("6BD64A")
-	local rose = K.hex("FF8FB1")
-	local bord = K.hex("FFF4DC")
-	local tache = K.hex("D6283A")
-	local corne = K.hex("FFF4DC")
+	local p = K.pal("6BD64A", "4EA93A")
 	local ventre = K.hex("E6FFB8")
-	V:boite(2, 0, -2, 3, 1, -1, p.f, "PatteAvD")
-	V:boite(2, 0, 3, 3, 1, 4, p.f, "PatteArD")
-	V:boite(2, 0, -2, 3, 0, -2, corne, "PatteAvD")
-	V:boite(2, 0, 3, 3, 0, 3, corne, "PatteArD")
-	K.pave(V, -3, 2, -3, 3, 5, 5, p.b, "Corps", 1)
-	V:tube(0, 3, 5, 0, 2, 9, 1.3, p.b, "Queue", 0.5)
-	-- collerette en deux couches : avant (z = -3) et arrière (z = -2) décalée d'un cran vers le haut,
-	-- liseré crème d'un cube sur chaque couche
-	for _, couche in ipairs({ { -3, 3.2 }, { -2, 3.8 } }) do
-		local zc, cy = couche[1], couche[2]
-		K.ellipsoideSi(V, 0, cy, zc, 6.4, 3.2, 0.6, rose, "Crete", function(x, y, z) return y >= 2 end)
-		V:peindre(function(x, y, z)
-			if z ~= zc then return nil end
-			local a, b = x / 6.4, (y - cy) / 3.2
-			if a * a + b * b > 0.85 then return bord end
-			return nil
-		end, "Crete")
+	local rose = K.pal("FF8FB1", "E86A92")
+	local tache = K.hex("D6283A")
+	local corne = K.hex("E8D5A8")
+	local bec = K.pal("FF9F45", "D97A2E")
+	K.patte(V, { x = 2, z = -4, l = 2, p = 2, h = 3, c = p.f, g = "PatteAvD", ongle = K.creme })
+	K.patte(V, { x = 2, z = 3, l = 2, p = 3, h = 3, c = p.f, g = "PatteArD", ongle = K.creme })
+	K.bloc(V, 3, 3, 7, -5, 5, p.b, "Corps", 1)
+	K.bloc(V, 2, 8, 8, -3, 3, p.b, "Corps")
+	K.troncons(V, { { 2, 3, 6, -7, -6 } }, p.b, "Cou")
+	-- tête relevée d'un cube (l'œil n'est plus à hauteur de genou), bec
+	K.tete(V, 2, 3, 6, -11, -7, p.b)
+	K.bloc(V, 1, 3, 5, -13, -12, bec.b, "Tete")
+	V:boite(0, 3, -14, 0, 4, -14, bec.f, "Tete")
+	-- collerette plate (z = -7 et -6) en demi-disque au-dessus de la nuque : bord d'un seul cube
+	-- orange, intérieur rose tramé de rose foncé (1 cube sur 3)
+	local function dedans(x, y)
+		local a, b = x / 5.6, (y - 4) / 5.8
+		return y >= 4 and a * a + b * b <= 1
 	end
-	-- picots blancs qui dépassent du bord, taches rouges dans le rose
-	for _, b in ipairs({ { 2, 7 }, { 4, 7 }, { 6, 5 }, { 7, 3 } }) do
-		V:mettre(b[1], b[2], -2, K.blanc, "Crete")
+	for x = -5, 5 do
+		for y = 4, 10 do
+			if dedans(x, y) then
+				local bord = not (dedans(x + 1, y) and dedans(x - 1, y) and dedans(x, y + 1))
+				local c = rose.b
+				if bord then
+					c = bec.b
+				elseif K.hache(math.abs(x), y, 0, 3) < 0.34 then
+					c = rose.f
+				end
+				V:mettre(x, y, -7, c, "Crete")
+				V:mettre(x, y, -6, c, "Crete")
+			end
+		end
 	end
-	for _, b in ipairs({ { 3, 5 }, { 5, 3 } }) do
-		V:mettre(b[1], b[2], -3, tache, "Crete")
+	-- picots blancs sur le bord, taches rouges dans le rose (sur la face avant)
+	for _, b in ipairs({ { 2, 10 }, { 4, 9 }, { 6, 6 }, { 6, 4 } }) do
+		V:mettre(b[1], b[2], -6, K.blanc, "Crete")
 	end
-	local tete = { hw = 4, y = 1, h = 5, z = -8, d = 5, c = p.b }
-	K.tete(V, tete)
-	-- cornes de front : partent du crâne, montent et sortent devant la face
-	K.chemin(V, { { 2, 6, -7 }, { 2, 6, -8 }, { 2, 7, -8 } }, function() return corne end, "Corne")
-	V:mettre(2, 7, -9, K.blanc, "Corne")
+	V:mettre(0, 10, -6, K.blanc, "Crete")
+	for _, t in ipairs({ { 2, 8 }, { 4, 6 } }) do
+		V:mettre(t[1], t[2], -7, tache, "Tache")
+	end
+	V:mettre(0, 8, -7, tache, "Tache")
+	-- cornes de front : montent puis filent vers l'avant (dépassent la collerette), pointe blanche ;
+	-- corne de nez sur le bec
+	K.chemin(V, { { 1, 7, -9 }, { 1, 8, -9 }, { 1, 8, -12 } }, function() return corne end, "Corne")
+	V:mettre(1, 8, -13, K.blanc, "Corne")
+	V:mettre(0, 6, -12, corne, "Corne")
+	V:mettre(0, 7, -12, K.blanc, "Corne")
+	K.troncons(V, { { 2, 4, 6, 6, 8 }, { 1, 3, 5, 9, 11 }, { 0, 3, 3, 12, 13 } }, p.b, "Queue")
 	V:symetriser()
-	K.volume(V, p)
-	K.repeindre(V, p, ventre, function(x, y, z) return y <= 2 and math.abs(x) <= 2 end, TRONC)
-	K.repeindre(V, p, p.f, function(x, y, z) return y >= 5 and z % 3 == 0 end, CORPS)
-	K.grain(V, p, TRONC)
-	K.visage(V, tete)
-	-- bec pointu de perroquet (rétrécit vers l'avant), bouche aux coins
-	local bec, becF = K.hex("FF9F45"), K.hex("E07A2E")
-	V:boite(-1, 2, -9, 1, 2, -9, bec, "Tete")
-	V:mettre(0, 2, -10, bec, "Tete")
-	V:mettre(0, 1, -9, becF, "Tete")
-	V:mettre(0, 1, -10, becF, "Tete")
-	V:mettre(1, 1, -9, K.bouche, "Bouche")
-	V:mettre(-1, 1, -9, K.bouche, "Bouche")
-	-- corne de nez : part du haut du bec, pointe blanche
-	V:mettre(0, 3, -10, corne, "Corne")
-	V:mettre(0, 4, -10, K.blanc, "Corne")
+	K.teinter(V, p, PEAU, zoneVentre(ventre, 2, 3, -6, 5))
+	K.repeindre(V, p, p.f, function(x, y, z) return y >= 7 and z % 3 == 0 end, groupes("Corps", "Queue"))
+	K.yeux(V, 4, -10, 4)
+	K.bouche(V, 3, -13, -11, bec.ff)
+	K.narines(V, 4, 1)
 end
 
--- ===== Rare (10 à 11 cubes) =====
+-- ===== Rare (11 à 12 cubes) =====
 
--- Stégo : deux rangées décalées de grandes plaques pointues orange, queue à pointes
+-- Stégo : dos voûté, deux rangées de grandes plaques orange, tête basse, queue à 4 pointes
 function ESPECES.Stego(V, K)
-	local p = K.pal("2EC4B6")
-	local orange = K.hex("FF8C42")
-	local bord = K.hex("D9601E")
+	local p = K.pal("2EC4B6", "1E968C")
 	local ventre = K.hex("D6FFF7")
-	V:boite(2, 0, -2, 3, 1, -1, p.f, "PatteAvD")
-	V:boite(2, 0, 4, 3, 1, 5, p.f, "PatteArD")
-	V:boite(2, 0, -2, 3, 0, -2, K.creme, "PatteAvD")
-	V:boite(2, 0, 4, 3, 0, 4, K.creme, "PatteArD")
-	K.pave(V, -3, 2, -3, 3, 6, 6, p.b, "Corps", 1)
-	-- tête basse et plus étroite que le corps : le dos et les plaques se voient de face
-	local tete = { hw = 3, y = 1, h = 5, z = -8, d = 5, c = p.b, museau = { hw = 2, d = 1 } }
-	K.tete(V, tete)
-	V:symetriser()
-	-- queue légèrement courbée vers la droite : dépasse du flanc en 3/4
-	V:tube(0, 4, 6, 3, 5, 11, 1.4, p.b, "Queue", 0.6)
-	K.volume(V, p)
-	K.repeindre(V, p, ventre, function(x, y, z) return y <= 3 and math.abs(x) <= 2 end, TRONC)
-	-- taches foncées sur les flancs
-	K.repeindre(V, p, p.f, function(x, y, z) return math.abs(x) == 3 and y >= 4 and y <= 5 and z % 4 == 0 end, TRONC)
-	K.grain(V, p, TRONC)
-	K.visage(V, tete)
-	-- plaques de 2 cubes d'épaisseur, décalées d'un côté à l'autre, plus hautes au milieu
-	local petite, grande = { 1, 2, 1 }, { 1, 2, 1, 0 }
-	K.plaque(V, 1, 2, 6, -2, petite, orange, bord, "Crete")
-	K.plaque(V, 1, 2, 6, 2, grande, orange, bord, "Crete")
-	K.plaque(V, 1, 2, 6, 6, petite, orange, bord, "Crete")
-	K.plaque(V, -2, -1, 6, 0, grande, orange, bord, "Crete")
-	K.plaque(V, -2, -1, 6, 4, petite, orange, bord, "Crete")
-	-- thagomizer : paires de pointes crème à bout blanc, vers le haut et l'extérieur
-	for _, pt in ipairs({ { 8, 1, 2 }, { 10, 2, 3 } }) do
-		local z, xg, xd = pt[1], pt[2], pt[3]
-		V:boite(xg, 6, z, xg, 7, z, K.creme, "Queue")
-		V:boite(xd, 6, z, xd, 7, z, K.creme, "Queue")
-		V:mettre(xg - 1, 7, z, K.blanc, "Queue")
-		V:mettre(xd + 1, 7, z, K.blanc, "Queue")
+	local orange = K.pal("FF8C42", "D9601E")
+	local ivoire = K.hex("E8D5A8")
+	K.patte(V, { x = 2, z = -5, l = 2, p = 2, h = 4, c = p.f, g = "PatteAvD", ongle = K.creme })
+	K.patte(V, { x = 2, z = 3, l = 3, p = 3, h = 4, c = p.f, g = "PatteArD", ongle = K.creme })
+	K.bloc(V, 3, 4, 7, -6, 6, p.b, "Corps", 1)
+	K.bloc(V, 2, 8, 8, -4, 5, p.b, "Corps")
+	K.troncons(V, { { 1, 3, 5, -8, -7 } }, p.b, "Cou")
+	K.tete(V, 2, 2, 5, -12, -8, p.b)
+	K.bloc(V, 1, 2, 3, -13, -13, p.b, "Tete")
+	-- queue : le tronçon moyen va jusqu'à z = 14 pour porter la seconde paire de pointes
+	K.troncons(V, { { 2, 5, 7, 7, 9 }, { 1, 5, 6, 10, 14 }, { 0, 5, 5, 15, 16 } }, p.b, "Queue")
+	-- pointes de queue : chaîne de cubes reliés face contre face (vers l'extérieur puis le haut),
+	-- ivoire, bout blanc
+	for _, z in ipairs({ 11, 14 }) do
+		V:mettre(1, 7, z, ivoire, "Queue")
+		V:mettre(2, 7, z, ivoire, "Queue")
+		V:mettre(2, 8, z, ivoire, "Queue")
+		V:mettre(3, 8, z, K.blanc, "Queue")
 	end
-end
-
--- Parasaure : bec de canard jaune, longue crête rose en tube recourbé vers l'arrière
-function ESPECES.Parasaure(V, K)
-	local p = K.pal("4D96FF")
-	local rose = K.pal("FF5CA8")
-	local jaune = K.hex("FFD166")
-	local jauneF = K.hex("F2A93B")
-	local ventre = K.hex("FFE9B0")
-	V:boite(2, 0, 2, 3, 1, 3, p.f, "PatteArD")
-	V:boite(2, 0, 1, 3, 0, 1, jauneF, "PatteArD")
-	V:boite(4, 3, -1, 4, 4, -1, p.b, "PatteAvD")
-	K.pave(V, -3, 2, -2, 3, 5, 5, p.b, "Corps", 1)
-	V:tube(0, 4, 5, 0, 3, 10, 1.4, p.b, "Queue", 0.5)
-	local tete = { hw = 4, y = 3, h = 5, z = -6, d = 5, c = p.b }
-	K.tete(V, tete)
-	-- crête : part du crâne et monte de 3 cubes vers l'arrière, bout recourbé plus foncé
-	V:tube(0, 8, -3, 0, 10, 4, 1, rose.b, "Crete", 0.7)
-	V:boite(0, 10, 5, 0, 9, 6, rose.f, "Crete")
 	V:symetriser()
-	K.volume(V, p)
-	K.volume(V, rose)
-	-- deux anneaux plus clairs sur la crête
-	V:peindre(function(x, y, z) if z == -1 or z == 2 then return rose.c end return nil end, "Crete")
-	K.repeindre(V, p, ventre, function(x, y, z) return y <= 4 and z <= 3 and math.abs(x) <= 2 end, TRONC)
-	K.repeindre(V, p, rose.b, function(x, y, z) return y >= 4 and z >= 0 and z % 3 == 1 and math.abs(x) == 3 end, CORPS)
-	K.grain(V, p, TRONC)
-	K.visage(V, tete)
-	-- bec de canard : rangée du haut sur 2 cubes, rangée du bas reculée d'un cube ; narines, commissures
-	V:boite(-2, 4, -8, 2, 4, -7, jaune, "Tete")
-	V:boite(-1, 3, -7, 1, 3, -7, jauneF, "Tete")
-	V:mettre(2, 3, -7, K.bouche, "Bouche")
-	V:mettre(-2, 3, -7, K.bouche, "Bouche")
-	V:mettre(1, 4, -8, K.hex("C9731E"), "Tete") -- narines
-	V:mettre(-1, 4, -8, K.hex("C9731E"), "Tete")
+	K.teinter(V, p, PEAU, zoneVentre(ventre, 2, 4, -7, 6))
+	-- taches foncées sur les flancs
+	K.repeindre(V, p, p.ff, function(x, y, z) return math.abs(x) == 3 and y == 6 and (z + 20) % 4 == 0 end, groupes("Corps"), "Tache")
+	-- plaques pointues (1 cube d'épaisseur) en deux rangées décalées, plus hautes au milieu
+	local function plaque(x, zc, largeurs)
+		for i, l in ipairs(largeurs) do
+			local y = 8 + i
+			for dz = -l, l do
+				local c = orange.b
+				if i == #largeurs or math.abs(dz) == l then c = orange.f end
+				V:mettre(x, y, zc + dz, c, "Crete")
+			end
+		end
+	end
+	plaque(1, -3, { 1, 0 })
+	plaque(-1, -1, { 1, 1, 0 })
+	plaque(1, 1, { 2, 1, 0 })
+	plaque(-1, 3, { 1, 1, 0 })
+	plaque(1, 5, { 1, 0 })
+	K.yeux(V, 3, -11, 4)
+	K.bouche(V, 2, -13, -11, p.ff)
+	K.narines(V, 3, 1)
 end
 
--- ===== Épique (10 à 12 cubes) =====
+-- Parasaure : bleu, grandes pattes arrière, bec de canard jaune, crête rose en tube qui part du
+-- crâne et monte en biais vers l'arrière (au-dessus de la tête et du cou, jamais au-dessus du dos)
+function ESPECES.Parasaure(V, K)
+	local p = K.pal("4D96FF", "2F6BD6")
+	local ventre = K.hex("FFE9B0")
+	local rose = K.pal("FF5CA8", "D93A86")
+	local jaune = K.pal("FFD166", "F2A93B")
+	V:boite(3, 4, 0, 4, 6, 3, p.b, "PatteArD")
+	K.patte(V, { x = 2, z = 1, l = 2, p = 2, h = 4, c = p.f, g = "PatteArD", ongle = K.creme })
+	K.patte(V, { x = 2, z = -4, l = 2, p = 2, h = 4, c = p.f, g = "PatteAvD", ongle = K.creme })
+	K.bloc(V, 3, 4, 8, -5, 4, p.b, "Corps", 1)
+	K.troncons(V, { { 1, 7, 9, -7, -5 } }, p.b, "Cou")
+	K.tete(V, 2, 7, 10, -11, -7, p.b)
+	-- bec de canard large et plat
+	K.bloc(V, 2, 8, 8, -13, -12, jaune.b, "Tete")
+	K.bloc(V, 1, 7, 7, -13, -12, jaune.f, "Tete")
+	-- crête : tube de 3 de large posé sur le crâne et la nuque, qui monte d'un cube puis file vers
+	-- l'arrière en s'affinant ; bout recourbé plus foncé
+	V:boite(0, 10, -9, 1, 10, -6, rose.b, "Crete")
+	V:boite(0, 11, -8, 1, 11, -5, rose.b, "Crete")
+	V:mettre(0, 11, -4, rose.b, "Crete")
+	V:mettre(0, 11, -3, rose.f, "Crete")
+	K.troncons(V, { { 2, 5, 7, 5, 7 }, { 1, 5, 6, 8, 10 }, { 0, 4, 5, 11, 13 }, { 0, 4, 4, 14, 14 } }, p.b, "Queue")
+	V:symetriser()
+	K.teinter(V, p, PEAU, zoneVentre(ventre, 2, 5, -8, 4))
+	K.teinter(V, rose, groupes("Crete"))
+	V:peindre(function(x, y, z) if z == -7 or z == -5 then return rose.c end return nil end, "Crete")
+	-- rayures roses sur le dos
+	K.repeindre(V, p, rose.b, function(x, y, z) return y >= 8 and z >= -3 and z % 3 == 0 end, groupes("Corps", "Queue"), "Tache")
+	K.yeux(V, 8, -10, 4)
+	K.bouche(V, 7, -11, -10, jaune.ff)
+	K.narines(V, 8, 1)
+end
 
--- Ankylo : large carapace brune qui encadre la tête, pointes crème, massue au bout de la queue
+-- ===== Épique (12 à 14 cubes) =====
+
+-- Ankylo : bas et large, carapace brune bombée à bosses plates crème, pointes latérales
+-- horizontales qui s'affinent, massue de queue
 function ESPECES.Ankylo(V, K)
 	local p = K.pal("F4A259", "D9793A")
-	local brun = K.pal("A0522D")
-	local pointe = K.hex("FFF4DC")
+	local brun = K.pal("A0522D", "7A3B1E")
+	local ivoire = K.hex("E8D5A8")
 	local ventre = K.hex("FFE3C2")
-	V:boite(3, 0, -2, 4, 1, -1, p.f, "PatteAvD")
-	V:boite(3, 0, 4, 4, 1, 5, p.f, "PatteArD")
-	-- carapace plus large (13) que la tête (9) : bord brun visible tout autour
-	K.pave(V, -6, 2, -3, 6, 7, 7, p.b, "Corps", 1)
-	V:peindre(function(x, y, z) if y >= 5 then return brun.b end return nil end, "Corps")
-	-- pointes latérales et dorsales de 2 cubes : dépassent de la silhouette de face
-	for _, z in ipairs({ -1, 2, 5 }) do
-		V:boite(7, 5, z, 8, 5, z, pointe, "Crete")
-		V:boite(3, 8, z, 3, 9, z, pointe, "Crete")
+	local bosse = K.hex("E8C9A0")
+	-- pattes courtes et massives
+	K.patte(V, { x = 3, z = -5, l = 3, p = 3, h = 3, c = p.f, g = "PatteAvD", ongle = ivoire })
+	K.patte(V, { x = 3, z = 3, l = 3, p = 3, h = 3, c = p.f, g = "PatteArD", ongle = ivoire })
+	-- corps large et bas, carapace bombée en trois étages
+	K.bloc(V, 5, 3, 7, -6, 6, p.b, "Corps", 1)
+	K.bloc(V, 4, 8, 8, -5, 5, brun.b, "Corps")
+	K.bloc(V, 3, 9, 9, -4, 4, brun.b, "Corps")
+	K.bloc(V, 2, 10, 10, -3, 3, brun.b, "Corps")
+	V:peindre(function(x, y, z) if y >= 6 then return brun.b end return nil end, "Corps")
+	-- tête plus étroite que les épaules (5 de large), plaque de crâne, cornes de joue
+	K.troncons(V, { { 2, 3, 6, -7, -7 } }, p.b, "Cou")
+	K.tete(V, 2, 3, 6, -12, -8, p.b)
+	K.bloc(V, 1, 3, 4, -13, -13, p.b, "Tete")
+	K.bloc(V, 1, 7, 7, -11, -9, brun.b, "Tete")
+	V:mettre(3, 5, -9, ivoire, "Corne")
+	V:mettre(3, 6, -9, K.blanc, "Corne")
+	-- pointes latérales horizontales au bord de la carapace : brun foncé -> ivoire -> bout blanc
+	for _, z in ipairs({ -4, -1, 2, 5 }) do
+		V:mettre(6, 6, z, brun.f, "Crete")
+		V:mettre(7, 6, z, ivoire, "Crete")
+		if z == -1 or z == 2 then
+			V:mettre(8, 6, z, K.blanc, "Crete")
+		end
 	end
-	for _, z in ipairs({ 0, 3 }) do
-		V:boite(0, 8, z, 0, 9, z, pointe, "Crete")
-	end
-	-- tête basse devant la carapace (la nuque fait une marche)
-	local tete = { hw = 4, y = 1, h = 6, z = -9, d = 6, c = p.b, t = 3, museau = { hw = 2, d = 1 } }
-	K.tete(V, tete)
-	-- cornes crème aux coins arrière du crâne
-	V:boite(3, 7, -5, 3, 8, -5, pointe, "Corne")
-	V:mettre(2, 7, -7, pointe, "Crete")
 	V:symetriser()
-	-- queue courbée vers la droite : la massue se voit de face et de 3/4
-	V:tube(0, 4, 7, 4, 3, 11, 1.2, p.b, "Queue", 0.8)
-	K.pave(V, 2, 2, 11, 6, 5, 13, brun.b, "Massue", 1)
-	for _, b in ipairs({ { 7, 3, 12 }, { 4, 6, 12 }, { 4, 3, 14 }, { 5, 4, 14 } }) do
-		V:mettre(b[1], b[2], b[3], pointe, "Massue")
+	-- queue et massue
+	K.troncons(V, { { 2, 4, 6, 7, 9 }, { 1, 3, 5, 10, 13 } }, p.b, "Queue")
+	K.bloc(V, 2, 1, 4, 14, 16, brun.b, "Massue", 1)
+	for _, b in ipairs({ { 3, 3, 15 }, { -3, 3, 15 }, { 0, 5, 15 }, { 0, 3, 17 } }) do
+		V:mettre(b[1], b[2], b[3], ivoire, "Massue")
 	end
-	K.volume(V, p)
-	K.volume(V, brun)
-	-- plaque brune peinte dans la rangée du haut de la tête
-	V:peindre(function(x, y, z) if y == 6 then return brun.b end return nil end, "Tete")
-	K.repeindre(V, p, ventre, function(x, y, z) return y <= 3 and math.abs(x) <= 3 end, TRONC)
-	K.grain(V, brun, TRONC)
-	tete.langue = K.langue
-	K.visage(V, tete)
+	K.teinter(V, p, PEAU, zoneVentre(ventre, 3, 4, -7, 6))
+	K.teinter(V, brun, groupes("Corps", "Massue", "Tete"))
+	-- bosses plates crème posées sur la carapace, trois rangées (milieu 1 x 2, côtés 2 x 2)
+	local function poser(x, z)
+		local y = K.dessus(V, x, z)
+		if y then V:mettre(x, y + 1, z, bosse, "Crete") end
+	end
+	for _, z in ipairs({ -4, -1, 2, 5 }) do
+		for dz = 0, 1 do
+			if math.abs(z + dz) <= 3 then poser(0, z + dz) end
+			for _, s in ipairs({ 1, -1 }) do
+				poser(3 * s, z + dz)
+				poser(4 * s, z + dz)
+			end
+		end
+	end
+	K.yeux(V, 4, -10, 4)
+	K.bouche(V, 3, -13, -11, p.ff)
+	K.narines(V, 4, 1)
 end
 
--- Iguano : ardoise, debout, pouces en pointe, fanon orange, crête d'épines, ventre jaune
+-- Iguano : ardoise, à demi quadrupède (mains posées au sol), bec crème, pouces-éperons blancs
+-- dressés, bande dorsale jaune, petit fanon sous la gorge
 function ESPECES.Iguano(V, K)
 	local p = K.pal("7A8CA8", "56647E")
 	local ventre = K.hex("FFF4DC")
 	local bande = K.hex("FFE14D")
-	local orange = K.hex("FF9F1C")
-	local jaune = K.hex("FFE14D")
+	local bec = K.pal("FFF1D0", "E3CFA3")
 	local fanon = K.hex("FF6B3D")
-	local pouce = K.hex("FFF4DC")
-	V:boite(2, 0, 1, 3, 1, 2, p.f, "PatteArD")
-	V:boite(2, 0, 0, 3, 0, 0, p.ff, "PatteArD")
-	K.pave(V, -3, 2, -2, 3, 8, 4, p.b, "Corps", 1)
-	V:tube(0, 4, 4, 0, 2, 10, 1.5, p.b, "Queue", 0.5)
-	local tete = { hw = 4, y = 6, h = 5, z = -6, d = 5, c = p.b, museau = { hw = 2, d = 2 } }
-	K.tete(V, tete)
-	-- bras posés APRÈS la tête et hors de son volume ; pouce crème en pointe vers l'avant
-	V:boite(4, 3, -1, 4, 5, 0, p.b, "PatteAvD")
-	V:boite(5, 4, -2, 5, 5, -1, p.b, "PatteAvD")
-	V:boite(5, 6, -2, 5, 7, -2, pouce, "PatteAvD")
-	V:mettre(5, 8, -2, K.blanc, "PatteAvD")
+	-- jambes arrière puissantes
+	V:boite(3, 4, 0, 4, 7, 3, p.b, "PatteArD")
+	K.patte(V, { x = 2, z = 1, l = 3, p = 2, h = 4, c = p.f, g = "PatteArD", ongle = K.creme })
+	-- bras-pattes avant 2 x 2 posés au sol, pouce-éperon blanc dressé contre le poignet
+	K.patte(V, { x = 1, z = -5, l = 2, p = 2, h = 5, c = p.f, g = "PatteAvD", ongle = K.creme })
+	V:boite(3, 1, -5, 3, 2, -5, K.blanc, "PatteAvD")
+	-- tronc : bassin haut, poitrail un peu plus bas vers l'avant
+	K.bloc(V, 3, 4, 9, -2, 4, p.b, "Corps", 1)
+	K.bloc(V, 2, 5, 9, -6, -3, p.b, "Corps", 1)
+	K.troncons(V, { { 1, 8, 10, -8, -6 } }, p.b, "Cou")
+	K.tete(V, 2, 9, 12, -12, -8, p.b)
+	-- bec crème de 3 de large et 2 de long au bout du museau
+	K.bloc(V, 1, 9, 10, -14, -13, bec.b, "Tete")
+	V:boite(-1, 9, -14, 1, 9, -13, bec.f, "Tete")
+	K.troncons(V, { { 2, 5, 7, 5, 7 }, { 1, 4, 6, 8, 10 }, { 0, 3, 4, 11, 13 }, { 0, 2, 3, 14, 15 } }, p.b, "Queue")
 	V:symetriser()
-	K.volume(V, p)
-	-- ventre jaune étendu : se voit sous le menton entre les bras
-	K.repeindre(V, p, ventre, function(x, y, z) return z <= -1 and y <= 7 and math.abs(x) <= 2 end, TRONC)
-	V:peindre(function(x, y, z, v)
-		if v.c.couleur == ventre and (y == 3 or y == 5 or y == 7) then return bande end
-		return nil
-	end, "Corps")
-	K.repeindre(V, p, p.f, function(x, y, z) return z >= 2 and z % 2 == 0 and math.abs(x) <= 2 end, CORPS)
-	K.grain(V, p, { Corps = true, Tete = true })
-	tete.langue = K.langue
-	K.visage(V, tete)
-	-- fanon orange-rouge sous le museau, écaille jaune
-	V:boite(-1, 5, -7, 1, 5, -6, fanon, "Tete")
-	V:mettre(0, 4, -7, fanon, "Tete")
-	V:mettre(0, 4, -6, jaune, "Tete")
-	-- épines : crâne (jaune à pointe orange) puis dos (orange)
-	V:boite(0, 10, -5, 0, 10, -3, jaune, "Crete")
-	V:mettre(0, 11, -4, orange, "Crete")
-	for _, z in ipairs({ -1, 1, 3 }) do
-		V:mettre(0, 9, z, jaune, "Crete")
-		V:mettre(0, 10, z, orange, "Crete")
-	end
-	V:mettre(0, 7, 5, orange, "Crete")
-end
-
--- ===== Légendaire (12 à 14 cubes) =====
-
--- Brachio : girafe jaune à taches orange, long cou dressé, couronne de fleurs, bouquet dans la bouche
-function ESPECES.Brachio(V, K)
-	local p = K.pal("FFD23F", "F2B02E")
-	local orange = K.hex("FF9F1C")
-	local ventre = K.hex("FFE08A")
-	local feuille = K.hex("5BD13B")
-	local feuilleClaire = K.hex("9BEA5E")
-	local fleur = K.hex("FF6FAE")
-	-- pattes avant plus longues : le poitrail se relève
-	V:boite(2, 0, -3, 3, 3, -2, p.f, "PatteAvD")
-	V:boite(2, 0, 4, 3, 1, 5, p.f, "PatteArD")
-	V:boite(2, 0, -4, 3, 0, -4, K.creme, "PatteAvD")
-	V:boite(2, 0, 3, 3, 0, 3, K.creme, "PatteArD")
-	K.pave(V, -4, 2, -2, 4, 6, 7, p.b, "Corps", 1)
-	-- long cou dressé (girafe) : 3 à 4 rangées visibles entre le corps et la tête
-	V:tube(0, 5, -2, 0, 10, -7, 1.6, p.b, "Cou", 1.3)
-	V:tube(0, 4, 7, 0, 2, 13, 1.6, p.b, "Queue", 0.6)
-	local tete = { hw = 3, y = 8, h = 5, z = -11, d = 5, c = p.b, museau = { hw = 2, d = 1 } }
-	K.tete(V, tete)
-	V:symetriser()
-	K.volume(V, p)
-	K.repeindre(V, p, ventre, function(x, y, z) return y <= 3 and math.abs(x) <= 3 end, TRONC)
-	-- grandes taches orange (blocs 2 x 2 bien espacés) sur le corps, le cou et la queue
-	K.repeindre(V, p, orange, function(x, y, z)
-		local bx, by, bz = math.floor(math.abs(x) / 2), math.floor(y / 2), math.floor(z / 2)
-		return y >= 4 and by % 2 == 0 and (bz + bx + by / 2) % 3 == 0
-	end, CORPS)
-	-- bosse orange peinte au milieu du crâne
-	V:boite(-1, 12, -9, 1, 12, -9, orange, "Tete")
-	tete.langue = K.langue
-	K.visage(V, tete)
-	-- couronne de fleurs posée sur le crâne : fleurs roses et blanches sur des feuilles
-	for x = -2, 2 do
-		for z = -10, -8 do
-			if math.abs(x) == 2 or z ~= -9 then
-				V:mettre(x, 13, z, feuille, "Crete")
-			end
+	K.teinter(V, p, PEAU, zoneVentre(ventre, 2, 6, -7, 4))
+	-- chevrons foncés sur la queue
+	K.repeindre(V, p, p.ff, function(x, y, z) return z % 3 == 0 end, groupes("Queue"), "Tache")
+	-- bande dorsale jaune d'un cube de large (dessus du cou, du dos et de la queue)
+	for _, v in pairs(V.grille) do
+		if v.x == 0 and (v.g == "Corps" or v.g == "Cou" or v.g == "Queue") and not V:lire(0, v.y + 1, v.z) then
+			v.c = { couleur = bande, materiau = nil }
 		end
 	end
-	for _, f in ipairs({ { 0, -10, fleur }, { 2, -10, K.blanc }, { -2, -10, K.blanc }, { 2, -8, fleur }, { -2, -8, fleur }, { 0, -8, K.blanc } }) do
-		V:mettre(f[1], 13, f[2], f[3], "Crete")
-	end
-	-- bouquet de feuilles au coin de la bouche : tige, touffe 2 x 2 en biais, une fleur
-	V:mettre(3, 8, -12, K.hex("8B5A2B"), "Tete")
-	V:boite(4, 8, -12, 5, 9, -12, feuille, "Tete")
-	V:mettre(4, 9, -12, feuilleClaire, "Tete")
-	V:mettre(5, 8, -12, feuilleClaire, "Tete")
-	V:mettre(5, 9, -13, feuilleClaire, "Tete")
-	V:mettre(5, 10, -12, fleur, "Tete")
+	-- petit fanon (2 cubes) collé sous la gorge
+	V:boite(0, 8, -10, 0, 8, -9, fanon, "Tete")
+	K.yeux(V, 10, -11, 4)
+	K.bouche(V, 9, -12, -11, p.ff)
+	K.narines(V, 10, 1)
 end
 
--- ===== Mythique (14 à 16 cubes) =====
+-- ===== Légendaire (14 à 16 cubes) =====
 
--- Diplodo : très long, cou dressé annelé, damier rose sur le dos, cristaux Neon cyan en pointe
+-- Brachio : jaune tacheté d'orange, épaules hautes (pattes avant plus longues), dos qui descend
+-- vers la queue, long cou fin qui monte en diagonale, petite tête à fleurons d'or
+function ESPECES.Brachio(V, K)
+	local p = K.pal("FFD23F", "E6A92A")
+	local orange = K.hex("FF9F1C")
+	local ventre = K.hex("FFF0B8")
+	local feuille = K.hex("5BD13B")
+	local fleur = K.hex("FF6FAE")
+	local or_ = K.hex("FFB300")
+	K.patte(V, { x = 2, z = -5, l = 3, p = 3, h = 6, c = p.f, g = "PatteAvD", ongle = K.creme })
+	K.patte(V, { x = 2, z = 3, l = 3, p = 3, h = 4, c = p.f, g = "PatteArD", ongle = K.creme })
+	-- avant du corps plus haut que la croupe, garrot
+	K.bloc(V, 4, 5, 8, -6, -1, p.b, "Corps", 1)
+	K.bloc(V, 4, 4, 7, 0, 6, p.b, "Corps", 1)
+	K.bloc(V, 3, 9, 9, -5, -2, p.b, "Corps")
+	-- cou fin (3 de large) qui monte presque à la verticale devant le poitrail, sur 7 cubes
+	K.troncons(V, { { 1, 7, 10, -7, -6 }, { 1, 9, 12, -8, -8 }, { 1, 11, 13, -9, -9 } }, p.b, "Cou")
+	-- petite tête 3 x 3 portée en avant (vide dessous)
+	V:boite(-1, 12, -13, 1, 14, -10, p.b, "Tete")
+	K.troncons(V, { { 2, 4, 6, 7, 9 }, { 1, 4, 5, 10, 12 }, { 1, 3, 4, 13, 15 }, { 0, 2, 3, 16, 17 } }, p.b, "Queue")
+	V:symetriser()
+	K.teinter(V, p, PEAU, zoneVentre(ventre, 2, 5, -7, 6))
+	-- grandes taches orange (blocs 2 x 2) sur les flancs et le cou
+	K.repeindre(V, p, orange, function(x, y, z, v)
+		local by, bz = math.floor(y / 2), math.floor((z + 40) / 2)
+		return (math.abs(x) >= 2 or v.g == "Cou") and y >= 6 and (bz + by) % 3 == 0
+	end, groupes("Corps", "Cou"), "Tache")
+	-- brin de feuilles fleuri au coin droit de la bouche (d'un seul côté : de face, deux brins
+	-- symétriques se liraient comme des oreilles)
+	V:mettre(2, 12, -13, feuille, "Tete")
+	V:mettre(3, 12, -13, feuille, "Tete")
+	V:mettre(3, 12, -14, fleur, "Tete")
+	-- trois fleurons d'or posés sur le crâne
+	V:mettre(1, 15, -12, or_, "Crete")
+	V:mettre(-1, 15, -12, or_, "Crete")
+	V:mettre(0, 15, -11, or_, "Crete")
+	K.yeux(V, 13, -12, 3)
+	K.bouche(V, 12, -12, -11, p.ff)
+	K.narines(V, 14, 1)
+end
+
+-- ===== Mythique (16 à 18 cubes) =====
+
+-- Diplodo : violet, très long cou et queue en fouet, selle rose, cristaux Neon cyan sur l'échine
 function ESPECES.Diplodo(V, K)
-	local p = K.pal("B15CFF")
-	local rose = K.hex("FF6FD8")
+	local p = K.pal("B15CFF", "8A3FD6")
+	local rose = K.pal("FF6FD8", "D94FB5")
 	local socle = K.hex("7FE8FF")
 	local cristal = { couleur = K.hex("00B8FF"), materiau = Enum.Material.Neon }
 	local ventre = K.hex("FFC2F0")
-	V:boite(2, 0, -3, 3, 2, -2, p.f, "PatteAvD")
-	V:boite(2, 0, 5, 3, 2, 6, p.f, "PatteArD")
-	V:boite(2, 0, -3, 3, 0, -3, K.creme, "PatteAvD")
-	V:boite(2, 0, 5, 3, 0, 5, K.creme, "PatteArD")
-	K.pave(V, -4, 3, -4, 4, 8, 8, p.b, "Corps", 1)
-	-- cou dressé : 3 cubes visibles entre le corps et la tête
-	V:tube(0, 8, -3, 0, 11, -11, 1.6, p.b, "Cou", 1.2)
-	V:tube(0, 6, 8, 0, 4, 14, 1.5, p.b, "Queue", 0.9)
-	local tete = { hw = 3, y = 10, h = 5, z = -16, d = 5, c = p.b, museau = { hw = 2, d = 1 } }
-	K.tete(V, tete)
+	K.patte(V, { x = 2, z = -6, l = 3, p = 3, h = 6, c = p.f, g = "PatteAvD", ongle = K.creme })
+	K.patte(V, { x = 2, z = 4, l = 3, p = 3, h = 6, c = p.f, g = "PatteArD", ongle = K.creme })
+	K.bloc(V, 4, 6, 10, -7, 7, p.b, "Corps", 1)
+	K.bloc(V, 3, 11, 11, -5, 5, p.b, "Corps")
+	-- long cou qui monte vers l'avant, anneaux roses
+	K.troncons(V, { { 2, 8, 11, -10, -8 }, { 2, 10, 12, -13, -11 }, { 1, 11, 13, -16, -14 }, { 1, 12, 14, -18, -17 } }, p.b, "Cou")
+	K.tete(V, 2, 12, 15, -22, -18, p.b)
+	K.bloc(V, 1, 12, 13, -23, -23, p.b, "Tete")
+	-- queue en fouet
+	K.troncons(V, { { 2, 7, 9, 8, 10 }, { 1, 6, 8, 11, 13 }, { 1, 5, 6, 14, 16 }, { 0, 4, 5, 17, 19 }, { 0, 3, 4, 20, 21 }, { 0, 3, 3, 22, 22 } }, p.b, "Queue")
 	V:symetriser()
-	-- bout de queue en fouet, recourbé vers la droite, cristal dans l'alignement
-	V:tube(0, 4, 14, 3, 3, 18, 0.9, p.b, "Queue", 0.5)
-	V:mettre(3, 3, 19, cristal, "Queue")
-	K.volume(V, p)
-	K.repeindre(V, p, ventre, function(x, y, z) return y <= 4 and math.abs(x) <= 3 end, TRONC)
-	-- damier rose sur le dessus du corps (cases de 3, lisibles par-dessus), anneaux roses sur le cou
-	K.repeindre(V, p, rose, function(x, y, z)
-		return y >= 8 and (math.floor((x + 1) / 3) + math.floor(z / 3)) % 2 == 0
-	end, TRONC)
-	K.repeindre(V, p, rose, function(x, y, z) return z % 3 == 0 end, { Cou = true })
-	tete.langue = K.langue
-	K.visage(V, tete)
-	-- cristaux de l'échine : socle clair, pointe Neon saturée
-	for _, c in ipairs({ { -1, 1 }, { 2, 2 }, { 5, 1 } }) do
-		V:boite(0, 9, c[1], 0, 8 + c[2], c[1], socle, "Cristal")
-		V:mettre(0, 9 + c[2], c[1], cristal, "Cristal")
+	K.teinter(V, p, PEAU, zoneVentre(ventre, 2, 6, -8, 7))
+	-- selle rose : bandes de 2 z tous les 5 z sur le dos (peu de coupures : les parts économisées
+	-- financent le tramage), anneaux roses sur le cou et la queue
+	K.repeindre(V, p, rose.b, function(x, y, z) return y >= 10 and (z + 40) % 5 < 2 end, groupes("Corps"), "Tache")
+	K.repeindre(V, p, rose.b, function(x, y, z) return z == -12 or z == -16 or z == 12 or z == 18 end, groupes("Cou", "Queue"), "Tache")
+	-- cristaux de l'échine : socle clair, pointe Neon
+	for _, c in ipairs({ { -4, 1 }, { -1, 2 }, { 2, 2 }, { 5, 1 } }) do
+		V:boite(0, 12, c[1], 0, 11 + c[2], c[1], socle, "Cristal")
+		V:mettre(0, 12 + c[2], c[1], cristal, "Cristal")
 	end
-	-- diadème : trois cristaux (socle peint dans le crâne, pointe Neon seulement au centre)
-	V:mettre(0, 14, -14, socle, "Cristal")
-	V:mettre(0, 15, -14, cristal, "Cristal")
-	for _, s in ipairs({ 2, -2 }) do
-		V:mettre(s, 14, -13, socle, "Cristal")
-		V:mettre(s, 15, -13, socle, "Cristal")
-	end
+	-- diadème de cristaux sur le crâne, cristal au bout de la queue
+	V:mettre(0, 15, -20, socle, "Cristal")
+	V:mettre(0, 16, -20, cristal, "Cristal")
+	V:mettre(1, 15, -19, cristal, "Cristal")
+	V:mettre(-1, 15, -19, cristal, "Cristal")
+	V:mettre(0, 3, 23, cristal, "Cristal")
+	K.yeux(V, 13, -21, 4)
+	K.bouche(V, 12, -23, -21, p.ff)
+	K.narines(V, 13, 1)
 end
 
--- ===== Divin (15 à 17 cubes) =====
+-- ===== Divin (17 à 19 cubes) =====
 
--- Thérizino : plumage blanc et or, faux dorées à pointe Neon, crête de plumes, auréole verticale
+-- Thérizino : bipède au plumage jade (dessus menthe, dessous vert profond), plastron crème,
+-- l'or réservé aux faux, au bec et à l'éventail de la queue ; jambes 3 x 3 sur pieds d'or,
+-- trois longues faux par main (pointes Neon), crête de plumes, auréole au-dessus de la tête
 function ESPECES.Therizino(V, K)
-	local p = K.pal("FFF8EE", "FFE9C2")
-	local or_ = K.pal("FFC933", "F29E1F")
-	local rose = K.pal("FF5CE1")
+	local jade = K.hex("3FCF8E")
+	local p = { b = jade, c = K.hex("A8F5CF"), f = K.hex("1E8F5E") }
+	p.ff = K.assombrir(p.f, 0.78)
+	local plastron = K.hex("FFF3E0")
+	local or_ = K.pal("FFC933", "E09A1F")
+	local rose = K.hex("FF8FC8")
 	local neonOr = { couleur = K.hex("FFB300"), materiau = Enum.Material.Neon }
-	V:boite(1, 0, 1, 2, 3, 2, or_.f, "PatteArD")
-	V:boite(1, 0, 0, 2, 0, 0, or_.b, "PatteArD")
-	K.pave(V, -3, 3, -3, 3, 9, 4, p.b, "Corps", 1)
-	V:boite(-3, 9, -3, 3, 9, -3, p.b, "Corps") -- nuque : la tête tient au corps
-	-- bras blancs, main dorée
-	V:boite(4, 6, -3, 4, 8, -1, p.b, "PatteAvD")
-	V:boite(4, 6, -5, 6, 7, -4, or_.b, "PatteAvD")
-	-- queue en plumes
-	V:tube(0, 6, 4, 0, 8, 8, 1.4, p.b, "Queue", 0.8)
-	V:boite(0, 8, 8, 0, 10, 9, or_.b, "Queue")
-	V:mettre(1, 9, 8, or_.b, "Queue")
-	local tete = { hw = 4, y = 9, h = 6, z = -6, d = 6, c = p.b, t = 3, museau = { hw = 1, d = 2, c = or_.b, bec = or_.f } }
-	K.tete(V, tete)
-	-- crête de plumes dorées
-	V:boite(0, 15, -5, 0, 15, -1, or_.c, "Crete")
-	-- trois faux courbes par main (arrêtées au-dessus du sol), seule la pointe est en Neon
-	for _, lame in ipairs({ { 4, 0 }, { 5, 1 }, { 6, 0 } }) do
-		local x, recul = lame[1], lame[2]
-		local c = function() return K.hex("FFC933") end
-		K.chemin(V, { { x, 5, -5 }, { x, 5, -6 }, { x, 4 + recul, -6 }, { x, 4 + recul, -7 }, { x, 3 + recul, -7 } }, c, "PatteAvD")
-		V:mettre(x, 3 + recul, -8, neonOr, "PatteAvD")
+	-- jambes 3 x 3 hautes, cuisse emplumée, pied d'or de 3 x 4
+	V:boite(4, 5, 0, 4, 8, 3, p.b, "PatteArD")
+	K.patte(V, { x = 2, z = 0, l = 3, p = 3, h = 6, c = p.f, g = "PatteArD", pied = or_.b })
+	V:boite(2, 0, -1, 4, 0, -1, or_.b, "PatteArD")
+	-- ventre descendu d'un cube, épaules plus étroites, poitrail
+	K.bloc(V, 3, 4, 10, -3, 4, p.b, "Corps", 1)
+	K.bloc(V, 2, 11, 13, -2, 2, p.b, "Corps")
+	K.bloc(V, 2, 6, 10, -4, -4, p.b, "Corps")
+	K.troncons(V, { { 1, 12, 14, -4, -3 } }, p.b, "Cou")
+	K.tete(V, 2, 13, 16, -8, -4, p.b)
+	-- bec doré
+	K.bloc(V, 1, 13, 14, -10, -9, or_.b, "Tete")
+	V:mettre(0, 13, -11, or_.f, "Tete")
+	-- bras : épaule, avant-bras, main, trois longues faux d'or verticales (pointe Neon en y = 2)
+	V:boite(3, 10, -2, 4, 12, -1, p.b, "PatteAvD")
+	V:boite(4, 8, -4, 5, 9, -2, p.b, "PatteAvD")
+	V:boite(4, 6, -5, 6, 7, -4, p.f, "PatteAvD")
+	-- (lames alternées or clair / or, celle du milieu plus courte : on distingue les trois griffes ;
+	-- chaque lame descend puis se recourbe vers l'avant, pointe Neon)
+	for _, x in ipairs({ 4, 5, 6 }) do
+		local milieu = x == 5
+		local bas = milieu and 4 or 3
+		local c = milieu and or_.b or or_.c
+		V:boite(x, bas, -6, x, 7, -6, c, "PatteAvD")
+		V:mettre(x, bas, -7, c, "PatteAvD")
+		V:mettre(x, bas - 1, -7, neonOr, "PatteAvD")
 	end
-	-- ventre blanc bordé d'or (peint sur la face avant du corps)
-	K.ellipsoideSi(V, 0, 5.5, -3, 3.6, 3.1, 0.6, or_.b, "Corps", function(x, y, z) return y <= 8 end)
-	K.ellipsoideSi(V, 0, 5.5, -3, 2.9, 2.5, 0.6, K.blanc, "Corps", function() return true end)
+	-- queue en éventail de plumes dorées
+	K.troncons(V, { { 2, 7, 9, 5, 7 }, { 1, 8, 9, 8, 10 } }, p.b, "Queue")
+	K.bloc(V, 2, 8, 11, 11, 11, or_.b, "Queue")
+	K.bloc(V, 1, 12, 12, 11, 11, or_.c, "Queue")
 	V:symetriser()
-	-- auréole verticale derrière la tête : arche dorée qui l'entoure vue de face, éclats Neon
-	local points = {}
-	for a = 0, 20 do
-		local ang = math.rad(-25 + a * 11.5)
-		table.insert(points, { math.floor(math.cos(ang) * 5.6 + 0.5), math.floor(12.4 + math.sin(ang) * 3.6 + 0.5), 0 })
+	K.teinter(V, p, PEAU, nil)
+	-- plumes en écailles plus claires sur le dos et les cuisses, plastron crème
+	K.repeindre(V, p, p.c, function(x, y, z)
+		return z >= 1 and y >= 7 and (z + y) % 3 == 0
+	end, groupes("Corps", "Queue", "PatteArD", "PatteArG"), nil)
+	K.repeindre(V, p, plastron, function(x, y, z) return z <= -3 and math.abs(x) <= 2 and y <= 12 end, groupes("Corps"))
+	-- crête de plumes menthe à bout blanc
+	V:boite(0, 16, -7, 0, 17, -4, p.c, "Crete")
+	V:mettre(0, 17, -7, K.blanc, "Crete")
+	V:mettre(0, 16, -3, p.c, "Crete")
+	-- auréole horizontale au-dessus de la tête, éclats Neon
+	for a = 0, 15 do
+		local ang = math.rad(a * 22.5)
+		local x, z = math.floor(math.cos(ang) * 3.5 + 0.5), math.floor(-6 + math.sin(ang) * 3.5 + 0.5)
+		local c = (a % 4 == 0) and neonOr or or_.c
+		V:mettre(x, 18, z, c, "Aureole")
 	end
-	K.chemin(V, points, function(i) if i % 6 == 3 then return neonOr end return or_.c end, "Aureole")
-	K.volume(V, p)
-	-- plumes dorées en blocs 2 x 2 sur le dos et les flancs
-	K.repeindre(V, p, or_.b, function(x, y, z)
-		return y >= 7 and z >= 1 and (math.floor(z / 2) + math.floor(y / 2)) % 2 == 0
-	end, CORPS)
-	tete.couleurJoue = rose.b
-	tete.blanc = or_.c -- œil cerclé d'or (un blanc disparaîtrait sur la tête blanche)
-	K.visage(V, tete)
+	K.yeux(V, 14, -7, 4)
+	K.bouche(V, 13, -10, -8, or_.ff)
+	-- joues roses en arrière des yeux
+	for _, s in ipairs({ 1, -1 }) do
+		local x = K.bordX(V, s, 13, -6, "Tete")
+		if x then V:mettre(x, 13, -6, rose, "Joue") end
+	end
 end
 
 -- ===== construction =====
 local ORDRE = { "Galli", "Pachy", "Tricera", "Stego", "Parasaure", "Ankylo", "Iguano", "Brachio", "Diplodo", "Therizino" }
 
--- lumière d'aura (Mythique et plus), mêmes réglages que aura() côté carnivores
-local AURAS = { Diplodo = "5CF2FF", Therizino = "FFD84D" }
+-- lumière d'aura (Mythique et plus)
+local AURAS = { Diplodo = "5CF2FF", Therizino = "7CFFC4" }
 
-local function construireEspece(ctx, K, dossier, cle, infos)
+local function construireEspece(ctx, K, dossier, cle, infos, rang)
 	local fabrique = ESPECES[cle]
 	if not fabrique then
 		return false
@@ -716,6 +1018,8 @@ local function construireEspece(ctx, K, dossier, cle, infos)
 	end
 	local V = ctx.Voxel.nouveau()
 	fabrique(V, K)
+	K.recentrer(V)
+	K.tramer(V, BUDGET, rang * 7)
 	local modele = V:construire(dossier, { nom = cle, origine = CFrame.new(), budget = BUDGET })
 	modele:SetAttribute("Espece", cle)
 	modele:SetAttribute("Rarete", infos.rarete or "Commun")
@@ -724,7 +1028,7 @@ local function construireEspece(ctx, K, dossier, cle, infos)
 		local l = Instance.new("PointLight")
 		l.Name = "Aura"
 		l.Color = K.hex(AURAS[cle])
-		l.Range = 14
+		l.Range = 16
 		l.Brightness = 1.2
 		l.Shadows = false
 		l.Parent = modele.PrimaryPart
@@ -743,10 +1047,10 @@ function M.construire(ctx)
 		dossier = ctx.Outils.dossier(stockage, "Dinos")
 	end
 	local K = kit(ctx)
-	for _, cle in ipairs(ORDRE) do
+	for rang, cle in ipairs(ORDRE) do
 		local infos = E.especes[cle]
 		if type(infos) == "table" and infos.famille == "Herbivore" then
-			local ok, err = pcall(construireEspece, ctx, K, dossier, cle, infos)
+			local ok, err = pcall(construireEspece, ctx, K, dossier, cle, infos, rang)
 			if not ok then
 				warn("[Dino] gabarit voxel « " .. cle .. " » : " .. tostring(err))
 			end

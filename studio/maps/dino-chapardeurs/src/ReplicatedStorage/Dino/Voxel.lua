@@ -265,6 +265,91 @@ function Voxel:construire(parent, props)
 		modele.PrimaryPart = plusGrande
 		plusGrande.PivotOffset = plusGrande.CFrame:ToObjectSpace(origine)
 	end
+	-- assemblage (par défaut) : seule la PrimaryPart reste ancrée ; chaque groupe est soudé à sa part racine ;
+	-- les pattes, la queue et les ailes sont reliées au corps par un Motor6D (animation côté client),
+	-- le reste est soudé au membre qu'il touche ou au corps. Déplacer le modèle ne coûte alors qu'une CFrame.
+	if props.assemblage ~= false and plusGrande then
+		local corps = plusGrande
+		local parGroupe2, boites = {}, {}
+		for _, p in ipairs(modele:GetChildren()) do
+			if p:IsA("BasePart") then
+				local g = (p == corps) and primaire or p.Name
+				parGroupe2[g] = parGroupe2[g] or {}
+				table.insert(parGroupe2[g], p)
+				local l = origine:ToObjectSpace(p.CFrame).Position
+				local demi = p.Size / 2
+				local b = boites[g]
+				local mn, mx = l - demi, l + demi
+				if b then
+					boites[g] = { b[1]:Min(mn), b[2]:Max(mx) }
+				else
+					boites[g] = { mn, mx }
+				end
+			end
+		end
+		local function articule(g)
+			return string.sub(g, 1, 5) == "Patte" or string.sub(g, 1, 5) == "Queue" or string.sub(g, 1, 4) == "Aile"
+		end
+		local racines = {}
+		for g, liste in pairs(parGroupe2) do
+			local r = liste[1]
+			for _, p in ipairs(liste) do
+				if p.Size.X * p.Size.Y * p.Size.Z > r.Size.X * r.Size.Y * r.Size.Z then r = p end
+			end
+			if g == primaire then r = corps end
+			racines[g] = r
+		end
+		local function souder(a, b)
+			local w = Instance.new("WeldConstraint")
+			w.Part0 = a
+			w.Part1 = b
+			w.Parent = b
+		end
+		for g, liste in pairs(parGroupe2) do
+			local racine = racines[g]
+			local mn, mx = boites[g][1], boites[g][2]
+			local centre = (mn + mx) / 2
+			if g ~= primaire then
+				if articule(g) then
+					-- point d'articulation : haut de la patte, base de la queue (côté corps), bord intérieur de l'aile
+					local point
+					if string.sub(g, 1, 5) == "Patte" then
+						point = Vector3.new(centre.X, mx.Y, centre.Z)
+					elseif string.sub(g, 1, 5) == "Queue" then
+						point = Vector3.new(centre.X, centre.Y, mn.Z)
+					else
+						local interieurX = mn.X
+						if math.abs(mx.X) < math.abs(mn.X) then interieurX = mx.X end
+						point = Vector3.new(interieurX, centre.Y, centre.Z)
+					end
+					local articulation = origine * CFrame.new(point)
+					local m = Instance.new("Motor6D")
+					m.Name = g
+					m.Part0 = corps
+					m.Part1 = racine
+					m.C0 = corps.CFrame:ToObjectSpace(articulation)
+					m.C1 = racine.CFrame:ToObjectSpace(articulation)
+					m.Parent = racine
+				else
+					-- accessoire : soudé au membre articulé qui le contient, sinon au corps
+					local support = corps
+					for ga, b in pairs(boites) do
+						if articule(ga) and centre.X >= b[1].X - 1 and centre.X <= b[2].X + 1 and centre.Y >= b[1].Y - 1
+							and centre.Y <= b[2].Y + 1 and centre.Z >= b[1].Z - 1 and centre.Z <= b[2].Z + 1 then
+							support = racines[ga]
+							break
+						end
+					end
+					souder(support, racine)
+				end
+			end
+			for _, p in ipairs(liste) do
+				if p ~= racine then souder(racine, p) end
+				if p ~= corps then p.Anchored = false end
+			end
+		end
+		modele:SetAttribute("Assemble", true)
+	end
 	if props.budget and nbParts > props.budget then
 		warn("[Dino] Voxel « " .. modele.Name .. " » : " .. nbParts .. " parts (budget " .. props.budget .. ")")
 	end

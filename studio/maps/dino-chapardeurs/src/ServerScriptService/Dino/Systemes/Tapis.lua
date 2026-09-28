@@ -331,8 +331,10 @@ function M.demarrer(ctx)
 		if not modele.PrimaryPart then
 			modele.PrimaryPart = corps
 		end
+		-- dino voxel assemblé : seule la PrimaryPart est ancrée, le reste suit par soudures et articulations
+		local assemble = modele:GetAttribute("Assemble") == true
 		for _, p in ipairs(partsDe(modele)) do
-			p.Anchored = true
+			p.Anchored = (not assemble) or p == corps
 			p.CanCollide = false
 		end
 
@@ -503,6 +505,8 @@ function M.demarrer(ctx)
 
 	-- repère les pattes (+ pieds, mains, griffes), la queue et les ailes ; mémorise leur pose de repos
 	local function analyserMembres(dino)
+		-- dino voxel assemblé (soudures + articulations) : les membres sont animés côté client (Interface/AnimationsDinos)
+		if dino:GetAttribute("Assemble") then return {} end
 		local pivot = dino:GetPivot()
 		local parts = partsDe(dino)
 		local groupes = {}
