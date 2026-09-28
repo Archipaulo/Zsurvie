@@ -35,7 +35,7 @@ function M.demarrer(ctx)
 	-- espèces regroupées par rareté (seulement les raretés connues)
 	local especesParRarete = {} -- [rarete] = { espece, ... }
 	for espece, fiche in pairs(E.especes or {}) do
-		if type(fiche) == "table" and type(fiche.rarete) == "string" and E.raretes and E.raretes[fiche.rarete] then
+		if type(fiche) == "table" and not fiche.special and type(fiche.rarete) == "string" and E.raretes and E.raretes[fiche.rarete] then
 			local liste = especesParRarete[fiche.rarete]
 			if not liste then
 				liste = {}
@@ -147,7 +147,7 @@ function M.demarrer(ctx)
 			return
 		end
 		local espece = dino:GetAttribute("Espece")
-		if type(espece) ~= "string" or not E.especes[espece] then
+		if type(espece) ~= "string" or not E.especes[espece] or E.especes[espece].special then
 			return
 		end
 		local position = positionDe(dino)

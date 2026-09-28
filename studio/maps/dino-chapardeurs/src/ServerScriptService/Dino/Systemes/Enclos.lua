@@ -374,7 +374,12 @@ function M.demarrer(ctx)
 	ajusterEmplacement = function(dino, cf)
 		local mn, mx = boiteLocale(dino)
 		if not mn then return cf end
+		-- l'Œuf mystère est plus large (ailes) que long : on le tourne d'un quart de tour,
+		-- ses ailes suivent alors la longueur du plateau
+		local infos = E.especes[dino:GetAttribute("Espece")]
+		local tourne = infos and infos.special and (mx.X - mn.X) > (mx.Z - mn.Z)
 		local largeur, longueur = mx.X - mn.X, mx.Z - mn.Z
+		if tourne then largeur, longueur = longueur, largeur end
 		local f = math.min(1, LARGEUR_EMPLACEMENT / math.max(largeur, 0.1), LONGUEUR_EMPLACEMENT / math.max(longueur, 0.1))
 		if f < 0.999 then
 			local okE = pcall(function() dino:ScaleTo(dino:GetScale() * f) end)
@@ -387,8 +392,10 @@ function M.demarrer(ctx)
 		-- centré sur le podium (le centre de sa boîte, pas son pivot, tombe au milieu du plateau)
 		local centreX = (mn.X + mx.X) / 2
 		local centreZ = (mn.Z + mx.Z) / 2
+		local rotation = CFrame.new()
+		if tourne then rotation = CFrame.Angles(0, math.pi / 2, 0) end
 		-- pieds posés exactement sur le plateau (le bas de la boîte au niveau du dessus du podium)
-		return cf * CFrame.new(-centreX, -mn.Y, -centreZ)
+		return cf * rotation * CFrame.new(-centreX, -mn.Y, -centreZ)
 	end
 
 	local function placer(dino, joueur, numero)
@@ -425,6 +432,11 @@ function M.demarrer(ctx)
 		dino:SetAttribute("Voleur", 0)
 		if type(dino:GetAttribute("Stock")) ~= "number" then
 			dino:SetAttribute("Stock", 0)
+		end
+		-- un Œuf mystère commence à couver dès sa première pose dans une Base
+		local especeInfos = E.especes[dino:GetAttribute("Espece")]
+		if especeInfos and especeInfos.special and type(dino:GetAttribute("EclosionFin")) ~= "number" then
+			dino:SetAttribute("EclosionFin", os.time() + ((E.oeuf and E.oeuf.incubation) or 900))
 		end
 		local okAjuste, cfAjuste = pcall(ajusterEmplacement, dino, cf)
 		if okAjuste and cfAjuste then cf = cfAjuste end
@@ -509,6 +521,9 @@ function M.demarrer(ctx)
 					return
 				end
 				local dino = Bus.demander("CreerDino", fiche.Espece, mutation)
+				if vivant(dino) and type(fiche.EclosionFin) == "number" then
+					dino:SetAttribute("EclosionFin", fiche.EclosionFin)
+				end
 				if vivant(dino) then
 					dino:SetAttribute("Etat", "Enclos")
 					if placer(dino, joueur, numero) ~= true then

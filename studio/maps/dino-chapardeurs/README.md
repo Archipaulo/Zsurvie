@@ -22,6 +22,28 @@ et les pattes, la queue et les ailes sont animées côté client par des Motor6D
 ![Les dinos voxel](captures/dinos-voxel-vitrine.png)
 ![Gros plan](captures/dinos-voxel-gros-plan.png)
 
+## 🎹 Musique et sons
+
+Musique de fond : **« Symphonie de la jungle »**, pièce pour piano composée pour le jeu (do majeur,
+76 bpm, 107 s en boucle), écrite une seule fois dans `outils/musique.js` qui produit :
+- `musique/symphonie-piano.wav` : l'enregistrement complet → à téléverser sur Roblox (Creator Hub >
+  Création > Audio), puis coller l'id dans `MUSIQUE_ID` en haut de `Interface/Musique.lua` ;
+- `musique/note-piano-do4.wav` : un seul do de piano (option `NOTE_PIANO_ID` : la partition est alors jouée
+  note par note avec ce son) ;
+- `ReplicatedStorage/Dino/Partition.lua` : la partition. **Sans rien téléverser**, le jeu la joue déjà note par
+  note avec un son intégré (timbre de boîte à musique).
+
+Les bruitages sont accordés sur la musique (notes de la gamme de do), la série d'encaissements monte dans la
+pentatonique, les fanfares tombent sur le demi-temps et la musique s'efface un instant sous les gros effets.
+
+## 🥚 L'Œuf mystère
+
+Il passe parfois sur le Tapis (≈ 1 apparition sur 30), en volant grâce à ses ailes, à hauteur des dinos, pour
+150 K$. Posé dans la Base, il couve 15 minutes (le temps continue même hors ligne) puis éclot sur son podium :
+du dino le plus commun (44 %) jusqu'au Secret (0,4 %), parfois muté.
+
+![L'Œuf mystère](captures/oeuf-mystere.png)
+
 ## ✨ Rendu professionnel (v2)
 
 Terrain Roblox pour la nature (herbe, falaises, rivière, volcan), vrais

@@ -184,6 +184,17 @@ function E.coutEtage(niveau) -- prix de l'amélioration numéro « niveau » (1 
 	return math.floor(2500 * 2.2 ^ (niveau - 1) + 0.5)
 end
 
+-- ===== l'Œuf mystère (vole sur le Tapis, éclot dans la Base) =====
+-- espèce spéciale : jamais tirée comme un dino normal, pas dans le Dinodex, aucun revenu tant qu'il n'a pas éclos
+E.especes.OeufMystere = { nom = "Œuf mystère", rarete = "Mythique", prix = 150000, revenu = 0, taille = 1, famille = "Oeuf", special = true, vol = 4 }
+E.oeuf = {
+	chance = 0.035,     -- probabilité qu'une apparition sur le Tapis soit un œuf (≈ 1 toutes les 30 apparitions)
+	incubation = 900,   -- secondes avant l'éclosion (15 min), le compte court même hors ligne
+	-- chances d'éclosion : du plus nul au plus rare
+	raretes = { Commun = 44, Rare = 26, Epique = 15, Legendaire = 9, Mythique = 4, Divin = 1.6, Secret = 0.4 },
+	chanceMutation = 0.25, -- un dino éclos peut aussi être muté (Or, Diamant, Arc-en-ciel)
+}
+
 E.joueursMax = 8
 
 return E

@@ -1,10 +1,10 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
 	<Meta name="ExplicitAutoJoints">true</Meta>
-	<Item class="ReplicatedStorage" referent="RBX0000000A">
+	<Item class="ReplicatedStorage" referent="RBX0000000B">
 		<Properties>
 			<string name="Name">ReplicatedStorage</string>
 		</Properties>
-		<Item class="Folder" referent="RBX00000009">
+		<Item class="Folder" referent="RBX0000000A">
 			<Properties>
 				<string name="Name">Dino</string>
 			</Properties>
@@ -334,6 +334,17 @@ function E.coutEtage(niveau) -- prix de l'amélioration numéro « niveau » (1 
 	return math.floor(2500 * 2.2 ^ (niveau - 1) + 0.5)
 end
 
+-- ===== l'Œuf mystère (vole sur le Tapis, éclot dans la Base) =====
+-- espèce spéciale : jamais tirée comme un dino normal, pas dans le Dinodex, aucun revenu tant qu'il n'a pas éclos
+E.especes.OeufMystere = { nom = "Œuf mystère", rarete = "Mythique", prix = 150000, revenu = 0, taille = 1, famille = "Oeuf", special = true, vol = 4 }
+E.oeuf = {
+	chance = 0.035,     -- probabilité qu'une apparition sur le Tapis soit un œuf (≈ 1 toutes les 30 apparitions)
+	incubation = 900,   -- secondes avant l'éclosion (15 min), le compte court même hors ligne
+	-- chances d'éclosion : du plus nul au plus rare
+	raretes = { Commun = 44, Rare = 26, Epique = 15, Legendaire = 9, Mythique = 4, Divin = 1.6, Secret = 0.4 },
+	chanceMutation = 0.25, -- un dino éclos peut aussi être muté (Or, Diamant, Arc-en-ciel)
+}
+
 E.joueursMax = 8
 
 return E
@@ -609,6 +620,467 @@ return Outils
 			</Item>
 			<Item class="ModuleScript" referent="RBX00000005">
 				<Properties>
+					<string name="Name">Partition</string>
+					<ProtectedString name="Source"><![CDATA[-- Partition de la « Symphonie de la jungle » (généré par outils/musique.js : ne pas modifier à la main).
+-- Chaque note : { temps (en battements), durée (battements), hauteur MIDI (60 = do4), vélocité 0..1 }.
+return {
+	titre = "Symphonie de la jungle",
+	bpm = 76,
+	duree = 136, -- battements (la boucle recommence ensuite)
+	notes = {
+		{ 0, 4, 36, 0.32 },
+		{ 0, 0.9, 48, 0.3 },
+		{ 0.5, 0.9, 55, 0.22 },
+		{ 1, 0.9, 60, 0.22 },
+		{ 1.5, 0.9, 64, 0.22 },
+		{ 2, 0.9, 67, 0.22 },
+		{ 2.5, 0.9, 64, 0.22 },
+		{ 3, 0.9, 60, 0.22 },
+		{ 3.5, 0.9, 55, 0.22 },
+		{ 4, 4, 35, 0.32 },
+		{ 4, 0.9, 43, 0.3 },
+		{ 4.5, 0.9, 50, 0.22 },
+		{ 5, 0.9, 55, 0.22 },
+		{ 5.5, 0.9, 59, 0.22 },
+		{ 6, 0.9, 62, 0.22 },
+		{ 6.5, 0.9, 59, 0.22 },
+		{ 7, 0.9, 55, 0.22 },
+		{ 7.5, 0.9, 50, 0.22 },
+		{ 8, 4, 36, 0.32 },
+		{ 8, 0.9, 48, 0.3 },
+		{ 8, 1, 76, 0.62 },
+		{ 8.5, 0.9, 55, 0.22 },
+		{ 9, 0.9, 60, 0.22 },
+		{ 9, 1, 79, 0.52 },
+		{ 9.5, 0.9, 64, 0.22 },
+		{ 10, 0.9, 67, 0.22 },
+		{ 10, 0.5, 76, 0.62 },
+		{ 10.5, 0.9, 64, 0.22 },
+		{ 10.5, 0.5, 74, 0.52 },
+		{ 11, 0.9, 60, 0.22 },
+		{ 11, 1, 72, 0.52 },
+		{ 11.5, 0.9, 55, 0.22 },
+		{ 12, 4, 35, 0.32 },
+		{ 12, 0.9, 43, 0.3 },
+		{ 12, 1.5, 74, 0.62 },
+		{ 12.5, 0.9, 50, 0.22 },
+		{ 13, 0.9, 55, 0.22 },
+		{ 13.5, 0.9, 59, 0.22 },
+		{ 13.5, 0.5, 76, 0.52 },
+		{ 14, 0.9, 62, 0.22 },
+		{ 14, 1, 74, 0.62 },
+		{ 14.5, 0.9, 59, 0.22 },
+		{ 15, 0.9, 55, 0.22 },
+		{ 15, 1, 71, 0.52 },
+		{ 15.5, 0.9, 50, 0.22 },
+		{ 16, 4, 33, 0.32 },
+		{ 16, 0.9, 45, 0.3 },
+		{ 16, 1, 72, 0.62 },
+		{ 16.5, 0.9, 52, 0.22 },
+		{ 17, 0.9, 57, 0.22 },
+		{ 17, 1, 76, 0.52 },
+		{ 17.5, 0.9, 60, 0.22 },
+		{ 18, 0.9, 64, 0.22 },
+		{ 18, 1.5, 81, 0.62 },
+		{ 18.5, 0.9, 60, 0.22 },
+		{ 19, 0.9, 57, 0.22 },
+		{ 19.5, 0.9, 52, 0.22 },
+		{ 19.5, 0.5, 79, 0.52 },
+		{ 20, 4, 29, 0.32 },
+		{ 20, 0.9, 41, 0.3 },
+		{ 20, 1, 77, 0.62 },
+		{ 20.5, 0.9, 48, 0.22 },
+		{ 21, 0.9, 53, 0.22 },
+		{ 21, 0.5, 76, 0.52 },
+		{ 21.5, 0.9, 57, 0.22 },
+		{ 21.5, 0.5, 74, 0.52 },
+		{ 22, 0.9, 60, 0.22 },
+		{ 22, 2, 72, 0.62 },
+		{ 22.5, 0.9, 57, 0.22 },
+		{ 23, 0.9, 53, 0.22 },
+		{ 23.5, 0.9, 48, 0.22 },
+		{ 24, 4, 36, 0.32 },
+		{ 24, 0.9, 48, 0.3 },
+		{ 24, 1, 76, 0.62 },
+		{ 24.5, 0.9, 55, 0.22 },
+		{ 25, 0.9, 60, 0.22 },
+		{ 25, 1, 79, 0.52 },
+		{ 25.5, 0.9, 64, 0.22 },
+		{ 26, 0.9, 67, 0.22 },
+		{ 26, 1.5, 84, 0.62 },
+		{ 26.5, 0.9, 64, 0.22 },
+		{ 27, 0.9, 60, 0.22 },
+		{ 27.5, 0.9, 55, 0.22 },
+		{ 27.5, 0.5, 83, 0.52 },
+		{ 28, 4, 29, 0.32 },
+		{ 28, 0.9, 41, 0.3 },
+		{ 28, 1, 81, 0.62 },
+		{ 28.5, 0.9, 48, 0.22 },
+		{ 29, 0.9, 53, 0.22 },
+		{ 29, 0.5, 79, 0.52 },
+		{ 29.5, 0.9, 57, 0.22 },
+		{ 29.5, 0.5, 77, 0.52 },
+		{ 30, 0.9, 60, 0.22 },
+		{ 30, 1, 76, 0.62 },
+		{ 30.5, 0.9, 57, 0.22 },
+		{ 31, 0.9, 53, 0.22 },
+		{ 31, 1, 74, 0.52 },
+		{ 31.5, 0.9, 48, 0.22 },
+		{ 32, 4, 31, 0.32 },
+		{ 32, 0.9, 43, 0.3 },
+		{ 32, 1, 74, 0.62 },
+		{ 32.5, 0.9, 50, 0.22 },
+		{ 33, 0.9, 55, 0.22 },
+		{ 33, 0.5, 76, 0.52 },
+		{ 33.5, 0.9, 59, 0.22 },
+		{ 33.5, 0.5, 77, 0.52 },
+		{ 34, 0.9, 62, 0.22 },
+		{ 34, 1, 79, 0.62 },
+		{ 34.5, 0.9, 59, 0.22 },
+		{ 35, 0.9, 55, 0.22 },
+		{ 35, 1, 71, 0.52 },
+		{ 35.5, 0.9, 50, 0.22 },
+		{ 36, 4, 36, 0.32 },
+		{ 36, 0.9, 48, 0.3 },
+		{ 36, 3, 72, 0.62 },
+		{ 36.5, 0.9, 55, 0.22 },
+		{ 37, 0.9, 60, 0.22 },
+		{ 37.5, 0.9, 64, 0.22 },
+		{ 38, 0.9, 67, 0.22 },
+		{ 38.5, 0.9, 64, 0.22 },
+		{ 39, 0.9, 60, 0.22 },
+		{ 39, 1, 67, 0.52 },
+		{ 39.5, 0.9, 55, 0.22 },
+		{ 40, 4, 33, 0.32 },
+		{ 40, 0.9, 45, 0.3 },
+		{ 40, 1, 69, 0.62 },
+		{ 40.5, 0.9, 52, 0.22 },
+		{ 41, 0.9, 57, 0.22 },
+		{ 41, 1, 72, 0.52 },
+		{ 41.5, 0.9, 60, 0.22 },
+		{ 42, 0.9, 64, 0.22 },
+		{ 42, 1, 76, 0.62 },
+		{ 42.5, 0.9, 60, 0.22 },
+		{ 43, 0.9, 57, 0.22 },
+		{ 43, 0.5, 74, 0.52 },
+		{ 43.5, 0.9, 52, 0.22 },
+		{ 43.5, 0.5, 72, 0.52 },
+		{ 44, 4, 29, 0.32 },
+		{ 44, 0.9, 41, 0.3 },
+		{ 44, 1.5, 69, 0.62 },
+		{ 44.5, 0.9, 48, 0.22 },
+		{ 45, 0.9, 53, 0.22 },
+		{ 45.5, 0.9, 57, 0.22 },
+		{ 45.5, 0.5, 72, 0.52 },
+		{ 46, 0.9, 60, 0.22 },
+		{ 46, 2, 77, 0.62 },
+		{ 46.5, 0.9, 57, 0.22 },
+		{ 47, 0.9, 53, 0.22 },
+		{ 47.5, 0.9, 48, 0.22 },
+		{ 48, 4, 36, 0.32 },
+		{ 48, 0.9, 48, 0.3 },
+		{ 48, 1, 79, 0.62 },
+		{ 48.5, 0.9, 55, 0.22 },
+		{ 49, 0.9, 60, 0.22 },
+		{ 49, 1, 76, 0.52 },
+		{ 49.5, 0.9, 64, 0.22 },
+		{ 50, 0.9, 67, 0.22 },
+		{ 50, 1, 72, 0.62 },
+		{ 50.5, 0.9, 64, 0.22 },
+		{ 51, 0.9, 60, 0.22 },
+		{ 51, 1, 76, 0.52 },
+		{ 51.5, 0.9, 55, 0.22 },
+		{ 52, 4, 31, 0.32 },
+		{ 52, 0.9, 43, 0.3 },
+		{ 52, 2, 74, 0.62 },
+		{ 52.5, 0.9, 50, 0.22 },
+		{ 53, 0.9, 55, 0.22 },
+		{ 53.5, 0.9, 59, 0.22 },
+		{ 54, 0.9, 62, 0.22 },
+		{ 54, 1, 71, 0.62 },
+		{ 54.5, 0.9, 59, 0.22 },
+		{ 55, 0.9, 55, 0.22 },
+		{ 55, 1, 67, 0.52 },
+		{ 55.5, 0.9, 50, 0.22 },
+		{ 56, 4, 33, 0.32 },
+		{ 56, 0.9, 45, 0.3 },
+		{ 56, 1, 81, 0.62 },
+		{ 56.5, 0.9, 52, 0.22 },
+		{ 57, 0.9, 57, 0.22 },
+		{ 57, 0.5, 79, 0.52 },
+		{ 57.5, 0.9, 60, 0.22 },
+		{ 57.5, 0.5, 76, 0.52 },
+		{ 58, 0.9, 64, 0.22 },
+		{ 58, 1, 81, 0.62 },
+		{ 58.5, 0.9, 60, 0.22 },
+		{ 59, 0.9, 57, 0.22 },
+		{ 59, 1, 83, 0.52 },
+		{ 59.5, 0.9, 52, 0.22 },
+		{ 60, 4, 29, 0.32 },
+		{ 60, 0.9, 41, 0.3 },
+		{ 60, 1.5, 84, 0.62 },
+		{ 60.5, 0.9, 48, 0.22 },
+		{ 61, 0.9, 53, 0.22 },
+		{ 61.5, 0.9, 57, 0.22 },
+		{ 61.5, 0.5, 81, 0.52 },
+		{ 62, 0.9, 60, 0.22 },
+		{ 62, 2, 77, 0.62 },
+		{ 62.5, 0.9, 57, 0.22 },
+		{ 63, 0.9, 53, 0.22 },
+		{ 63.5, 0.9, 48, 0.22 },
+		{ 64, 4, 36, 0.32 },
+		{ 64, 0.9, 48, 0.3 },
+		{ 64, 1, 76, 0.62 },
+		{ 64.5, 0.9, 55, 0.22 },
+		{ 65, 0.9, 60, 0.22 },
+		{ 65, 1, 79, 0.52 },
+		{ 65.5, 0.9, 64, 0.22 },
+		{ 66, 0.9, 67, 0.22 },
+		{ 66, 1, 84, 0.62 },
+		{ 66.5, 0.9, 64, 0.22 },
+		{ 67, 0.9, 60, 0.22 },
+		{ 67, 0.5, 83, 0.52 },
+		{ 67.5, 0.9, 55, 0.22 },
+		{ 67.5, 0.5, 81, 0.52 },
+		{ 68, 4, 31, 0.32 },
+		{ 68, 0.9, 43, 0.3 },
+		{ 68, 2, 79, 0.62 },
+		{ 68.5, 0.9, 50, 0.22 },
+		{ 69, 0.9, 55, 0.22 },
+		{ 69.5, 0.9, 59, 0.22 },
+		{ 70, 0.9, 62, 0.22 },
+		{ 70, 1, 74, 0.62 },
+		{ 70.5, 0.9, 59, 0.22 },
+		{ 71, 0.9, 55, 0.22 },
+		{ 71, 1, 71, 0.52 },
+		{ 71.5, 0.9, 50, 0.22 },
+		{ 72, 4, 29, 0.32 },
+		{ 72, 0.9, 41, 0.3 },
+		{ 72, 2, 81, 0.62 },
+		{ 72.5, 0.9, 48, 0.22 },
+		{ 73, 0.9, 53, 0.22 },
+		{ 73.5, 0.9, 57, 0.22 },
+		{ 74, 0.9, 60, 0.22 },
+		{ 74, 1, 84, 0.62 },
+		{ 74.5, 0.9, 57, 0.22 },
+		{ 75, 0.9, 53, 0.22 },
+		{ 75, 1, 81, 0.52 },
+		{ 75.5, 0.9, 48, 0.22 },
+		{ 76, 4, 31, 0.32 },
+		{ 76, 0.9, 43, 0.3 },
+		{ 76, 2, 83, 0.62 },
+		{ 76.5, 0.9, 50, 0.22 },
+		{ 77, 0.9, 55, 0.22 },
+		{ 77.5, 0.9, 59, 0.22 },
+		{ 78, 0.9, 62, 0.22 },
+		{ 78, 1, 86, 0.62 },
+		{ 78.5, 0.9, 59, 0.22 },
+		{ 79, 0.9, 55, 0.22 },
+		{ 79, 1, 83, 0.52 },
+		{ 79.5, 0.9, 50, 0.22 },
+		{ 80, 4, 40, 0.32 },
+		{ 80, 0.9, 52, 0.3 },
+		{ 80, 1.5, 79, 0.62 },
+		{ 80.5, 0.9, 59, 0.22 },
+		{ 81, 0.9, 64, 0.22 },
+		{ 81.5, 0.9, 67, 0.22 },
+		{ 81.5, 0.5, 76, 0.52 },
+		{ 82, 0.9, 71, 0.22 },
+		{ 82, 2, 71, 0.62 },
+		{ 82.5, 0.9, 67, 0.22 },
+		{ 83, 0.9, 64, 0.22 },
+		{ 83.5, 0.9, 59, 0.22 },
+		{ 84, 4, 33, 0.32 },
+		{ 84, 0.9, 45, 0.3 },
+		{ 84, 1, 72, 0.62 },
+		{ 84.5, 0.9, 52, 0.22 },
+		{ 85, 0.9, 57, 0.22 },
+		{ 85, 1, 76, 0.52 },
+		{ 85.5, 0.9, 60, 0.22 },
+		{ 86, 0.9, 64, 0.22 },
+		{ 86, 2, 81, 0.62 },
+		{ 86.5, 0.9, 60, 0.22 },
+		{ 87, 0.9, 57, 0.22 },
+		{ 87.5, 0.9, 52, 0.22 },
+		{ 88, 4, 38, 0.32 },
+		{ 88, 0.9, 50, 0.3 },
+		{ 88, 1, 77, 0.62 },
+		{ 88.5, 0.9, 57, 0.22 },
+		{ 89, 0.9, 62, 0.22 },
+		{ 89, 1, 81, 0.52 },
+		{ 89.5, 0.9, 65, 0.22 },
+		{ 90, 0.9, 69, 0.22 },
+		{ 90, 1, 86, 0.62 },
+		{ 90.5, 0.9, 65, 0.22 },
+		{ 91, 0.9, 62, 0.22 },
+		{ 91, 0.5, 84, 0.52 },
+		{ 91.5, 0.9, 57, 0.22 },
+		{ 91.5, 0.5, 81, 0.52 },
+		{ 92, 4, 31, 0.32 },
+		{ 92, 0.9, 43, 0.3 },
+		{ 92, 1, 83, 0.62 },
+		{ 92.5, 0.9, 50, 0.22 },
+		{ 93, 0.9, 55, 0.22 },
+		{ 93, 1, 79, 0.52 },
+		{ 93.5, 0.9, 59, 0.22 },
+		{ 94, 0.9, 62, 0.22 },
+		{ 94, 1, 74, 0.62 },
+		{ 94.5, 0.9, 59, 0.22 },
+		{ 95, 0.9, 55, 0.22 },
+		{ 95, 1, 77, 0.52 },
+		{ 95.5, 0.9, 50, 0.22 },
+		{ 96, 4, 36, 0.32 },
+		{ 96, 0.9, 48, 0.3 },
+		{ 96, 1, 76, 0.62 },
+		{ 96.5, 0.9, 55, 0.22 },
+		{ 97, 0.9, 60, 0.22 },
+		{ 97, 1, 79, 0.52 },
+		{ 97.5, 0.9, 64, 0.22 },
+		{ 98, 0.9, 67, 0.22 },
+		{ 98, 2, 84, 0.62 },
+		{ 98.5, 0.9, 64, 0.22 },
+		{ 99, 0.9, 60, 0.22 },
+		{ 99.5, 0.9, 55, 0.22 },
+		{ 100, 4, 31, 0.32 },
+		{ 100, 0.9, 43, 0.3 },
+		{ 100, 1, 86, 0.62 },
+		{ 100.5, 0.9, 50, 0.22 },
+		{ 101, 0.9, 55, 0.22 },
+		{ 101, 1, 83, 0.52 },
+		{ 101.5, 0.9, 59, 0.22 },
+		{ 102, 0.9, 62, 0.22 },
+		{ 102, 1, 79, 0.62 },
+		{ 102.5, 0.9, 59, 0.22 },
+		{ 103, 0.9, 53, 0.22 },
+		{ 103, 1, 77, 0.52 },
+		{ 103.5, 0.9, 50, 0.22 },
+		{ 104, 4, 36, 0.32 },
+		{ 104, 0.9, 48, 0.3 },
+		{ 104, 1, 76, 0.62 },
+		{ 104, 1, 88, 0.3 },
+		{ 104.5, 0.9, 55, 0.22 },
+		{ 105, 0.9, 60, 0.22 },
+		{ 105, 1, 79, 0.52 },
+		{ 105.5, 0.9, 64, 0.22 },
+		{ 106, 0.9, 67, 0.22 },
+		{ 106, 0.5, 76, 0.62 },
+		{ 106, 0.5, 88, 0.3 },
+		{ 106.5, 0.9, 64, 0.22 },
+		{ 106.5, 0.5, 74, 0.52 },
+		{ 107, 0.9, 60, 0.22 },
+		{ 107, 1, 72, 0.52 },
+		{ 107.5, 0.9, 55, 0.22 },
+		{ 108, 4, 35, 0.32 },
+		{ 108, 0.9, 43, 0.3 },
+		{ 108, 1.5, 74, 0.62 },
+		{ 108, 1.5, 86, 0.3 },
+		{ 108.5, 0.9, 50, 0.22 },
+		{ 109, 0.9, 55, 0.22 },
+		{ 109.5, 0.9, 59, 0.22 },
+		{ 109.5, 0.5, 76, 0.52 },
+		{ 110, 0.9, 62, 0.22 },
+		{ 110, 1, 74, 0.62 },
+		{ 110, 1, 86, 0.3 },
+		{ 110.5, 0.9, 59, 0.22 },
+		{ 111, 0.9, 55, 0.22 },
+		{ 111, 1, 71, 0.52 },
+		{ 111.5, 0.9, 50, 0.22 },
+		{ 112, 4, 33, 0.32 },
+		{ 112, 0.9, 45, 0.3 },
+		{ 112, 1, 72, 0.62 },
+		{ 112, 1, 84, 0.3 },
+		{ 112.5, 0.9, 52, 0.22 },
+		{ 113, 0.9, 57, 0.22 },
+		{ 113, 1, 76, 0.52 },
+		{ 113.5, 0.9, 60, 0.22 },
+		{ 114, 0.9, 64, 0.22 },
+		{ 114, 1.5, 81, 0.62 },
+		{ 114, 1.5, 93, 0.3 },
+		{ 114.5, 0.9, 60, 0.22 },
+		{ 115, 0.9, 57, 0.22 },
+		{ 115.5, 0.9, 52, 0.22 },
+		{ 115.5, 0.5, 79, 0.52 },
+		{ 116, 4, 29, 0.32 },
+		{ 116, 0.9, 41, 0.3 },
+		{ 116, 1, 77, 0.62 },
+		{ 116, 1, 89, 0.3 },
+		{ 116.5, 0.9, 48, 0.22 },
+		{ 117, 0.9, 53, 0.22 },
+		{ 117, 0.5, 76, 0.52 },
+		{ 117.5, 0.9, 57, 0.22 },
+		{ 117.5, 0.5, 74, 0.52 },
+		{ 118, 0.9, 60, 0.22 },
+		{ 118, 2, 72, 0.62 },
+		{ 118, 2, 84, 0.3 },
+		{ 118.5, 0.9, 57, 0.22 },
+		{ 119, 0.9, 53, 0.22 },
+		{ 119.5, 0.9, 48, 0.22 },
+		{ 120, 4, 36, 0.32 },
+		{ 120, 0.9, 48, 0.3 },
+		{ 120, 1, 76, 0.62 },
+		{ 120, 1, 88, 0.3 },
+		{ 120.5, 0.9, 55, 0.22 },
+		{ 121, 0.9, 60, 0.22 },
+		{ 121, 1, 79, 0.52 },
+		{ 121.5, 0.9, 64, 0.22 },
+		{ 122, 0.9, 67, 0.22 },
+		{ 122, 1.5, 84, 0.62 },
+		{ 122, 1.5, 96, 0.3 },
+		{ 122.5, 0.9, 64, 0.22 },
+		{ 123, 0.9, 60, 0.22 },
+		{ 123.5, 0.9, 55, 0.22 },
+		{ 123.5, 0.5, 83, 0.52 },
+		{ 124, 4, 29, 0.32 },
+		{ 124, 0.9, 41, 0.3 },
+		{ 124, 1, 81, 0.62 },
+		{ 124, 1, 93, 0.3 },
+		{ 124.5, 0.9, 48, 0.22 },
+		{ 125, 0.9, 53, 0.22 },
+		{ 125, 0.5, 79, 0.52 },
+		{ 125.5, 0.9, 57, 0.22 },
+		{ 125.5, 0.5, 77, 0.52 },
+		{ 126, 0.9, 60, 0.22 },
+		{ 126, 1, 76, 0.62 },
+		{ 126, 1, 88, 0.3 },
+		{ 126.5, 0.9, 57, 0.22 },
+		{ 127, 0.9, 53, 0.22 },
+		{ 127, 1, 74, 0.52 },
+		{ 127.5, 0.9, 48, 0.22 },
+		{ 128, 4, 31, 0.32 },
+		{ 128, 0.9, 43, 0.3 },
+		{ 128, 1, 74, 0.62 },
+		{ 128, 1, 86, 0.3 },
+		{ 128.5, 0.9, 50, 0.22 },
+		{ 129, 0.9, 55, 0.22 },
+		{ 129, 0.5, 76, 0.52 },
+		{ 129.5, 0.9, 59, 0.22 },
+		{ 129.5, 0.5, 77, 0.52 },
+		{ 130, 0.9, 62, 0.22 },
+		{ 130, 1, 79, 0.62 },
+		{ 130, 1, 91, 0.3 },
+		{ 130.5, 0.9, 59, 0.22 },
+		{ 131, 0.9, 55, 0.22 },
+		{ 131, 1, 71, 0.52 },
+		{ 131.5, 0.9, 50, 0.22 },
+		{ 132, 4, 36, 0.32 },
+		{ 132, 0.9, 48, 0.3 },
+		{ 132, 3, 72, 0.62 },
+		{ 132, 3, 84, 0.3 },
+		{ 132.5, 0.9, 55, 0.22 },
+		{ 133, 0.9, 60, 0.22 },
+		{ 133.5, 0.9, 64, 0.22 },
+		{ 134, 0.9, 67, 0.22 },
+		{ 134.5, 0.9, 64, 0.22 },
+		{ 135, 0.9, 60, 0.22 },
+		{ 135, 1, 67, 0.52 },
+		{ 135.5, 0.9, 55, 0.22 },
+	},
+}
+]]></ProtectedString>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBX00000006">
+				<Properties>
 					<string name="Name">Plan</string>
 					<ProtectedString name="Source"><![CDATA[-- Plan du monde (studs). Le sol est à Y = 0 partout. Chaque module de construction reste dans son emprise (CONTRAT.md §9).
 -- Vue de dessus : le Tapis traverse le monde d'ouest (Nurserie) en est (Fin du tapis) le long de z = 0 ;
@@ -670,7 +1142,7 @@ return Plan
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX00000006">
+			<Item class="ModuleScript" referent="RBX00000007">
 				<Properties>
 					<string name="Name">Reseau</string>
 					<ProtectedString name="Source"><![CDATA[-- Les RemoteEvents du jeu, rangés dans ReplicatedStorage.DinoReseau.
@@ -714,7 +1186,7 @@ return Reseau
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX00000007">
+			<Item class="ModuleScript" referent="RBX00000008">
 				<Properties>
 					<string name="Name">Style</string>
 					<ProtectedString name="Source"><![CDATA[-- Style : la boîte à outils visuelle de Dino Chapardeurs (voir STYLE.md).
@@ -1156,7 +1628,7 @@ return Style
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX00000008">
+			<Item class="ModuleScript" referent="RBX00000009">
 				<Properties>
 					<string name="Name">Voxel</string>
 					<ProtectedString name="Source"><![CDATA[-- Voxel : modélisation en petits cubes, style « voxel » des grands simulateurs Roblox.
@@ -1526,19 +1998,19 @@ return Voxel
 			</Item>
 		</Item>
 	</Item>
-	<Item class="ServerScriptService" referent="RBX00000035">
+	<Item class="ServerScriptService" referent="RBX00000038">
 		<Properties>
 			<string name="Name">ServerScriptService</string>
 		</Properties>
-		<Item class="Folder" referent="RBX00000034">
+		<Item class="Folder" referent="RBX00000037">
 			<Properties>
 				<string name="Name">Dino</string>
 			</Properties>
-			<Item class="Folder" referent="RBX0000001E">
+			<Item class="Folder" referent="RBX00000020">
 				<Properties>
 					<string name="Name">Builders</string>
 				</Properties>
-				<Item class="ModuleScript" referent="RBX0000000B">
+				<Item class="ModuleScript" referent="RBX0000000C">
 					<Properties>
 						<string name="Name">Autel</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur Autel : l'Autel des Renaissances, à l'est de la Place (version 2, rendu soigné).
@@ -2405,7 +2877,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX0000000C">
+				<Item class="ModuleScript" referent="RBX0000000D">
 					<Properties>
 						<string name="Name">Bases</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur Bases : les 8 Bases des joueurs (CONTRAT §5), rendu « version 2 » (STYLE.md §4).
@@ -2989,7 +3461,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX0000000D">
+				<Item class="ModuleScript" referent="RBX0000000E">
 					<Properties>
 						<string name="Name">Ciel</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur Ciel : éclairage de Dino Chapardeurs (Lighting uniquement, aucune part).
@@ -3547,7 +4019,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX0000000E">
+				<Item class="ModuleScript" referent="RBX0000000F">
 					<Properties>
 						<string name="Name">Comptoir</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur Comptoir : la cabane-boutique d'explorateur, au sud-ouest de la Place (version 2, rendu « pro »).
@@ -4210,7 +4682,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX0000000F">
+				<Item class="ModuleScript" referent="RBX00000010">
 					<Properties>
 						<string name="Name">Cratere</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur Cratere (version 2, STYLE.md §4) : scène des événements au nord de la Place.
@@ -5205,7 +5677,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000010">
+				<Item class="ModuleScript" referent="RBX00000011">
 					<Properties>
 						<string name="Name">DinosCarnivores</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur DinosCarnivores : gabarits des 10 espèces de la famille « Carnivore »
@@ -6273,7 +6745,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000011">
+				<Item class="ModuleScript" referent="RBX00000012">
 					<Properties>
 						<string name="Name">DinosHerbivores</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur DinosHerbivores : gabarits des espèces de la famille « Herbivore »,
@@ -7340,7 +7812,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000012">
+				<Item class="ModuleScript" referent="RBX00000013">
 					<Properties>
 						<string name="Name">Falaises</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur Falaises : falaises de terrain Roblox (Rock, Slate, dessus Grass) sculptées en terrasses irrégulières
@@ -8397,7 +8869,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000013">
+				<Item class="ModuleScript" referent="RBX00000014">
 					<Properties>
 						<string name="Name">FinTapis</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur FinTapis : la « Grande Porte » par où partent les dinos invendus.
@@ -8953,7 +9425,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000014">
+				<Item class="ModuleScript" referent="RBX00000015">
 					<Properties>
 						<string name="Name">Fossiles</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur Fossiles : petits props de décor (4 studs de haut au plus) façon « expédition paléontologique ».
@@ -9767,7 +10239,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000015">
+				<Item class="ModuleScript" referent="RBX00000016">
 					<Properties>
 						<string name="Name">Jungle</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur Jungle (version 2, STYLE.md §4) : végétation dense dans Plan.decor.jungleOuest, jungleEst et jungleNord.
@@ -11054,7 +11526,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000016">
+				<Item class="ModuleScript" referent="RBX00000017">
 					<Properties>
 						<string name="Name">Lumieres</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur Lumieres (version 2, STYLE.md §4) : torches tiki soignées qui balisent le Tapis
@@ -11417,7 +11889,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000017">
+				<Item class="ModuleScript" referent="RBX00000018">
 					<Properties>
 						<string name="Name">Nurserie</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur Nurserie : la couveuse d'où sortent les dinos, à l'ouest du Tapis (version 2, rendu soigné).
@@ -12392,7 +12864,104 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000018">
+				<Item class="ModuleScript" referent="RBX00000019">
+					<Properties>
+						<string name="Name">OeufMystere</string>
+						<ProtectedString name="Source"><![CDATA[-- Constructeur OeufMystere : le gabarit voxel de l'Œuf mystère ailé (ctx.stockage.Dinos.OeufMystere).
+-- Un gros œuf crème à taches arc-en-ciel et points d'interrogation, deux grandes ailes de plumes blanches
+-- et dorées (groupes AileG / AileD : elles battent grâce à Interface/AnimationsDinos), un petit halo doré.
+-- Pivot au sol sous l'œuf, regard vers -Z (CONTRAT §4).
+local M = {}
+
+function M.construire(ctx)
+	local Voxel = ctx.Voxel
+	local Charte = ctx.Charte
+	local stockage = ctx.stockage and ctx.stockage:FindFirstChild("Dinos")
+	if not (Voxel and Charte and stockage) then return end
+	local hex = Charte.hex
+
+	local CREME = hex("FFF4DC")
+	local CREME_OMBRE = hex("EAD7B0")
+	local CREME_LUMIERE = hex("FFFDF5")
+	local TACHES = { hex("FF4D6D"), hex("FFB020"), hex("5CFF5C"), hex("3DD6F5"), hex("A35DFF") }
+	local PLUME = hex("FFFFFF")
+	local PLUME_OMBRE = hex("DDE6F0")
+	local OR = { couleur = hex("FFC933"), materiau = Enum.Material.Neon }
+	local NOIR = hex("1B1A2E")
+
+	local V = Voxel.nouveau()
+	-- l'œuf : plus large en bas, pointe en haut (hauteur 11)
+	local RX, RY = 4.5, 6.5
+	V:ellipsoide(0, RY, 0, RX, RY, RX, CREME, "Corps")
+	V:peindre(function(x, y, z)
+		-- volume : haut plus clair, bas plus foncé
+		if y >= 10 then return CREME_LUMIERE end
+		if y <= 2 then return CREME_OMBRE end
+		return nil
+	end, "Corps")
+	-- taches arc-en-ciel (graine fixe) : quelques cubes de la coquille repeints
+	local alea = Random.new(7)
+	V:peindre(function(x, y, z)
+		if y >= 1 and y <= 12 and alea:NextNumber() < 0.07 then
+			return TACHES[alea:NextInteger(1, #TACHES)]
+		end
+		return nil
+	end, "Corps")
+
+	-- ailes : plumes en éventail, côté droit (x > 0) puis symétrie
+	for k = 0, 4 do
+		local y = 10 - k
+		local longueur = 6 - math.abs(k - 1)
+		V:boite(5, y, -1, 4 + longueur, y, 1, (k % 2 == 0) and PLUME or PLUME_OMBRE, "AileD")
+	end
+	V:boite(5, 10, 0, 10, 10, 0, OR, "AileD") -- liseré doré
+	V:symetriser()
+
+	-- un « ? » violet posé sur la coquille, face avant (-Z) : chaque cube est collé à la surface
+	local VIOLET = hex("7A3FD1")
+	local POINT_Q = { { -1, 11 }, { 0, 12 }, { 1, 12 }, { 2, 11 }, { 2, 10 }, { 1, 9 }, { 0, 8 }, { 0, 7 }, { 0, 5 } }
+	for _, p in ipairs(POINT_Q) do
+		local x, y = p[1], p[2]
+		local u = 1 - ((y - RY) / RY) ^ 2 - (x / RX) ^ 2
+		if u > 0 then
+			local z = -math.floor(RX * math.sqrt(u) + 0.5)
+			V:mettre(x, y, z, VIOLET, "Corps")
+		end
+	end
+
+
+	-- petit halo doré au-dessus
+	for a = 0, 11 do
+		local ang = a / 12 * math.pi * 2
+		V:mettre(math.cos(ang) * 2.5, 15, math.sin(ang) * 2.5, OR, "Corps")
+	end
+
+	local ok, modele = pcall(function()
+		return V:construire(stockage, { nom = "OeufMystere", origine = CFrame.new(), budget = 220 })
+	end)
+	if ok and modele then
+		modele:SetAttribute("Espece", "OeufMystere")
+		modele:SetAttribute("Rarete", "Mythique")
+		modele:SetAttribute("Famille", "Oeuf")
+		local corps = modele.PrimaryPart
+		if corps then
+			local lumiere = Instance.new("PointLight")
+			lumiere.Name = "Halo"
+			lumiere.Color = hex("FFE08A")
+			lumiere.Range = 10
+			lumiere.Brightness = 1.2
+			lumiere.Parent = corps
+		end
+	else
+		warn("[Dino] OeufMystere : " .. tostring(modele))
+	end
+end
+
+return M
+]]></ProtectedString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX0000001A">
 					<Properties>
 						<string name="Name">Place</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur Place : la grande place du sud où tout le monde apparaît (version 2, rendu « pro »).
@@ -13037,8 +13606,8 @@ function M.construire(ctx)
 		local nbEspeces = 0
 		local especes = ctx.Equilibrage and ctx.Equilibrage.especes
 		if type(especes) == "table" then
-			for _ in pairs(especes) do
-				nbEspeces = nbEspeces + 1
+			for _, fiche in pairs(especes) do
+				if not (type(fiche) == "table" and fiche.special) then nbEspeces = nbEspeces + 1 end
 			end
 		end
 		local texteEspeces = "Toutes les espèces à découvrir"
@@ -13271,7 +13840,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000019">
+				<Item class="ModuleScript" referent="RBX0000001B">
 					<Properties>
 						<string name="Name">Riviere</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur Riviere (version 2, STYLE.md §4) : rivière d'ouest en est au sud de la Place.
@@ -14101,7 +14670,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX0000001A">
+				<Item class="ModuleScript" referent="RBX0000001C">
 					<Properties>
 						<string name="Name">Signaletique</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur Signaletique : panneaux-flèches en bois, finition « pro » (STYLE.md §4).
@@ -14816,7 +15385,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX0000001B">
+				<Item class="ModuleScript" referent="RBX0000001D">
 					<Properties>
 						<string name="Name">Sol</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur Sol (version 2, STYLE.md §4) : le sol de tout le monde en TERRAIN Roblox.
@@ -15477,7 +16046,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX0000001C">
+				<Item class="ModuleScript" referent="RBX0000001E">
 					<Properties>
 						<string name="Name">Tapis</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur Tapis : le grand tapis roulant rouge qui traverse le monde de la Nurserie à la Fin du tapis.
@@ -15841,7 +16410,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX0000001D">
+				<Item class="ModuleScript" referent="RBX0000001F">
 					<Properties>
 						<string name="Name">Volcan</string>
 						<ProtectedString name="Source"><![CDATA[-- Constructeur Volcan : pièce maîtresse du nord, version 2 « rendu professionnel ».
@@ -16805,7 +17374,7 @@ return M
 					</Properties>
 				</Item>
 			</Item>
-			<Item class="Script" referent="RBX0000001F">
+			<Item class="Script" referent="RBX00000021">
 				<Properties>
 					<string name="Name">Demarrage</string>
 					<ProtectedString name="Source"><![CDATA[-- Point d'entrée du serveur : construit toute la map, puis démarre les systèmes de jeu.
@@ -16897,7 +17466,7 @@ end
 
 -- ===== 1. construction de la map =====
 local ORDRE_CONSTRUCTION = {
-	"DinosHerbivores", "DinosCarnivores", "Ciel", "Sol", "Falaises", "Jungle", "Riviere", "Volcan", "Tapis",
+	"DinosHerbivores", "DinosCarnivores", "OeufMystere", "Ciel", "Sol", "Falaises", "Jungle", "Riviere", "Volcan", "Tapis",
 	"Nurserie", "FinTapis", "Bases", "Place", "Comptoir", "Autel", "Cratere", "Fossiles", "Lumieres", "Signaletique",
 }
 
@@ -16916,7 +17485,7 @@ print(string.format("[Dino] map construite : %d parts en %.2f s", Outils.nombreP
 -- ===== 2. démarrage des systèmes =====
 local ORDRE_SYSTEMES = {
 	"Donnees", "Economie", "Bases", "Tapis", "Enclos", "Achat", "Vol", "Batte", "Renaissance", "Boutique",
-	"Index", "Evenements", "Classement", "Recompenses", "Securite", "GardeFou", "Autotest", "ModeTest",
+	"Index", "Oeufs", "Evenements", "Classement", "Recompenses", "Securite", "GardeFou", "Autotest", "ModeTest",
 }
 
 for _, module in ipairs(modulesDans(script.Parent:FindFirstChild("Systemes"), ORDRE_SYSTEMES)) do
@@ -16934,11 +17503,11 @@ racine:SetAttribute("Pret", true)
 					<bool name="Disabled">false</bool>
 				</Properties>
 			</Item>
-			<Item class="Folder" referent="RBX00000033">
+			<Item class="Folder" referent="RBX00000036">
 				<Properties>
 					<string name="Name">Systemes</string>
 				</Properties>
-				<Item class="ModuleScript" referent="RBX00000020">
+				<Item class="ModuleScript" referent="RBX00000022">
 					<Properties>
 						<string name="Name">Achat</string>
 						<ProtectedString name="Source"><![CDATA[-- Système Achat : achat des dinos sur le Tapis (invite « Acheter »), puis marche du dino jusqu'à la Base de son acheteur.
@@ -17774,7 +18343,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000021">
+				<Item class="ModuleScript" referent="RBX00000023">
 					<Properties>
 						<string name="Name">Autotest</string>
 						<ProtectedString name="Source"><![CDATA[-- Système Autotest : 3 s après le démarrage, vérifie que la map et les systèmes respectent le CONTRAT.
@@ -18068,7 +18637,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000022">
+				<Item class="ModuleScript" referent="RBX00000024">
 					<Properties>
 						<string name="Name">Bases</string>
 						<ProtectedString name="Source"><![CDATA[-- Système Bases : attribution des Bases aux joueurs, apparition, emplacements débloqués, verrou de l'entrée.
@@ -19053,7 +19622,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000023">
+				<Item class="ModuleScript" referent="RBX00000025">
 					<Properties>
 						<string name="Name">Batte</string>
 						<ProtectedString name="Source"><![CDATA[-- Systemes/Batte : donne une batte à chaque apparition et traite les frappes (Remote « Frapper »).
@@ -19386,7 +19955,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000024">
+				<Item class="ModuleScript" referent="RBX00000026">
 					<Properties>
 						<string name="Name">Boutique</string>
 						<ProtectedString name="Source"><![CDATA[-- Systemes/Boutique : achats d'objets payés en argent du jeu (Remote « Acheter ») et effets permanents.
@@ -19702,7 +20271,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000025">
+				<Item class="ModuleScript" referent="RBX00000027">
 					<Properties>
 						<string name="Name">Classement</string>
 						<ProtectedString name="Source"><![CDATA[-- Système Classement : leaderstats des joueurs, meilleur revenu du serveur et tableau d'honneur sur la Place.
@@ -20368,7 +20937,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000026">
+				<Item class="ModuleScript" referent="RBX00000028">
 					<Properties>
 						<string name="Name">Donnees</string>
 						<ProtectedString name="Source"><![CDATA[-- Système Donnees : chargement et sauvegarde de la progression des joueurs (DataStore « DinoChapardeursV1 »).
@@ -20467,7 +21036,10 @@ function M.demarrer(ctx)
 							if type(mutation) ~= "string" or not (E.mutations and E.mutations[mutation]) then
 								mutation = "Normal"
 							end
-							table.insert(liste, { Espece = espece, Mutation = mutation })
+							local entree = { Espece = espece, Mutation = mutation }
+							local fin = dino:GetAttribute("EclosionFin")
+							if type(fin) == "number" and fin == fin then entree.EclosionFin = math.floor(fin) end
+							table.insert(liste, entree)
 						end
 					end
 				end
@@ -20613,7 +21185,9 @@ function M.demarrer(ctx)
 				if type(mutation) ~= "string" or not (E.mutations and E.mutations[mutation]) then
 					mutation = "Normal"
 				end
-				table.insert(liste, { Espece = d.Espece, Mutation = mutation })
+				local entree = { Espece = d.Espece, Mutation = mutation }
+				if type(d.EclosionFin) == "number" and d.EclosionFin == d.EclosionFin then entree.EclosionFin = d.EclosionFin end
+				table.insert(liste, entree)
 			end
 		end
 		return liste
@@ -20757,7 +21331,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000027">
+				<Item class="ModuleScript" referent="RBX00000029">
 					<Properties>
 						<string name="Name">Economie</string>
 						<ProtectedString name="Source"><![CDATA[-- Système Economie : attribut Argent des joueurs, gains, dépenses et multiplicateur de revenu.
@@ -20953,7 +21527,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000028">
+				<Item class="ModuleScript" referent="RBX0000002A">
 					<Properties>
 						<string name="Name">Enclos</string>
 						<ProtectedString name="Source"><![CDATA[-- Système Enclos : les dinos posés dans les Bases (emplacements, revenu, collecte, vente, restauration).
@@ -21332,7 +21906,12 @@ function M.demarrer(ctx)
 	ajusterEmplacement = function(dino, cf)
 		local mn, mx = boiteLocale(dino)
 		if not mn then return cf end
+		-- l'Œuf mystère est plus large (ailes) que long : on le tourne d'un quart de tour,
+		-- ses ailes suivent alors la longueur du plateau
+		local infos = E.especes[dino:GetAttribute("Espece")]
+		local tourne = infos and infos.special and (mx.X - mn.X) > (mx.Z - mn.Z)
 		local largeur, longueur = mx.X - mn.X, mx.Z - mn.Z
+		if tourne then largeur, longueur = longueur, largeur end
 		local f = math.min(1, LARGEUR_EMPLACEMENT / math.max(largeur, 0.1), LONGUEUR_EMPLACEMENT / math.max(longueur, 0.1))
 		if f < 0.999 then
 			local okE = pcall(function() dino:ScaleTo(dino:GetScale() * f) end)
@@ -21345,8 +21924,10 @@ function M.demarrer(ctx)
 		-- centré sur le podium (le centre de sa boîte, pas son pivot, tombe au milieu du plateau)
 		local centreX = (mn.X + mx.X) / 2
 		local centreZ = (mn.Z + mx.Z) / 2
+		local rotation = CFrame.new()
+		if tourne then rotation = CFrame.Angles(0, math.pi / 2, 0) end
 		-- pieds posés exactement sur le plateau (le bas de la boîte au niveau du dessus du podium)
-		return cf * CFrame.new(-centreX, -mn.Y, -centreZ)
+		return cf * rotation * CFrame.new(-centreX, -mn.Y, -centreZ)
 	end
 
 	local function placer(dino, joueur, numero)
@@ -21383,6 +21964,11 @@ function M.demarrer(ctx)
 		dino:SetAttribute("Voleur", 0)
 		if type(dino:GetAttribute("Stock")) ~= "number" then
 			dino:SetAttribute("Stock", 0)
+		end
+		-- un Œuf mystère commence à couver dès sa première pose dans une Base
+		local especeInfos = E.especes[dino:GetAttribute("Espece")]
+		if especeInfos and especeInfos.special and type(dino:GetAttribute("EclosionFin")) ~= "number" then
+			dino:SetAttribute("EclosionFin", os.time() + ((E.oeuf and E.oeuf.incubation) or 900))
 		end
 		local okAjuste, cfAjuste = pcall(ajusterEmplacement, dino, cf)
 		if okAjuste and cfAjuste then cf = cfAjuste end
@@ -21467,6 +22053,9 @@ function M.demarrer(ctx)
 					return
 				end
 				local dino = Bus.demander("CreerDino", fiche.Espece, mutation)
+				if vivant(dino) and type(fiche.EclosionFin) == "number" then
+					dino:SetAttribute("EclosionFin", fiche.EclosionFin)
+				end
 				if vivant(dino) then
 					dino:SetAttribute("Etat", "Enclos")
 					if placer(dino, joueur, numero) ~= true then
@@ -22192,7 +22781,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000029">
+				<Item class="ModuleScript" referent="RBX0000002B">
 					<Properties>
 						<string name="Name">Etages</string>
 						<ProtectedString name="Source"><![CDATA[-- Système Etages : l'étage de la Base, acheté amélioration par amélioration.
@@ -22507,7 +23096,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX0000002A">
+				<Item class="ModuleScript" referent="RBX0000002C">
 					<Properties>
 						<string name="Name">Evenements</string>
 						<ProtectedString name="Source"><![CDATA[-- Systeme Evenements : lance regulierement un evenement aleatoire (pluie de meteores, eruption, lune doree).
@@ -23241,7 +23830,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX0000002B">
+				<Item class="ModuleScript" referent="RBX0000002D">
 					<Properties>
 						<string name="Name">GardeFou</string>
 						<ProtectedString name="Source"><![CDATA[-- GardeFou : filet de sécurité du serveur (toutes les 2 s).
@@ -23474,7 +24063,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX0000002C">
+				<Item class="ModuleScript" referent="RBX0000002E">
 					<Properties>
 						<string name="Name">Index</string>
 						<ProtectedString name="Source"><![CDATA[-- Système Index (Dinodex) : première rencontre d'une espèce = récompense, notification et effet.
@@ -23514,7 +24103,7 @@ function M.demarrer(ctx)
 	-- espèces regroupées par rareté (seulement les raretés connues)
 	local especesParRarete = {} -- [rarete] = { espece, ... }
 	for espece, fiche in pairs(E.especes or {}) do
-		if type(fiche) == "table" and type(fiche.rarete) == "string" and E.raretes and E.raretes[fiche.rarete] then
+		if type(fiche) == "table" and not fiche.special and type(fiche.rarete) == "string" and E.raretes and E.raretes[fiche.rarete] then
 			local liste = especesParRarete[fiche.rarete]
 			if not liste then
 				liste = {}
@@ -23626,7 +24215,7 @@ function M.demarrer(ctx)
 			return
 		end
 		local espece = dino:GetAttribute("Espece")
-		if type(espece) ~= "string" or not E.especes[espece] then
+		if type(espece) ~= "string" or not E.especes[espece] or E.especes[espece].special then
 			return
 		end
 		local position = positionDe(dino)
@@ -23707,7 +24296,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX0000002D">
+				<Item class="ModuleScript" referent="RBX0000002F">
 					<Properties>
 						<string name="Name">ModeTest</string>
 						<ProtectedString name="Source"><![CDATA[-- Système ModeTest : commandes de chat réservées à Roblox Studio pour tester le jeu rapidement.
@@ -24040,7 +24629,166 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX0000002E">
+				<Item class="ModuleScript" referent="RBX00000030">
+					<Properties>
+						<string name="Name">Oeufs</string>
+						<ProtectedString name="Source"><![CDATA[-- Système Oeufs : l'éclosion des Œufs mystères posés dans les Bases.
+-- Un œuf commence à couver à sa première pose (attribut EclosionFin = os.time() + incubation, posé par Enclos ;
+-- il est sauvegardé, donc le compte continue même hors ligne). À l'heure dite, l'œuf éclot sur son podium :
+-- rareté tirée dans E.oeuf.raretes (du plus nul au plus rare), espèce au hasard dans cette rareté,
+-- mutation possible. Au-dessus de l'œuf, un compte à rebours « 🐣 12:34 ».
+local Players = game:GetService("Players")
+
+local M = {}
+
+function M.demarrer(ctx)
+	local Bus = ctx.Bus
+	local E = ctx.Equilibrage
+	local Charte = ctx.Charte
+	local Style = ctx.Style
+	local Reseau = ctx.Reseau
+	local O = E.oeuf or { raretes = { Commun = 1 }, incubation = 900, chanceMutation = 0 }
+	local alea = Random.new()
+
+	-- espèces normales par rareté
+	local parRarete = {}
+	for cle, fiche in pairs(E.especes) do
+		if not fiche.special then
+			parRarete[fiche.rarete] = parRarete[fiche.rarete] or {}
+			table.insert(parRarete[fiche.rarete], cle)
+		end
+	end
+	for _, l in pairs(parRarete) do table.sort(l) end
+
+	local function tirer(poids)
+		local total = 0
+		for _, p in pairs(poids) do total = total + p end
+		local r = alea:NextNumber() * total
+		local ordre = {}
+		for k in pairs(poids) do table.insert(ordre, k) end
+		table.sort(ordre)
+		for _, k in ipairs(ordre) do
+			r = r - poids[k]
+			if r <= 0 then return k end
+		end
+		return ordre[#ordre]
+	end
+
+	local function tirerEspece()
+		local rarete = tirer(O.raretes)
+		local liste = parRarete[rarete]
+		if not liste or #liste == 0 then liste = parRarete.Commun end
+		local espece = liste[alea:NextInteger(1, #liste)]
+		local mutation = "Normal"
+		if alea:NextNumber() < (O.chanceMutation or 0) then
+			local poids = {}
+			for nom, m in pairs(E.mutations) do
+				if nom ~= "Normal" and not m.evenement and (m.poids or 0) > 0 then poids[nom] = m.poids end
+			end
+			if next(poids) then mutation = tirer(poids) end
+		end
+		return espece, rarete, mutation
+	end
+
+	local function format(secondes)
+		secondes = math.max(0, math.floor(secondes))
+		return string.format("%d:%02d", math.floor(secondes / 60), secondes % 60)
+	end
+
+	-- compte à rebours au-dessus de l'œuf
+	local minuteurs = {}
+	local function minuteur(oeuf)
+		local m = minuteurs[oeuf]
+		if m and m.Parent then return m end
+		local corps = oeuf.PrimaryPart
+		if not corps or not Style then return nil end
+		local _, lignes = Style.etiquette(corps, {
+			{ texte = "🐣 ÉCLOSION", titre = true, contour = 3, nom = "Titre", taille = 0.9 },
+			{ texte = "15:00", titre = true, contour = 3.5, nom = "Temps", taille = 1.2 },
+		}, { Name = "Eclosion", largeur = 7, hauteurLigne = 1.3, StudsOffset = Vector3.new(0, 15, 0), MaxDistance = 80 })
+		m = lignes and lignes[2]
+		if m then m.TextColor3 = Style.couleurs.revenu end
+		minuteurs[oeuf] = m
+		return m
+	end
+
+	local enCours = {}
+	local function eclore(oeuf)
+		if enCours[oeuf] then return end
+		enCours[oeuf] = true
+		local uid = oeuf:GetAttribute("Proprietaire")
+		local joueur = type(uid) == "number" and Players:GetPlayerByUserId(uid) or nil
+		local numero = oeuf:GetAttribute("Emplacement")
+		if not joueur or type(numero) ~= "number" then
+			enCours[oeuf] = nil
+			return
+		end
+		local position = oeuf:GetPivot().Position
+		local espece, rarete, mutation = tirerEspece()
+		local dino = Bus.demander("CreerDino", espece, mutation)
+		if not dino then
+			enCours[oeuf] = nil
+			return
+		end
+		oeuf:Destroy()
+		minuteurs[oeuf] = nil
+		dino:SetAttribute("Etat", "Enclos")
+		local ok = Bus.demander("PlacerDino", dino, joueur, numero)
+		if ok ~= true then
+			local autre = Bus.demander("ReserverEmplacement", joueur)
+			if not autre or Bus.demander("PlacerDino", dino, joueur, autre) ~= true then
+				dino:Destroy()
+				enCours[oeuf] = nil
+				return
+			end
+		end
+		local nom = (E.especes[espece] and E.especes[espece].nom) or espece
+		local nomRarete = (E.raretes[rarete] and E.raretes[rarete].nom) or rarete
+		local mut = ""
+		if mutation ~= "Normal" and E.mutations[mutation] then mut = E.mutations[mutation].nom .. " " end
+		pcall(function()
+			Reseau.Notification:FireClient(joueur, "🐣 TON ŒUF A ÉCLOS : " .. mut .. nom .. " (" .. nomRarete .. ") !", "succes")
+			Reseau.Effet:FireAllClients("Eclosion", position, { rarete = rarete, mutation = mutation, espece = espece })
+		end)
+		Bus.emettre("OeufEclos", joueur, dino, espece, rarete)
+		enCours[oeuf] = nil
+	end
+
+	task.spawn(function()
+		while true do
+			local maintenant = os.time()
+			for _, d in ipairs(ctx.dinos:GetChildren()) do
+				if d:IsA("Model") and d:GetAttribute("Espece") == "OeufMystere" then
+					local fin = d:GetAttribute("EclosionFin")
+					if d:GetAttribute("Etat") == "Enclos" and type(fin) == "number" then
+						local texte = minuteur(d)
+						if texte then texte.Text = format(fin - maintenant) end
+						if maintenant >= fin then pcall(eclore, d) end
+					end
+				end
+			end
+			task.wait(1)
+		end
+	end)
+
+	-- ModeTest et banc d'essai : faire éclore tout de suite les œufs d'un joueur
+	Bus.repondre("EclorOeufs", function(joueur)
+		local n = 0
+		for _, d in ipairs(ctx.dinos:GetChildren()) do
+			if d:IsA("Model") and d:GetAttribute("Espece") == "OeufMystere" and d:GetAttribute("Proprietaire") == joueur.UserId then
+				d:SetAttribute("EclosionFin", os.time())
+				n = n + 1
+			end
+		end
+		return n
+	end)
+end
+
+return M
+]]></ProtectedString>
+					</Properties>
+				</Item>
+				<Item class="ModuleScript" referent="RBX00000031">
 					<Properties>
 						<string name="Name">Recompenses</string>
 						<ProtectedString name="Source"><![CDATA[-- Système Recompenses : série de connexion quotidienne, prime de temps de jeu et coffre caché des falaises.
@@ -24677,7 +25425,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX0000002F">
+				<Item class="ModuleScript" referent="RBX00000032">
 					<Properties>
 						<string name="Name">Renaissance</string>
 						<ProtectedString name="Source"><![CDATA[-- Système Renaissance : échange une grosse somme contre un multiplicateur de revenu permanent.
@@ -24909,7 +25657,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000030">
+				<Item class="ModuleScript" referent="RBX00000033">
 					<Properties>
 						<string name="Name">Securite</string>
 						<ProtectedString name="Source"><![CDATA[-- Système Securite : anti-rebond des actions, surveillance du débit réseau, détection grossière de téléportation.
@@ -25168,7 +25916,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000031">
+				<Item class="ModuleScript" referent="RBX00000034">
 					<Properties>
 						<string name="Name">Tapis</string>
 						<ProtectedString name="Source"><![CDATA[-- Systemes/Tapis : fabrique tous les dinos vivants (répondeur CreerDino), fait apparaître
@@ -25444,9 +26192,17 @@ function M.demarrer(ctx)
 			taille = 1.4,
 			contour = 3.5,
 		})
+		if infosEspece and infosEspece.special then
+			-- Œuf mystère : rareté inconnue (arc-en-ciel), prix, promesse d'éclosion
+			local minutes = math.floor(((E.oeuf and E.oeuf.incubation) or 900) / 60 + 0.5)
+			table.insert(lignes, { nom = "Rarete", texte = "??? DU PLUS NUL AU PLUS RARE ???", rarete = "Divin", taille = 0.8 })
+			table.insert(lignes, { nom = "Prix", texte = Charte.argent(prix), couleur = Style.couleurs.argent, taille = 1 })
+			table.insert(lignes, { nom = "Revenu", texte = "🐣 Éclot en " .. minutes .. " min", couleur = Style.couleurs.revenu, taille = 0.9 })
+		else
 		table.insert(lignes, { nom = "Rarete", texte = (infosRarete and infosRarete.nom) or rarete, rarete = rarete, taille = 0.9 })
 		table.insert(lignes, { nom = "Prix", texte = Charte.argent(prix), couleur = Style.couleurs.argent, taille = 1 })
 		table.insert(lignes, { nom = "Revenu", texte = Style.revenu(revenu), couleur = Style.couleurs.revenu, taille = 0.9 })
+		end
 
 		local gui = Style.etiquette(corps, lignes, {
 			Name = "Etiquette",
@@ -25514,6 +26270,8 @@ function M.demarrer(ctx)
 		end
 		-- trop large pour le tapis : réduit (pivot au sol, proportions gardées)
 		local okBoite, mnB, mxB = pcall(boiteLocale, modele)
+		-- ce qui vole (Œuf mystère) plane au-dessus des rebords : pas besoin de le réduire
+		if infos.vol then okBoite = false end
 		if okBoite then
 			local f = facteurLargeur(mnB, mxB)
 			if f < 1 then
@@ -25550,8 +26308,12 @@ function M.demarrer(ctx)
 	-- ===== tirages =====
 	local especesParRarete = {}
 	for cle, infos in pairs(E.especes) do
+		if infos.special then
+			-- l'Œuf mystère a son propre tirage (voir apparaitre)
+		else
 		especesParRarete[infos.rarete] = especesParRarete[infos.rarete] or {}
 		table.insert(especesParRarete[infos.rarete], cle)
+		end
 	end
 	for _, liste in pairs(especesParRarete) do
 		table.sort(liste)
@@ -25693,9 +26455,14 @@ function M.demarrer(ctx)
 		return e
 	end
 
-	local function cadreTapis(x, t, phase, decal)
+	local function cadreTapis(x, t, phase, decal, vol)
 		local oscillation = math.sin(t * DANDINEMENT_FREQUENCE + phase)
 		local y = Plan.tapis.hauteur + math.abs(oscillation) * DANDINEMENT_HAUTEUR
+		if vol then
+			-- en vol : plane au-dessus du Tapis, à hauteur des dinos, et monte et descend doucement
+			y = Plan.tapis.hauteur + vol + math.sin(t * 1.6 + phase) * 0.8
+			oscillation = oscillation * 0.3
+		end
 		return CFrame.new(x, y, Plan.tapis.debut.Z + (decal or 0))
 			* CFrame.Angles(0, ANGLE_REGARD, 0)
 			* CFrame.Angles(0, 0, oscillation * DANDINEMENT_ANGLE)
@@ -25956,7 +26723,8 @@ function M.demarrer(ctx)
 			local okM, em = pcall(encombrement, "?", dino)
 			e = okM and em or { avant = 6, arriere = 6, decal = 0 }
 		end
-		local fiche = { x = x, phase = alea:NextNumber() * math.pi * 2, avant = e.avant, arriere = e.arriere, decal = e.decal }
+		local infosVol = espece and E.especes[espece]
+		local fiche = { x = x, phase = alea:NextNumber() * math.pi * 2, avant = e.avant, arriere = e.arriere, decal = e.decal, vol = infosVol and infosVol.vol }
 		local ok, groupes = pcall(analyserMembres, dino)
 		if ok then
 			fiche.groupes = groupes
@@ -25991,6 +26759,11 @@ function M.demarrer(ctx)
 		end
 		local espece = liste[alea:NextInteger(1, #liste)]
 		local mutation = tirerMutation(nomEvenement, evenement)
+		-- de temps en temps, un Œuf mystère ailé à la place
+		if E.oeuf and E.especes.OeufMystere and alea:NextNumber() < (E.oeuf.chance or 0) then
+			espece = "OeufMystere"
+			mutation = "Normal"
+		end
 
 		-- attend qu'il y ait assez de place derrière le dernier dino (on voit le tapis entre eux)
 		local e = encombrement(espece, nil)
@@ -26013,7 +26786,7 @@ function M.demarrer(ctx)
 		local depart = Plan.tapis.debut
 		suivre(dino, depart.X)
 		local fiche = surTapis[dino]
-		dino:PivotTo(cadreTapis(depart.X, 0, 0, fiche and fiche.decal or 0))
+		dino:PivotTo(cadreTapis(depart.X, 0, 0, fiche and fiche.decal or 0, fiche and fiche.vol))
 		dernierSorti = dino
 
 		local corps = dino:FindFirstChild("Corps") or dino.PrimaryPart
@@ -26097,7 +26870,7 @@ function M.demarrer(ctx)
 					table.insert(aDetruire, dino)
 				else
 					local ok = pcall(function()
-						local cf = cadreTapis(fiche.x, t, fiche.phase, fiche.decal)
+						local cf = cadreTapis(fiche.x, t, fiche.phase, fiche.decal, fiche.vol)
 						dino:PivotTo(cf)
 						if fiche.anime and fiche.groupes then
 							animerMembres(cf, fiche, t)
@@ -26130,7 +26903,7 @@ return M
 ]]></ProtectedString>
 					</Properties>
 				</Item>
-				<Item class="ModuleScript" referent="RBX00000032">
+				<Item class="ModuleScript" referent="RBX00000035">
 					<Properties>
 						<string name="Name">Vol</string>
 						<ProtectedString name="Source"><![CDATA[-- Système Vol : invite « Voler » sur les dinos des Bases, transport sur la tête du voleur, livraison ou retour chez la victime.
@@ -26656,19 +27429,19 @@ return M
 			</Item>
 		</Item>
 	</Item>
-	<Item class="StarterPlayer" referent="RBX00000048">
+	<Item class="StarterPlayer" referent="RBX0000004B">
 		<Properties>
 			<string name="Name">StarterPlayer</string>
 		</Properties>
-		<Item class="StarterPlayerScripts" referent="RBX00000047">
+		<Item class="StarterPlayerScripts" referent="RBX0000004A">
 			<Properties>
 				<string name="Name">StarterPlayerScripts</string>
 			</Properties>
-			<Item class="Folder" referent="RBX00000046">
+			<Item class="Folder" referent="RBX00000049">
 				<Properties>
 					<string name="Name">Dino</string>
 				</Properties>
-				<Item class="LocalScript" referent="RBX00000036">
+				<Item class="LocalScript" referent="RBX00000039">
 					<Properties>
 						<string name="Name">Client</string>
 						<ProtectedString name="Source"><![CDATA[-- Point d'entrée du client : crée l'écran du joueur et démarre les modules d'interface.
@@ -26759,11 +27532,11 @@ end
 						<bool name="Disabled">false</bool>
 					</Properties>
 				</Item>
-				<Item class="Folder" referent="RBX00000045">
+				<Item class="Folder" referent="RBX00000048">
 					<Properties>
 						<string name="Name">Interface</string>
 					</Properties>
-					<Item class="ModuleScript" referent="RBX00000037">
+					<Item class="ModuleScript" referent="RBX0000003A">
 						<Properties>
 							<string name="Name">AnimationsDecor</string>
 							<ProtectedString name="Source"><![CDATA[-- Interface/AnimationsDecor : anime localement le décor portant l'attribut « Anime ».
@@ -27026,7 +27799,7 @@ return M
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX00000038">
+					<Item class="ModuleScript" referent="RBX0000003B">
 						<Properties>
 							<string name="Name">AnimationsDinos</string>
 							<ProtectedString name="Source"><![CDATA[-- Interface/AnimationsDinos : anime localement les dinos voxel assemblés (attribut « Assemble »),
@@ -27268,7 +28041,7 @@ return M
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX00000039">
+					<Item class="ModuleScript" referent="RBX0000003C">
 						<Properties>
 							<string name="Name">Base</string>
 							<ProtectedString name="Source"><![CDATA[-- Interface Base : invites locales (Vendre / Voler / Verrouiller), repère « Ta base »,
@@ -28018,7 +28791,7 @@ return M
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX0000003A">
+					<Item class="ModuleScript" referent="RBX0000003D">
 						<Properties>
 							<string name="Name">Batte</string>
 							<ProtectedString name="Source"><![CDATA[-- Interface/Batte : frappe à la batte (clic, touche F, bouton mobile), gros rond de recharge en bas au centre, « BONK ! » géant à la frappe,
@@ -28444,7 +29217,7 @@ return M
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX0000003B">
+					<Item class="ModuleScript" referent="RBX0000003E">
 						<Properties>
 							<string name="Name">Boutique</string>
 							<ProtectedString name="Source"><![CDATA[-- Interface Boutique : le comptoir de l'explorateur, au look « simulateur Roblox » (voir STYLE.md §2 et §4).
@@ -29065,7 +29838,7 @@ return M
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX0000003C">
+					<Item class="ModuleScript" referent="RBX0000003F">
 						<Properties>
 							<string name="Name">Effets</string>
 							<ProtectedString name="Source"><![CDATA[-- Interface/Effets : effets visuels locaux déclenchés par le serveur (Reseau.Effet).
@@ -30211,6 +30984,11 @@ function M.demarrer(ctx)
 
 	-- événement : titre géant à l'écran sur un bandeau sombre lisere d'or
 	local titreActif = nil
+	-- éclosion d'un Œuf mystère : spirale de renaissance aux couleurs de la rareté obtenue
+	function effets.Eclosion(position, d)
+		effets.Renaissance(position, d)
+	end
+
 	function effets.Evenement(position, d)
 		if type(d.nom) ~= "string" or d.nom == "" then return end
 		local infos = E.evenements.liste[d.nom]
@@ -30550,7 +31328,7 @@ return M
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX0000003D">
+					<Item class="ModuleScript" referent="RBX00000040">
 						<Properties>
 							<string name="Name">HUD</string>
 							<ProtectedString name="Source"><![CDATA[-- Interface HUD : argent et revenu, menu de gauche, bouton de collecte, bandeau d'événement et notifications.
@@ -31544,7 +32322,7 @@ return M
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX0000003E">
+					<Item class="ModuleScript" referent="RBX00000041">
 						<Properties>
 							<string name="Name">Index</string>
 							<ProtectedString name="Source"><![CDATA[-- Interface Index (Dinodex) : le carnet des espèces découvertes.
@@ -31599,7 +32377,11 @@ function M.demarrer(ctx)
 	local noir = Color3.new(0, 0, 0)
 
 	local RARETES = E.raretes or {}
-	local ESPECES = E.especes or {}
+	-- le Dinodex ne liste que les vrais dinos (pas l'Œuf mystère)
+	local ESPECES = {}
+	for cle, fiche in pairs(E.especes or {}) do
+		if type(fiche) == "table" and not fiche.special then ESPECES[cle] = fiche end
+	end
 	local reglages = E.index or {}
 	local BONUS_RARETE = tonumber(reglages.bonusCompletRarete) or 0.1
 
@@ -32464,7 +33246,7 @@ return M
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX0000003F">
+					<Item class="ModuleScript" referent="RBX00000042">
 						<Properties>
 							<string name="Name">Mobile</string>
 							<ProtectedString name="Source"><![CDATA[-- Interface/Mobile : boutons tactiles (frapper, collecter) en bas à droite, au-dessus du bouton de saut.
@@ -32670,260 +33452,235 @@ return M
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX00000040">
+					<Item class="ModuleScript" referent="RBX00000043">
 						<Properties>
 							<string name="Name">Musique</string>
-							<ProtectedString name="Source"><![CDATA[-- Interface Musique : trois ambiances en boucle (Jungle, Evenement, Vol) avec fondu enchaîné,
--- et un bouton rond « 🎵 » (style simulateur) en haut à droite pour couper la musique (attribut local MusiqueCoupee).
+							<ProtectedString name="Source"><![CDATA[-- Interface Musique : la musique de fond, « Symphonie de la jungle » pour piano (do majeur, 76 bpm).
+-- Trois façons de la jouer, de la meilleure à la plus simple :
+--   1. MUSIQUE_ID : l'enregistrement complet (musique/symphonie-piano.wav, à téléverser sur Roblox) en boucle ;
+--   2. NOTE_PIANO_ID : un do4 de piano (musique/note-piano-do4.wav) ; la partition (ReplicatedStorage.Dino.Partition)
+--      est jouée note par note en transposant ce son ;
+--   3. sinon, la même partition jouée par un son intégré de Roblox (timbre de boîte à musique).
+-- Pendant un événement la musique s'anime un peu (plus vite, plus forte) ; quand on porte un dino volé, elle
+-- accélère encore. Elle s'efface légèrement sous les gros bruitages (Bus local « Ducking », envoyé par Interface/Sons).
+-- Bouton rond « 🎵 » en haut à droite pour couper la musique (attribut local MusiqueCoupee).
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local M = {}
 
--- pistes des ambiances : laissées vides, rien ne joue tant qu'aucun id n'est renseigné
-local PISTES = {
-	Jungle = "", -- mettez ici l'id de votre piste (ex. "rbxassetid://123456789")
-	Evenement = "", -- mettez ici l'id de votre piste
-	Vol = "", -- mettez ici l'id de votre piste
-}
+-- ===== à compléter après téléversement sur Roblox (Creator Hub > Création > Audio) =====
+local MUSIQUE_ID = ""    -- ex. "rbxassetid://123456789" : musique/symphonie-piano.wav
+local NOTE_PIANO_ID = "" -- ex. "rbxassetid://123456789" : musique/note-piano-do4.wav (do4 = MIDI 60)
+-- repli sans téléversement : un son intégré, supposé proche d'un do5 (MIDI 72), joué plus doucement
+local NOTE_REPLI = { id = "rbxasset://sounds/electronicpingshort.wav", midi = 72, volume = 0.45 }
 
-local function nombre(t, cle, defaut)
-	if type(t) == "table" and type(t[cle]) == "number" then
-		return t[cle]
-	end
-	return defaut
-end
+local VOLUME = 0.32
+local VOIX = 28 -- notes simultanées possibles
+local ACCELERATION = { Evenement = 1.08, Vol = 1.15 }
 
 function M.demarrer(ctx)
-	local Charte = ctx.Charte
-	local Outils = ctx.Outils
 	local joueur = ctx.joueur
 	local Etat = ctx.Etat
+	local Bus = ctx.Bus
+	local Style = ctx.Style
 
-	-- réglages (surchargés par Equilibrage.musique s'il existe)
-	local reglages = ctx.Equilibrage and ctx.Equilibrage.musique
-	local DUREE_FONDU = nombre(reglages, "fondu", 1.5)
-	local VOLUME = nombre(reglages, "volume", 0.35)
-	local PERIODE_CONTROLE = nombre(reglages, "controle", 2)
-
-	-- dossier local des sons (côté client : entendu par ce joueur seulement)
 	local ancien = SoundService:FindFirstChild("DinoMusique")
-	if ancien then
-		pcall(function() ancien:Destroy() end)
-	end
+	if ancien then pcall(function() ancien:Destroy() end) end
 	local dossier = Instance.new("Folder")
 	dossier.Name = "DinoMusique"
 	dossier.Parent = SoundService
 
-	local pistes = {}
-	for nom, id in pairs(PISTES) do
-		local son = Instance.new("Sound")
-		son.Name = nom
-		son.SoundId = id
-		son.Looped = true
-		son.Volume = 0
-		son.Parent = dossier
-		pistes[nom] = { son = son, generation = 0, tween = nil }
-	end
+	local groupe = Instance.new("SoundGroup")
+	groupe.Name = "Musique"
+	groupe.Volume = VOLUME
+	groupe.Parent = dossier
+	-- un peu de salle, des aigus adoucis : un piano chaleureux qui laisse la place aux bruitages
+	local salle = Instance.new("ReverbSoundEffect")
+	salle.DecayTime = 2.2
+	salle.Density = 0.9
+	salle.Diffusion = 0.9
+	salle.DryLevel = -2
+	salle.WetLevel = -9
+	salle.Parent = groupe
+	local egaliseur = Instance.new("EqualizerSoundEffect")
+	egaliseur.HighGain = -4
+	egaliseur.MidGain = 0
+	egaliseur.LowGain = 1
+	egaliseur.Parent = groupe
 
-	local actuelle = nil
 	local coupee = joueur:GetAttribute("MusiqueCoupee") == true
+	local vitesse = 1
+	local volumeCible = VOLUME
 
-	-- fondu d'une piste vers un volume ; met la piste en pause une fois silencieuse
-	local function fondre(piste, cible)
-		piste.generation = piste.generation + 1
-		local generation = piste.generation
-		local son = piste.son
-		if piste.tween then
-			pcall(function() piste.tween:Cancel() end)
-			piste.tween = nil
-		end
-		if cible > 0 then
-			if son.SoundId == "" then
-				return
-			end
-			if not son.IsPlaying then
-				pcall(function() son:Play() end)
-			end
-		elseif not son.IsPlaying then
-			son.Volume = 0
-			return
-		end
-		local ok, tween = pcall(function()
-			return TweenService:Create(son, TweenInfo.new(DUREE_FONDU, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), { Volume = cible })
+	local function appliquerVolume(duree)
+		local v = volumeCible
+		if coupee then v = 0 end
+		pcall(function()
+			TweenService:Create(groupe, TweenInfo.new(duree or 1.2, Enum.EasingStyle.Sine), { Volume = v }):Play()
 		end)
-		if not ok or not tween then
-			son.Volume = cible
-			if cible <= 0 then
-				pcall(function() son:Pause() end)
-			end
-			return
-		end
-		piste.tween = tween
-		tween.Completed:Connect(function()
-			if piste.generation ~= generation then
-				return
-			end
-			piste.tween = nil
-			if cible <= 0 then
-				pcall(function() son:Pause() end)
-			end
-		end)
-		tween:Play()
 	end
 
-	-- quelle ambiance doit jouer maintenant
-	local function ambianceVoulue()
+	-- ===== mode 1 : l'enregistrement complet =====
+	local piste = nil
+	if MUSIQUE_ID ~= "" then
+		piste = Instance.new("Sound")
+		piste.Name = "Symphonie"
+		piste.SoundId = MUSIQUE_ID
+		piste.Looped = true
+		piste.Volume = 1
+		piste.SoundGroup = groupe
+		piste.Parent = dossier
+		piste:Play()
+	end
+
+	-- ===== modes 2 et 3 : la partition jouée note par note =====
+	local partition = nil
+	if not piste then
+		local module = ReplicatedStorage:FindFirstChild("Dino") and ReplicatedStorage.Dino:FindFirstChild("Partition")
+		if module then
+			local ok, p = pcall(require, module)
+			if ok and type(p) == "table" and type(p.notes) == "table" then partition = p end
+		end
+	end
+	if partition then
+		local source = { id = NOTE_PIANO_ID, midi = 60, volume = 1 }
+		if NOTE_PIANO_ID == "" then source = NOTE_REPLI end
+		local voix = {}
+		for i = 1, VOIX do
+			local s = Instance.new("Sound")
+			s.Name = "Voix" .. i
+			s.SoundId = source.id
+			s.SoundGroup = groupe
+			s.Parent = dossier
+			voix[i] = s
+		end
+		local prochaineVoix = 1
+		local function jouerNote(hauteur, velocite, dureeS)
+			local s = voix[prochaineVoix]
+			prochaineVoix = prochaineVoix % VOIX + 1
+			s.PlaybackSpeed = 2 ^ ((hauteur - source.midi) / 12)
+			s.Volume = velocite * source.volume
+			s.TimePosition = 0
+			s:Play()
+			-- étouffoir : on laisse sonner un peu après la durée écrite puis on coupe en douceur
+			local jeton = {}
+			s:SetAttribute("Jeton", tostring(jeton))
+			task.delay(dureeS + 0.9, function()
+				if s:GetAttribute("Jeton") == tostring(jeton) then
+					pcall(function() TweenService:Create(s, TweenInfo.new(0.4), { Volume = 0 }):Play() end)
+				end
+			end)
+		end
+
+		local notes = partition.notes
+		local secParTemps = 60 / (partition.bpm or 76)
+		local dureeBoucle = partition.duree or 136
+		local position = 0 -- en battements
+		local index = 1
+		RunService.Heartbeat:Connect(function(dt)
+			if coupee then return end
+			local suivante = position + dt / secParTemps * vitesse
+			if suivante >= dureeBoucle then
+				-- fin de boucle : on joue ce qui reste puis on repart au début
+				while index <= #notes do
+					local n = notes[index]
+					pcall(jouerNote, n[3], n[4], n[2] * secParTemps / vitesse)
+					index = index + 1
+				end
+				suivante = suivante - dureeBoucle
+				index = 1
+			end
+			while index <= #notes and notes[index][1] < suivante do
+				local n = notes[index]
+				pcall(jouerNote, n[3], n[4], n[2] * secParTemps / vitesse)
+				index = index + 1
+			end
+			position = suivante
+		end)
+		-- Interface/Sons cale ses fanfares sur la pulsation
+		if Bus then
+			Bus.repondre("TempsMusique", function()
+				return position, secParTemps / vitesse
+			end)
+		end
+	end
+
+	-- ===== ambiance : plus d'élan pendant un événement ou un vol =====
+	local function actualiser()
+		local v = 1
+		local vol = VOLUME
+		if Etat and type(Etat:GetAttribute("Evenement")) == "string" and Etat:GetAttribute("Evenement") ~= "" then
+			v = ACCELERATION.Evenement
+			vol = VOLUME * 1.15
+		end
 		local porte = joueur:GetAttribute("Porte")
 		if type(porte) == "string" and porte ~= "" then
-			return "Vol"
+			v = ACCELERATION.Vol
+			vol = VOLUME * 1.2
 		end
-		local evenement = Etat and Etat:GetAttribute("Evenement")
-		if type(evenement) == "string" and evenement ~= "" then
-			return "Evenement"
-		end
-		return "Jungle"
+		vitesse = v
+		if piste then pcall(function() piste.PlaybackSpeed = v end) end
+		volumeCible = vol
+		appliquerVolume(1.5)
 	end
+	if Etat then Etat:GetAttributeChangedSignal("Evenement"):Connect(actualiser) end
+	joueur:GetAttributeChangedSignal("Porte"):Connect(actualiser)
+	actualiser()
 
-	local function actualiser(force)
-		local voulue = ambianceVoulue()
-		if coupee then
-			voulue = nil
-		end
-		if voulue == actuelle and not force then
-			return
-		end
-		actuelle = voulue
-		for nom, piste in pairs(pistes) do
-			if nom == voulue then
-				fondre(piste, VOLUME)
-			else
-				fondre(piste, 0)
-			end
-		end
-	end
-
-	-- bouton rond « 🎵 » bleu en haut à droite (sous la barre Roblox), « 🔇 » barré quand coupé
-	local Style = ctx.Style
-	local bouton
-	local libelle
-	local barre
-
-	local function majBouton()
-		if not bouton then
-			return
-		end
-		if coupee then
-			if Style then
-				Style.couleurBouton(bouton, "gris")
-			else
-				bouton.BackgroundColor3 = Charte.pierre
-			end
-			if libelle then libelle.Text = "🔇" end
-			if barre then barre.Visible = true end
-		else
-			if Style then
-				Style.couleurBouton(bouton, "bleu")
-			else
-				bouton.BackgroundColor3 = Charte.jungle
-			end
-			if libelle then libelle.Text = "🎵" end
-			if barre then barre.Visible = false end
-		end
-	end
-
-	local function basculer()
-		joueur:SetAttribute("MusiqueCoupee", not coupee)
-	end
-
-	local ok = pcall(function()
-		if Style then
-			bouton, libelle = Style.bouton(ctx.gui, {
-				Name = "BoutonMusique",
-				AnchorPoint = Vector2.new(1, 0),
-				Position = UDim2.new(1, -12, 0, 64),
-				Size = UDim2.fromOffset(56, 56),
-				couleur = "bleu",
-				icone = "🎵",
-				rayon = 28,
-				tailleMax = 30,
-				ZIndex = 5,
-			}, basculer)
-		else
-			bouton = Outils.bouton(ctx.gui, {
-				Name = "BoutonMusique",
-				AnchorPoint = Vector2.new(1, 0),
-				Position = UDim2.new(1, -12, 0, 64),
-				Size = UDim2.new(0, 56, 0, 56),
-				Text = "🎵",
-				BackgroundColor3 = Charte.jungle,
-				TextColor3 = Charte.creme,
-				ZIndex = 5,
-			}, basculer)
-			libelle = bouton
-		end
-		-- trait rouge en diagonale, cerné de noir, quand la musique est coupée
-		barre = Instance.new("Frame")
-		barre.Name = "Barre"
-		barre.AnchorPoint = Vector2.new(0.5, 0.5)
-		barre.Position = UDim2.new(0.5, 0, 0.5, 0)
-		barre.Size = UDim2.new(0.82, 0, 0, 6)
-		barre.Rotation = -45
-		barre.BorderSizePixel = 0
-		barre.BackgroundColor3 = Charte.alerte
-		barre.ZIndex = 7
-		barre.Visible = false
-		if Style then
-			Style.coins(barre, 3)
-			Style.bordure(barre, 2)
-		end
-		barre.Parent = bouton
-	end)
-	if not ok then
-		bouton = nil
-		libelle = nil
-		barre = nil
-	end
-	majBouton()
-
-	-- écoute des changements
-	joueur:GetAttributeChangedSignal("MusiqueCoupee"):Connect(function()
-		coupee = joueur:GetAttribute("MusiqueCoupee") == true
-		majBouton()
-		actualiser(false)
-	end)
-	joueur:GetAttributeChangedSignal("Porte"):Connect(function()
-		actualiser(false)
-	end)
-	if Etat then
-		Etat:GetAttributeChangedSignal("Evenement"):Connect(function()
-			actualiser(false)
+	-- ===== la musique s'efface un instant sous les gros bruitages =====
+	if Bus then
+		Bus.ecouter("Ducking", function(force, duree)
+			if coupee then return end
+			force = math.clamp(tonumber(force) or 0.5, 0, 1)
+			local bas = volumeCible * (1 - force)
+			pcall(function()
+				local t = TweenService:Create(groupe, TweenInfo.new(0.08), { Volume = bas })
+				t:Play()
+				task.delay(tonumber(duree) or 0.6, function() appliquerVolume(0.8) end)
+			end)
 		end)
 	end
 
-	actualiser(true)
-
-	-- contrôle périodique de secours (id de piste renseigné en cours de partie, son arrêté…)
-	while dossier.Parent do
-		task.wait(PERIODE_CONTROLE)
-		local voulue = actuelle
-		if voulue and pistes[voulue] then
-			local piste = pistes[voulue]
-			if piste.son.SoundId ~= "" and not piste.son.IsPlaying then
-				actualiser(true)
-			end
-		end
-		if ambianceVoulue() ~= voulue and not coupee then
-			actualiser(false)
-		end
+	-- ===== bouton « 🎵 » =====
+	local bouton, libelle
+	pcall(function()
+		bouton, libelle = Style.bouton(ctx.gui, {
+			Name = "BoutonMusique",
+			Size = UDim2.fromOffset(56, 56),
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -12, 0, 64),
+			couleur = "bleu",
+			texte = "🎵",
+			rayon = 28,
+		}, function()
+			joueur:SetAttribute("MusiqueCoupee", not coupee)
+		end)
+	end)
+	local function majBouton()
+		if not bouton then return end
+		if libelle then libelle.Text = coupee and "🔇" or "🎵" end
+		pcall(function() Style.couleurBouton(bouton, coupee and "gris" or "bleu") end)
 	end
+	joueur:GetAttributeChangedSignal("MusiqueCoupee"):Connect(function()
+		coupee = joueur:GetAttribute("MusiqueCoupee") == true
+		if piste then
+			if coupee then pcall(function() piste:Pause() end) else pcall(function() piste:Resume() end) end
+		end
+		appliquerVolume(0.4)
+		majBouton()
+	end)
+	majBouton()
+	appliquerVolume(2)
 end
 
 return M
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX00000041">
+					<Item class="ModuleScript" referent="RBX00000044">
 						<Properties>
 							<string name="Name">Renaissance</string>
 							<ProtectedString name="Source"><![CDATA[-- Interface Renaissance : panneau ouvert depuis l'Autel (ou le HUD), au style « simulateur Roblox ».
@@ -33678,7 +34435,7 @@ return M
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX00000042">
+					<Item class="ModuleScript" referent="RBX00000045">
 						<Properties>
 							<string name="Name">Sons</string>
 							<ProtectedString name="Source"><![CDATA[-- Interface/Sons : banque de bruitages du jeu (sons intégrés uniquement).
@@ -33691,15 +34448,13 @@ local M = {}
 
 local INTERVALLE_MIN = 0.05 -- anti-cacophonie : délai minimal entre deux lectures d'un même son
 local TAILLE_RESERVOIR = 3 -- lectures simultanées possibles par couche
-local VOLUME_GENERAL = 0.6
+local VOLUME_GENERAL = 0.5
 local DISTANCE_PLEINE = 40 -- en deçà, un effet du monde s'entend à plein volume
 local DISTANCE_MAX = 220 -- au-delà, il ne s'entend plus
 local VOLUME_LOINTAIN = 0.15 -- volume relatif juste avant la limite
 
 -- série d'encaissements : la tonalité monte à chaque gain rapproché (style « juicy »)
 local SERIE_DELAI = 1.5 -- sans gain pendant ce délai, la tonalité revient à la normale
-local SERIE_PAS = 0.07 -- hausse de PlaybackSpeed par gain de la série
-local SERIE_MAX = 0.7 -- hausse maximale (vitesse x1,7)
 
 -- raretés qui déclenchent le son « rare » renforcé (ordre d'Equilibrage.raretes)
 local ORDRE_FORT = 5 -- Mythique et au-delà
@@ -33707,74 +34462,97 @@ local RARETES_FORTES = { Mythique = true, Divin = true, Secret = true } -- repli
 
 local S = "rbxasset://sounds/"
 
+-- ===== accord avec la musique =====
+-- La musique (Interface/Musique) est en do majeur. Le son « ping » intégré est pris comme un do5 (MIDI 72),
+-- la même hypothèse que le repli de la musique : chaque bruitage mélodique joue des notes de la gamme de do
+-- (surtout la pentatonique do-ré-mi-sol-la), et les grandes fanfares tombent sur le demi-temps suivant.
+local PING = S .. "electronicpingshort.wav"
+local function n(midi) return 2 ^ ((midi - 72) / 12) end
+local DO5, RE5, MI5, SOL5, LA5, DO6, MI6, SOL6 = 72, 74, 76, 79, 81, 84, 88, 91
+
 -- banque : nom -> liste de couches { fichier, vitesse, volume, retard }
 local BANQUE = {
 	clic = {
-		{ S .. "button.wav", 1.25, 0.45, 0 },
+		{ S .. "button.wav", 1.2, 0.3, 0 },
 	},
-	achat = {
-		{ S .. "electronicpingshort.wav", 1.0, 0.7, 0 },
-		{ S .. "electronicpingshort.wav", 1.5, 0.55, 0.08 },
+	achat = { -- quinte montante sol-do
+		{ PING, n(SOL5), 0.45, 0 },
+		{ PING, n(DO6), 0.4, 0.09 },
 	},
-	refus = {
-		{ S .. "button.wav", 0.55, 0.6, 0 },
-		{ S .. "button.wav", 0.45, 0.5, 0.09 },
+	refus = { -- un « bonk » grave et doux, sans note fausse
+		{ S .. "button.wav", 0.6, 0.4, 0 },
 	},
-	argent = {
-		{ S .. "electronicpingshort.wav", 1.8, 0.5, 0 },
-		{ S .. "electronicpingshort.wav", 2.25, 0.4, 0.05 },
+	argent = { -- tierce do-mi ; la série d'encaissements monte dans la pentatonique
+		{ PING, n(DO6), 0.35, 0 },
+		{ PING, n(MI6), 0.25, 0.05 },
 	},
 	vol = {
-		{ S .. "swordlunge.wav", 0.8, 0.6, 0 },
-		{ S .. "unsheath.wav", 1.2, 0.35, 0.06 },
+		{ S .. "swordlunge.wav", 0.8, 0.45, 0 },
+		{ PING, n(LA5 - 12), 0.35, 0.06 },
 	},
-	alerte = {
-		{ S .. "electronicpingshort.wav", 0.7, 0.7, 0 },
-		{ S .. "electronicpingshort.wav", 0.7, 0.7, 0.18 },
+	alerte = { -- la mineur : inquiétant mais dans le ton
+		{ PING, n(LA5 - 12), 0.45, 0 },
+		{ PING, n(DO5), 0.4, 0.16 },
 	},
 	alerteGrave = {
-		{ S .. "electronicpingshort.wav", 0.4, 0.8, 0 },
-		{ S .. "electronicpingshort.wav", 0.4, 0.8, 0.25 },
-		{ S .. "impact_water.mp3", 0.45, 0.6, 0.1 },
+		{ PING, n(LA5 - 24), 0.55, 0 },
+		{ PING, n(MI5 - 12), 0.5, 0.2 },
+		{ S .. "impact_water.mp3", 0.45, 0.45, 0.1 },
 	},
 	frappe = {
-		{ S .. "swordslash.wav", 1.0, 0.65, 0 },
-		{ S .. "action_jump.mp3", 0.6, 0.35, 0.03 },
+		{ S .. "swordslash.wav", 1.0, 0.5, 0 },
+		{ S .. "action_jump.mp3", 0.6, 0.25, 0.03 },
 	},
 	verrou = {
-		{ S .. "clickfast.wav", 0.7, 0.6, 0 },
-		{ S .. "electronicpingshort.wav", 0.85, 0.45, 0.07 },
+		{ S .. "clickfast.wav", 0.7, 0.45, 0 },
+		{ PING, n(SOL5 - 12), 0.35, 0.07 },
 	},
 	deverrou = {
-		{ S .. "clickfast.wav", 1.1, 0.5, 0 },
-		{ S .. "electronicpingshort.wav", 0.65, 0.35, 0.07 },
+		{ S .. "clickfast.wav", 1.1, 0.4, 0 },
+		{ PING, n(DO5), 0.3, 0.07 },
 	},
-	rare = {
-		{ S .. "electronicpingshort.wav", 1.2, 0.55, 0 },
-		{ S .. "electronicpingshort.wav", 1.5, 0.55, 0.09 },
-		{ S .. "electronicpingshort.wav", 1.8, 0.6, 0.18 },
+	rare = { -- arpège do-mi-sol
+		{ PING, n(DO5), 0.4, 0 },
+		{ PING, n(MI5), 0.4, 0.09 },
+		{ PING, n(SOL5), 0.45, 0.18 },
 	},
-	-- Mythique, Divin, Secret : plus fort, plus aigu, avec une cloche finale
-	rareFort = {
-		{ S .. "electronicpingshort.wav", 1.6, 0.9, 0 },
-		{ S .. "electronicpingshort.wav", 2.0, 0.9, 0.08 },
-		{ S .. "electronicpingshort.wav", 2.4, 0.95, 0.16 },
-		{ S .. "electronicpingshort.wav", 3.0, 1.0, 0.26 },
-		{ S .. "impact_water.mp3", 1.3, 0.5, 0.26 },
+	rareFort = { -- arpège do-mi-sol-do-mi, cloche d'eau à la fin
+		{ PING, n(DO5), 0.6, 0 },
+		{ PING, n(MI5), 0.6, 0.08 },
+		{ PING, n(SOL5), 0.65, 0.16 },
+		{ PING, n(DO6), 0.7, 0.24 },
+		{ PING, n(MI6), 0.6, 0.32 },
+		{ S .. "impact_water.mp3", 1.3, 0.35, 0.32 },
 	},
-	renaissance = {
-		{ S .. "electronicpingshort.wav", 0.8, 0.6, 0 },
-		{ S .. "electronicpingshort.wav", 1.0, 0.6, 0.12 },
-		{ S .. "electronicpingshort.wav", 1.25, 0.6, 0.24 },
-		{ S .. "electronicpingshort.wav", 1.6, 0.7, 0.36 },
-		{ S .. "impact_water.mp3", 0.7, 0.45, 0.36 },
+	renaissance = { -- montée do-mi-sol-do puis accord
+		{ PING, n(DO5), 0.45, 0 },
+		{ PING, n(MI5), 0.45, 0.13 },
+		{ PING, n(SOL5), 0.45, 0.26 },
+		{ PING, n(DO6), 0.55, 0.39 },
+		{ PING, n(MI6), 0.4, 0.39 },
+		{ S .. "impact_water.mp3", 0.7, 0.35, 0.39 },
 	},
 	decouverte = {
-		{ S .. "electronicpingshort.wav", 1.4, 0.55, 0 },
-		{ S .. "electronicpingshort.wav", 1.9, 0.5, 0.1 },
-		{ S .. "button.wav", 1.6, 0.3, 0.1 },
+		{ PING, n(SOL5), 0.4, 0 },
+		{ PING, n(DO6), 0.4, 0.1 },
+		{ PING, n(MI6), 0.35, 0.2 },
+	},
+	eclosion = { -- craquement puis fanfare do-sol-do-mi-sol
+		{ S .. "snap.wav", 1.0, 0.5, 0 },
+		{ PING, n(DO5), 0.55, 0.12 },
+		{ PING, n(SOL5), 0.55, 0.2 },
+		{ PING, n(DO6), 0.6, 0.28 },
+		{ PING, n(MI6), 0.6, 0.36 },
+		{ PING, n(SOL6), 0.55, 0.44 },
+		{ S .. "impact_water.mp3", 1.1, 0.35, 0.44 },
 	},
 }
+
+-- série d'encaissements : degrés de la pentatonique (do ré mi sol la do…) en rapports de vitesse
+local SERIE_NOTES = { 0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24 }
+-- gros bruitages : la musique s'efface un peu (force, durée) et ils tombent sur le demi-temps
+local DUCKING = { rareFort = { 0.45, 1.2 }, renaissance = { 0.5, 1.5 }, eclosion = { 0.55, 1.6 }, alerteGrave = { 0.4, 1 }, vol = { 0.3, 0.8 } }
+local EN_RYTHME = { rareFort = true, renaissance = true, eclosion = true, decouverte = true }
 
 -- genre d'Effet -> son (une fonction peut choisir selon les données)
 local EFFETS = {
@@ -33788,6 +34566,7 @@ local EFFETS = {
 	Renaissance = "renaissance",
 	Decouverte = "decouverte",
 	Meteore = "alerteGrave",
+	Eclosion = "eclosion",
 }
 
 -- effets qui s'entendent partout, sans atténuation
@@ -33820,6 +34599,17 @@ function M.demarrer(ctx)
 	groupe.Name = "Effets"
 	groupe.Volume = VOLUME_GENERAL
 	groupe.Parent = dossier
+	-- même salle que la musique et des aigus adoucis : bruitages et piano se fondent
+	local salle = Instance.new("ReverbSoundEffect")
+	salle.DecayTime = 1.6
+	salle.DryLevel = -1
+	salle.WetLevel = -12
+	salle.Parent = groupe
+	local egaliseur = Instance.new("EqualizerSoundEffect")
+	egaliseur.HighGain = -3
+	egaliseur.MidGain = 0
+	egaliseur.LowGain = 0
+	egaliseur.Parent = groupe
 
 	-- construction des réservoirs
 	local reservoirs = {} -- [nom] = { { sons = {...}, prochain = 1, couche = {...} }, ... }
@@ -33854,9 +34644,9 @@ function M.demarrer(ctx)
 			serie = 0
 		end
 		dernierGain = maintenant
-		local hausse = math.min(serie * SERIE_PAS, SERIE_MAX)
+		local degre = SERIE_NOTES[math.min(serie + 1, #SERIE_NOTES)]
 		serie = serie + 1
-		return 1 + hausse
+		return 2 ^ (degre / 12)
 	end
 
 	local function lireCouche(entree, facteur, vitesse)
@@ -33886,8 +34676,19 @@ function M.demarrer(ctx)
 		if nom == "argent" then
 			vitesse = tonaliteGain(maintenant)
 		end
+		local d = DUCKING[nom]
+		if d and ctx.Bus then ctx.Bus.emettre("Ducking", d[1], d[2]) end
+		-- fanfares : calées sur le demi-temps suivant de la musique (au plus un quart de seconde d'attente)
+		local attente = 0
+		if EN_RYTHME[nom] and ctx.Bus then
+			local position, secParTemps = ctx.Bus.demander("TempsMusique")
+			if type(position) == "number" and type(secParTemps) == "number" and secParTemps > 0 then
+				local reste = (0.5 - (position % 0.5)) * secParTemps
+				if reste <= 0.25 then attente = reste end
+			end
+		end
 		for _, entree in ipairs(liste) do
-			local retard = entree.couche[4] or 0
+			local retard = (entree.couche[4] or 0) + attente
 			if retard > 0 then
 				task.delay(retard, lireCouche, entree, facteur, vitesse)
 			else
@@ -34021,7 +34822,7 @@ return M
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX00000043">
+					<Item class="ModuleScript" referent="RBX00000046">
 						<Properties>
 							<string name="Name">Tutoriel</string>
 							<ProtectedString name="Source"><![CDATA[-- Interface Tutoriel : bulles d'aide montrées une seule fois par session (7 s ou un clic pour fermer),
@@ -34718,7 +35519,7 @@ return M
 ]]></ProtectedString>
 						</Properties>
 					</Item>
-					<Item class="ModuleScript" referent="RBX00000044">
+					<Item class="ModuleScript" referent="RBX00000047">
 						<Properties>
 							<string name="Name">Vol</string>
 							<ProtectedString name="Source"><![CDATA[-- Interface Vol : guide du voleur (ruban rouge qui pulse avec médaillon 🦖, faisceau vers sa base, bords dorés)

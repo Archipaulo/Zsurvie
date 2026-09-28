@@ -640,8 +640,8 @@ function M.construire(ctx)
 		local nbEspeces = 0
 		local especes = ctx.Equilibrage and ctx.Equilibrage.especes
 		if type(especes) == "table" then
-			for _ in pairs(especes) do
-				nbEspeces = nbEspeces + 1
+			for _, fiche in pairs(especes) do
+				if not (type(fiche) == "table" and fiche.special) then nbEspeces = nbEspeces + 1 end
 			end
 		end
 		local texteEspeces = "Toutes les espèces à découvrir"

@@ -1141,6 +1141,11 @@ function M.demarrer(ctx)
 
 	-- événement : titre géant à l'écran sur un bandeau sombre lisere d'or
 	local titreActif = nil
+	-- éclosion d'un Œuf mystère : spirale de renaissance aux couleurs de la rareté obtenue
+	function effets.Eclosion(position, d)
+		effets.Renaissance(position, d)
+	end
+
 	function effets.Evenement(position, d)
 		if type(d.nom) ~= "string" or d.nom == "" then return end
 		local infos = E.evenements.liste[d.nom]

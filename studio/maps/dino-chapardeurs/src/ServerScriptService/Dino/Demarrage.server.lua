@@ -87,7 +87,7 @@ end
 
 -- ===== 1. construction de la map =====
 local ORDRE_CONSTRUCTION = {
-	"DinosHerbivores", "DinosCarnivores", "Ciel", "Sol", "Falaises", "Jungle", "Riviere", "Volcan", "Tapis",
+	"DinosHerbivores", "DinosCarnivores", "OeufMystere", "Ciel", "Sol", "Falaises", "Jungle", "Riviere", "Volcan", "Tapis",
 	"Nurserie", "FinTapis", "Bases", "Place", "Comptoir", "Autel", "Cratere", "Fossiles", "Lumieres", "Signaletique",
 }
 
@@ -106,7 +106,7 @@ print(string.format("[Dino] map construite : %d parts en %.2f s", Outils.nombreP
 -- ===== 2. démarrage des systèmes =====
 local ORDRE_SYSTEMES = {
 	"Donnees", "Economie", "Bases", "Tapis", "Enclos", "Achat", "Vol", "Batte", "Renaissance", "Boutique",
-	"Index", "Evenements", "Classement", "Recompenses", "Securite", "GardeFou", "Autotest", "ModeTest",
+	"Index", "Oeufs", "Evenements", "Classement", "Recompenses", "Securite", "GardeFou", "Autotest", "ModeTest",
 }
 
 for _, module in ipairs(modulesDans(script.Parent:FindFirstChild("Systemes"), ORDRE_SYSTEMES)) do

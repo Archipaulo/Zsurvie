@@ -50,7 +50,11 @@ function M.demarrer(ctx)
 	local noir = Color3.new(0, 0, 0)
 
 	local RARETES = E.raretes or {}
-	local ESPECES = E.especes or {}
+	-- le Dinodex ne liste que les vrais dinos (pas l'Œuf mystère)
+	local ESPECES = {}
+	for cle, fiche in pairs(E.especes or {}) do
+		if type(fiche) == "table" and not fiche.special then ESPECES[cle] = fiche end
+	end
 	local reglages = E.index or {}
 	local BONUS_RARETE = tonumber(reglages.bonusCompletRarete) or 0.1
 

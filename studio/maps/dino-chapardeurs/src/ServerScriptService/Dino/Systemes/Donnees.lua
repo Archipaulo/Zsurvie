@@ -94,7 +94,10 @@ function M.demarrer(ctx)
 							if type(mutation) ~= "string" or not (E.mutations and E.mutations[mutation]) then
 								mutation = "Normal"
 							end
-							table.insert(liste, { Espece = espece, Mutation = mutation })
+							local entree = { Espece = espece, Mutation = mutation }
+							local fin = dino:GetAttribute("EclosionFin")
+							if type(fin) == "number" and fin == fin then entree.EclosionFin = math.floor(fin) end
+							table.insert(liste, entree)
 						end
 					end
 				end
@@ -240,7 +243,9 @@ function M.demarrer(ctx)
 				if type(mutation) ~= "string" or not (E.mutations and E.mutations[mutation]) then
 					mutation = "Normal"
 				end
-				table.insert(liste, { Espece = d.Espece, Mutation = mutation })
+				local entree = { Espece = d.Espece, Mutation = mutation }
+				if type(d.EclosionFin) == "number" and d.EclosionFin == d.EclosionFin then entree.EclosionFin = d.EclosionFin end
+				table.insert(liste, entree)
 			end
 		end
 		return liste

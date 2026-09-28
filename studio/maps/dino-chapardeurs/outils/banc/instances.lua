@@ -44,7 +44,11 @@ local PARENTS = {
 	Player = "Instance", HumanoidDescription = "Instance", LuaSourceContainer = "Instance",
 	BaseScript = "LuaSourceContainer", Script = "BaseScript", LocalScript = "Script", ModuleScript = "LuaSourceContainer",
 	Team = "Instance", Accessory = "Instance", Shirt = "Instance", Pants = "Instance", BodyColors = "Instance",
-	PathfindingModifier = "Instance", Dialog = "Instance", StarterGear = "Instance", DataModel = "Instance",
+	PathfindingModifier = "Instance",
+	SoundEffect = "Instance", ReverbSoundEffect = "SoundEffect", EqualizerSoundEffect = "SoundEffect",
+	CompressorSoundEffect = "SoundEffect", ChorusSoundEffect = "SoundEffect", EchoSoundEffect = "SoundEffect",
+	DistortionSoundEffect = "SoundEffect", FlangeSoundEffect = "SoundEffect", PitchShiftSoundEffect = "SoundEffect",
+	TremoloSoundEffect = "SoundEffect", Dialog = "Instance", StarterGear = "Instance", DataModel = "Instance",
 }
 banc.PARENTS = PARENTS
 local CREABLES = {}
@@ -52,7 +56,7 @@ for c in pairs(PARENTS) do CREABLES[c] = true end
 for _, c in ipairs({ "PVInstance", "BasePart", "FormFactorPart", "GuiBase", "GuiBase2d", "GuiObject", "GuiButton",
 	"LayerCollector", "SurfaceGuiBase", "UIComponent", "UIBase", "UIGridStyleLayout", "UIConstraint", "Light",
 	"ValueBase", "FaceInstance", "DataModelMesh", "JointInstance", "PostEffect", "Constraint", "BodyMover",
-	"LuaSourceContainer", "BaseScript", "Terrain", "Workspace", "Player", "PlayerGui", "PlayerScripts", "DataModel" }) do
+	"LuaSourceContainer", "BaseScript", "Terrain", "SoundEffect", "Workspace", "Player", "PlayerGui", "PlayerScripts", "DataModel" }) do
 	CREABLES[c] = nil
 end
 
@@ -210,6 +214,10 @@ local DEFAUTS = {
 		MoonAngularSize = 11, StarCount = 3000, CelestialBodiesShown = true, SunTextureId = "", MoonTextureId = "", SkyboxOrientation = function() return Vector3.zero end },
 	Clouds = { Cover = 0.5, Density = 0.7, Color = function() return C3(1, 1, 1) end, Enabled = true },
 	PostEffect = { Enabled = true },
+	SoundEffect = { Enabled = true, Priority = 0 },
+	ReverbSoundEffect = { DecayTime = 1.5, Density = 1, Diffusion = 1, DryLevel = -6, WetLevel = 0 },
+	EqualizerSoundEffect = { HighGain = 0, MidGain = 0, LowGain = 0 },
+	CompressorSoundEffect = { Attack = 0.1, GainMakeup = 0, Ratio = 40, Release = 0.1, Threshold = -40 },
 	BloomEffect = { Intensity = 1, Size = 24, Threshold = 2 },
 	ColorCorrectionEffect = { Brightness = 0, Contrast = 0, Saturation = 0, TintColor = function() return C3(1, 1, 1) end },
 	SunRaysEffect = { Intensity = 0.25, Spread = 1 }, BlurEffect = { Size = 24 },

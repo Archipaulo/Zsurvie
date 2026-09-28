@@ -337,7 +337,9 @@ if stock and stock:FindFirstChild("Dinos") then
 			basY = mn and mn.Y, pivotY = ok and piv.Position.Y or nil, taille = mn and { mx.X - mn.X, mx.Y - mn.Y, mx.Z - mn.Z } }
 	end
 end
-controle("20 gabarits de dinos", nbGabarits == 20, nbGabarits)
+local nbEspeces = 0
+for _ in pairs(E.especes) do nbEspeces = nbEspeces + 1 end
+controle("un gabarit par espèce (20 dinos + l'Œuf mystère)", nbGabarits == nbEspeces, nbGabarits .. "/" .. nbEspeces)
 local bases = racine and racine:FindFirstChild("Bases")
 local nbBasesOk = 0
 if bases then
@@ -406,6 +408,21 @@ avancer(1)
 controle("les dinos avancent", surTapis[1] and surTapis[1].Parent and surTapis[1]:GetPivot().Position.X > xAvant, "")
 controle("étiquette et invite Acheter", surTapis[1] and surTapis[1]:FindFirstChild("Etiquette", true) ~= nil and inviteSur(surTapis[1], "Acheter") ~= nil, "")
 
+-- l'Œuf mystère vole au-dessus du Tapis, à hauteur des dinos
+do
+	local oeufTapis
+	serveur(function()
+		oeufTapis = busServeur.demander("CreerDino", "OeufMystere", "Normal")
+		if oeufTapis then
+			oeufTapis:PivotTo(CFrame.new(-40, 1, 0))
+		end
+	end)
+	avancer(3)
+	local y = oeufTapis and oeufTapis:GetPivot().Position.Y or 0
+	controle("œuf mystère : vole au-dessus du Tapis", oeufTapis and oeufTapis:GetAttribute("Etat") == "Tapis" and y > 3, string.format("y = %.1f", y))
+	controle("musique : la partition joue", (banc.sons or 0) > 20, tostring(banc.sons))
+end
+
 -- ===== 4. achats =====
 demander("AjouterArgent", A, 1000000, "test")
 local achetes = {}
@@ -454,6 +471,29 @@ end)
 avancer(0.5)
 controle("étage : le 9e dino est placé à l'étage", dinoEtage and dinoEtage:GetAttribute("Emplacement") == 13
 	and dinoEtage:GetPivot().Position.Y > 12, dinoEtage and tostring(dinoEtage:GetAttribute("Emplacement")))
+-- Œuf mystère : acheté, posé, il couve 15 min puis éclot en un vrai dino sur le même podium
+do
+	local oeuf
+	serveur(function()
+		oeuf = busServeur.demander("CreerDino", "OeufMystere", "Normal")
+		local n = busServeur.demander("ReserverEmplacement", A)
+		if oeuf and n then busServeur.demander("PlacerDino", oeuf, A, n) end
+	end)
+	avancer(1.5)
+	local fin = oeuf and oeuf:GetAttribute("EclosionFin")
+	controle("œuf mystère : couve 15 min dans la Base", type(fin) == "number" and math.abs(fin - os.time() - E.oeuf.incubation) < 5, tostring(fin and (fin - os.time())))
+	local minuteurVu = oeuf and oeuf.PrimaryPart and oeuf.PrimaryPart:FindFirstChild("Eclosion") ~= nil
+	controle("œuf mystère : compte à rebours affiché", minuteurVu, "")
+	local numero = oeuf and oeuf:GetAttribute("Emplacement")
+	demander("EclorOeufs", A)
+	avancer(2)
+	local eclos
+	for _, d in ipairs(dinosDe(A)) do
+		if d:GetAttribute("Emplacement") == numero and d:GetAttribute("Espece") ~= "OeufMystere" then eclos = d end
+	end
+	controle("œuf mystère : éclot en dino sur le même podium", oeuf and oeuf.Parent == nil and eclos ~= nil,
+		eclos and (eclos:GetAttribute("Espece") .. " " .. eclos:GetAttribute("Rarete")) or "rien")
+end
 -- chaque dino de la base a les pieds posés sur son podium (bas du modèle au niveau du plateau, centre au-dessus)
 do
 	local malPoses, verifies = {}, 0

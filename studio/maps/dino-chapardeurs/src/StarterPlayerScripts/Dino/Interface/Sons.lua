@@ -8,15 +8,13 @@ local M = {}
 
 local INTERVALLE_MIN = 0.05 -- anti-cacophonie : délai minimal entre deux lectures d'un même son
 local TAILLE_RESERVOIR = 3 -- lectures simultanées possibles par couche
-local VOLUME_GENERAL = 0.6
+local VOLUME_GENERAL = 0.5
 local DISTANCE_PLEINE = 40 -- en deçà, un effet du monde s'entend à plein volume
 local DISTANCE_MAX = 220 -- au-delà, il ne s'entend plus
 local VOLUME_LOINTAIN = 0.15 -- volume relatif juste avant la limite
 
 -- série d'encaissements : la tonalité monte à chaque gain rapproché (style « juicy »)
 local SERIE_DELAI = 1.5 -- sans gain pendant ce délai, la tonalité revient à la normale
-local SERIE_PAS = 0.07 -- hausse de PlaybackSpeed par gain de la série
-local SERIE_MAX = 0.7 -- hausse maximale (vitesse x1,7)
 
 -- raretés qui déclenchent le son « rare » renforcé (ordre d'Equilibrage.raretes)
 local ORDRE_FORT = 5 -- Mythique et au-delà
@@ -24,74 +22,97 @@ local RARETES_FORTES = { Mythique = true, Divin = true, Secret = true } -- repli
 
 local S = "rbxasset://sounds/"
 
+-- ===== accord avec la musique =====
+-- La musique (Interface/Musique) est en do majeur. Le son « ping » intégré est pris comme un do5 (MIDI 72),
+-- la même hypothèse que le repli de la musique : chaque bruitage mélodique joue des notes de la gamme de do
+-- (surtout la pentatonique do-ré-mi-sol-la), et les grandes fanfares tombent sur le demi-temps suivant.
+local PING = S .. "electronicpingshort.wav"
+local function n(midi) return 2 ^ ((midi - 72) / 12) end
+local DO5, RE5, MI5, SOL5, LA5, DO6, MI6, SOL6 = 72, 74, 76, 79, 81, 84, 88, 91
+
 -- banque : nom -> liste de couches { fichier, vitesse, volume, retard }
 local BANQUE = {
 	clic = {
-		{ S .. "button.wav", 1.25, 0.45, 0 },
+		{ S .. "button.wav", 1.2, 0.3, 0 },
 	},
-	achat = {
-		{ S .. "electronicpingshort.wav", 1.0, 0.7, 0 },
-		{ S .. "electronicpingshort.wav", 1.5, 0.55, 0.08 },
+	achat = { -- quinte montante sol-do
+		{ PING, n(SOL5), 0.45, 0 },
+		{ PING, n(DO6), 0.4, 0.09 },
 	},
-	refus = {
-		{ S .. "button.wav", 0.55, 0.6, 0 },
-		{ S .. "button.wav", 0.45, 0.5, 0.09 },
+	refus = { -- un « bonk » grave et doux, sans note fausse
+		{ S .. "button.wav", 0.6, 0.4, 0 },
 	},
-	argent = {
-		{ S .. "electronicpingshort.wav", 1.8, 0.5, 0 },
-		{ S .. "electronicpingshort.wav", 2.25, 0.4, 0.05 },
+	argent = { -- tierce do-mi ; la série d'encaissements monte dans la pentatonique
+		{ PING, n(DO6), 0.35, 0 },
+		{ PING, n(MI6), 0.25, 0.05 },
 	},
 	vol = {
-		{ S .. "swordlunge.wav", 0.8, 0.6, 0 },
-		{ S .. "unsheath.wav", 1.2, 0.35, 0.06 },
+		{ S .. "swordlunge.wav", 0.8, 0.45, 0 },
+		{ PING, n(LA5 - 12), 0.35, 0.06 },
 	},
-	alerte = {
-		{ S .. "electronicpingshort.wav", 0.7, 0.7, 0 },
-		{ S .. "electronicpingshort.wav", 0.7, 0.7, 0.18 },
+	alerte = { -- la mineur : inquiétant mais dans le ton
+		{ PING, n(LA5 - 12), 0.45, 0 },
+		{ PING, n(DO5), 0.4, 0.16 },
 	},
 	alerteGrave = {
-		{ S .. "electronicpingshort.wav", 0.4, 0.8, 0 },
-		{ S .. "electronicpingshort.wav", 0.4, 0.8, 0.25 },
-		{ S .. "impact_water.mp3", 0.45, 0.6, 0.1 },
+		{ PING, n(LA5 - 24), 0.55, 0 },
+		{ PING, n(MI5 - 12), 0.5, 0.2 },
+		{ S .. "impact_water.mp3", 0.45, 0.45, 0.1 },
 	},
 	frappe = {
-		{ S .. "swordslash.wav", 1.0, 0.65, 0 },
-		{ S .. "action_jump.mp3", 0.6, 0.35, 0.03 },
+		{ S .. "swordslash.wav", 1.0, 0.5, 0 },
+		{ S .. "action_jump.mp3", 0.6, 0.25, 0.03 },
 	},
 	verrou = {
-		{ S .. "clickfast.wav", 0.7, 0.6, 0 },
-		{ S .. "electronicpingshort.wav", 0.85, 0.45, 0.07 },
+		{ S .. "clickfast.wav", 0.7, 0.45, 0 },
+		{ PING, n(SOL5 - 12), 0.35, 0.07 },
 	},
 	deverrou = {
-		{ S .. "clickfast.wav", 1.1, 0.5, 0 },
-		{ S .. "electronicpingshort.wav", 0.65, 0.35, 0.07 },
+		{ S .. "clickfast.wav", 1.1, 0.4, 0 },
+		{ PING, n(DO5), 0.3, 0.07 },
 	},
-	rare = {
-		{ S .. "electronicpingshort.wav", 1.2, 0.55, 0 },
-		{ S .. "electronicpingshort.wav", 1.5, 0.55, 0.09 },
-		{ S .. "electronicpingshort.wav", 1.8, 0.6, 0.18 },
+	rare = { -- arpège do-mi-sol
+		{ PING, n(DO5), 0.4, 0 },
+		{ PING, n(MI5), 0.4, 0.09 },
+		{ PING, n(SOL5), 0.45, 0.18 },
 	},
-	-- Mythique, Divin, Secret : plus fort, plus aigu, avec une cloche finale
-	rareFort = {
-		{ S .. "electronicpingshort.wav", 1.6, 0.9, 0 },
-		{ S .. "electronicpingshort.wav", 2.0, 0.9, 0.08 },
-		{ S .. "electronicpingshort.wav", 2.4, 0.95, 0.16 },
-		{ S .. "electronicpingshort.wav", 3.0, 1.0, 0.26 },
-		{ S .. "impact_water.mp3", 1.3, 0.5, 0.26 },
+	rareFort = { -- arpège do-mi-sol-do-mi, cloche d'eau à la fin
+		{ PING, n(DO5), 0.6, 0 },
+		{ PING, n(MI5), 0.6, 0.08 },
+		{ PING, n(SOL5), 0.65, 0.16 },
+		{ PING, n(DO6), 0.7, 0.24 },
+		{ PING, n(MI6), 0.6, 0.32 },
+		{ S .. "impact_water.mp3", 1.3, 0.35, 0.32 },
 	},
-	renaissance = {
-		{ S .. "electronicpingshort.wav", 0.8, 0.6, 0 },
-		{ S .. "electronicpingshort.wav", 1.0, 0.6, 0.12 },
-		{ S .. "electronicpingshort.wav", 1.25, 0.6, 0.24 },
-		{ S .. "electronicpingshort.wav", 1.6, 0.7, 0.36 },
-		{ S .. "impact_water.mp3", 0.7, 0.45, 0.36 },
+	renaissance = { -- montée do-mi-sol-do puis accord
+		{ PING, n(DO5), 0.45, 0 },
+		{ PING, n(MI5), 0.45, 0.13 },
+		{ PING, n(SOL5), 0.45, 0.26 },
+		{ PING, n(DO6), 0.55, 0.39 },
+		{ PING, n(MI6), 0.4, 0.39 },
+		{ S .. "impact_water.mp3", 0.7, 0.35, 0.39 },
 	},
 	decouverte = {
-		{ S .. "electronicpingshort.wav", 1.4, 0.55, 0 },
-		{ S .. "electronicpingshort.wav", 1.9, 0.5, 0.1 },
-		{ S .. "button.wav", 1.6, 0.3, 0.1 },
+		{ PING, n(SOL5), 0.4, 0 },
+		{ PING, n(DO6), 0.4, 0.1 },
+		{ PING, n(MI6), 0.35, 0.2 },
+	},
+	eclosion = { -- craquement puis fanfare do-sol-do-mi-sol
+		{ S .. "snap.wav", 1.0, 0.5, 0 },
+		{ PING, n(DO5), 0.55, 0.12 },
+		{ PING, n(SOL5), 0.55, 0.2 },
+		{ PING, n(DO6), 0.6, 0.28 },
+		{ PING, n(MI6), 0.6, 0.36 },
+		{ PING, n(SOL6), 0.55, 0.44 },
+		{ S .. "impact_water.mp3", 1.1, 0.35, 0.44 },
 	},
 }
+
+-- série d'encaissements : degrés de la pentatonique (do ré mi sol la do…) en rapports de vitesse
+local SERIE_NOTES = { 0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24 }
+-- gros bruitages : la musique s'efface un peu (force, durée) et ils tombent sur le demi-temps
+local DUCKING = { rareFort = { 0.45, 1.2 }, renaissance = { 0.5, 1.5 }, eclosion = { 0.55, 1.6 }, alerteGrave = { 0.4, 1 }, vol = { 0.3, 0.8 } }
+local EN_RYTHME = { rareFort = true, renaissance = true, eclosion = true, decouverte = true }
 
 -- genre d'Effet -> son (une fonction peut choisir selon les données)
 local EFFETS = {
@@ -105,6 +126,7 @@ local EFFETS = {
 	Renaissance = "renaissance",
 	Decouverte = "decouverte",
 	Meteore = "alerteGrave",
+	Eclosion = "eclosion",
 }
 
 -- effets qui s'entendent partout, sans atténuation
@@ -137,6 +159,17 @@ function M.demarrer(ctx)
 	groupe.Name = "Effets"
 	groupe.Volume = VOLUME_GENERAL
 	groupe.Parent = dossier
+	-- même salle que la musique et des aigus adoucis : bruitages et piano se fondent
+	local salle = Instance.new("ReverbSoundEffect")
+	salle.DecayTime = 1.6
+	salle.DryLevel = -1
+	salle.WetLevel = -12
+	salle.Parent = groupe
+	local egaliseur = Instance.new("EqualizerSoundEffect")
+	egaliseur.HighGain = -3
+	egaliseur.MidGain = 0
+	egaliseur.LowGain = 0
+	egaliseur.Parent = groupe
 
 	-- construction des réservoirs
 	local reservoirs = {} -- [nom] = { { sons = {...}, prochain = 1, couche = {...} }, ... }
@@ -171,9 +204,9 @@ function M.demarrer(ctx)
 			serie = 0
 		end
 		dernierGain = maintenant
-		local hausse = math.min(serie * SERIE_PAS, SERIE_MAX)
+		local degre = SERIE_NOTES[math.min(serie + 1, #SERIE_NOTES)]
 		serie = serie + 1
-		return 1 + hausse
+		return 2 ^ (degre / 12)
 	end
 
 	local function lireCouche(entree, facteur, vitesse)
@@ -203,8 +236,19 @@ function M.demarrer(ctx)
 		if nom == "argent" then
 			vitesse = tonaliteGain(maintenant)
 		end
+		local d = DUCKING[nom]
+		if d and ctx.Bus then ctx.Bus.emettre("Ducking", d[1], d[2]) end
+		-- fanfares : calées sur le demi-temps suivant de la musique (au plus un quart de seconde d'attente)
+		local attente = 0
+		if EN_RYTHME[nom] and ctx.Bus then
+			local position, secParTemps = ctx.Bus.demander("TempsMusique")
+			if type(position) == "number" and type(secParTemps) == "number" and secParTemps > 0 then
+				local reste = (0.5 - (position % 0.5)) * secParTemps
+				if reste <= 0.25 then attente = reste end
+			end
+		end
 		for _, entree in ipairs(liste) do
-			local retard = entree.couche[4] or 0
+			local retard = (entree.couche[4] or 0) + attente
 			if retard > 0 then
 				task.delay(retard, lireCouche, entree, facteur, vitesse)
 			else

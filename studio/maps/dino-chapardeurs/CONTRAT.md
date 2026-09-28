@@ -128,6 +128,13 @@ Devant chaque podium débloqué (côté allée), une dalle verte `C<n>` de la la
 (dossier `Collectes` de la Base) : quand le propriétaire marche dessus, il encaisse l'argent de
 CE dino ; le montant (BillboardGui « Stock ») flotte juste au-dessus de la dalle.
 
+### Œuf mystère (Builders/OeufMystere, Systemes/Tapis, Systemes/Enclos, Systemes/Oeufs)
+
+Espèce spéciale `E.especes.OeufMystere` (`special = true`, `vol = 4`) : jamais tirée comme un dino, absente
+du Dinodex. Tapis la fait apparaître avec la chance `E.oeuf.chance`, en vol. Enclos pose `EclosionFin`
+(os.time) à sa première pose ; Donnees la sauvegarde ; Systemes/Oeufs la fait éclore (`E.oeuf.raretes`),
+émet `OeufEclos(joueur, dino, espece, rarete)` et l'Effet `"Eclosion"`. Répondeur `EclorOeufs(joueur)` (tests).
+
 ### Étage de la Base (Systemes/Etages)
 
 Borne « Etage » à l'entrée de chaque Base (invite réservée au propriétaire) : chaque

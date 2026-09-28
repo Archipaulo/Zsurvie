@@ -271,9 +271,17 @@ function M.demarrer(ctx)
 			taille = 1.4,
 			contour = 3.5,
 		})
+		if infosEspece and infosEspece.special then
+			-- Œuf mystère : rareté inconnue (arc-en-ciel), prix, promesse d'éclosion
+			local minutes = math.floor(((E.oeuf and E.oeuf.incubation) or 900) / 60 + 0.5)
+			table.insert(lignes, { nom = "Rarete", texte = "??? DU PLUS NUL AU PLUS RARE ???", rarete = "Divin", taille = 0.8 })
+			table.insert(lignes, { nom = "Prix", texte = Charte.argent(prix), couleur = Style.couleurs.argent, taille = 1 })
+			table.insert(lignes, { nom = "Revenu", texte = "🐣 Éclot en " .. minutes .. " min", couleur = Style.couleurs.revenu, taille = 0.9 })
+		else
 		table.insert(lignes, { nom = "Rarete", texte = (infosRarete and infosRarete.nom) or rarete, rarete = rarete, taille = 0.9 })
 		table.insert(lignes, { nom = "Prix", texte = Charte.argent(prix), couleur = Style.couleurs.argent, taille = 1 })
 		table.insert(lignes, { nom = "Revenu", texte = Style.revenu(revenu), couleur = Style.couleurs.revenu, taille = 0.9 })
+		end
 
 		local gui = Style.etiquette(corps, lignes, {
 			Name = "Etiquette",
@@ -341,6 +349,8 @@ function M.demarrer(ctx)
 		end
 		-- trop large pour le tapis : réduit (pivot au sol, proportions gardées)
 		local okBoite, mnB, mxB = pcall(boiteLocale, modele)
+		-- ce qui vole (Œuf mystère) plane au-dessus des rebords : pas besoin de le réduire
+		if infos.vol then okBoite = false end
 		if okBoite then
 			local f = facteurLargeur(mnB, mxB)
 			if f < 1 then
@@ -377,8 +387,12 @@ function M.demarrer(ctx)
 	-- ===== tirages =====
 	local especesParRarete = {}
 	for cle, infos in pairs(E.especes) do
+		if infos.special then
+			-- l'Œuf mystère a son propre tirage (voir apparaitre)
+		else
 		especesParRarete[infos.rarete] = especesParRarete[infos.rarete] or {}
 		table.insert(especesParRarete[infos.rarete], cle)
+		end
 	end
 	for _, liste in pairs(especesParRarete) do
 		table.sort(liste)
@@ -520,9 +534,14 @@ function M.demarrer(ctx)
 		return e
 	end
 
-	local function cadreTapis(x, t, phase, decal)
+	local function cadreTapis(x, t, phase, decal, vol)
 		local oscillation = math.sin(t * DANDINEMENT_FREQUENCE + phase)
 		local y = Plan.tapis.hauteur + math.abs(oscillation) * DANDINEMENT_HAUTEUR
+		if vol then
+			-- en vol : plane au-dessus du Tapis, à hauteur des dinos, et monte et descend doucement
+			y = Plan.tapis.hauteur + vol + math.sin(t * 1.6 + phase) * 0.8
+			oscillation = oscillation * 0.3
+		end
 		return CFrame.new(x, y, Plan.tapis.debut.Z + (decal or 0))
 			* CFrame.Angles(0, ANGLE_REGARD, 0)
 			* CFrame.Angles(0, 0, oscillation * DANDINEMENT_ANGLE)
@@ -783,7 +802,8 @@ function M.demarrer(ctx)
 			local okM, em = pcall(encombrement, "?", dino)
 			e = okM and em or { avant = 6, arriere = 6, decal = 0 }
 		end
-		local fiche = { x = x, phase = alea:NextNumber() * math.pi * 2, avant = e.avant, arriere = e.arriere, decal = e.decal }
+		local infosVol = espece and E.especes[espece]
+		local fiche = { x = x, phase = alea:NextNumber() * math.pi * 2, avant = e.avant, arriere = e.arriere, decal = e.decal, vol = infosVol and infosVol.vol }
 		local ok, groupes = pcall(analyserMembres, dino)
 		if ok then
 			fiche.groupes = groupes
@@ -818,6 +838,11 @@ function M.demarrer(ctx)
 		end
 		local espece = liste[alea:NextInteger(1, #liste)]
 		local mutation = tirerMutation(nomEvenement, evenement)
+		-- de temps en temps, un Œuf mystère ailé à la place
+		if E.oeuf and E.especes.OeufMystere and alea:NextNumber() < (E.oeuf.chance or 0) then
+			espece = "OeufMystere"
+			mutation = "Normal"
+		end
 
 		-- attend qu'il y ait assez de place derrière le dernier dino (on voit le tapis entre eux)
 		local e = encombrement(espece, nil)
@@ -840,7 +865,7 @@ function M.demarrer(ctx)
 		local depart = Plan.tapis.debut
 		suivre(dino, depart.X)
 		local fiche = surTapis[dino]
-		dino:PivotTo(cadreTapis(depart.X, 0, 0, fiche and fiche.decal or 0))
+		dino:PivotTo(cadreTapis(depart.X, 0, 0, fiche and fiche.decal or 0, fiche and fiche.vol))
 		dernierSorti = dino
 
 		local corps = dino:FindFirstChild("Corps") or dino.PrimaryPart
@@ -924,7 +949,7 @@ function M.demarrer(ctx)
 					table.insert(aDetruire, dino)
 				else
 					local ok = pcall(function()
-						local cf = cadreTapis(fiche.x, t, fiche.phase, fiche.decal)
+						local cf = cadreTapis(fiche.x, t, fiche.phase, fiche.decal, fiche.vol)
 						dino:PivotTo(cf)
 						if fiche.anime and fiche.groupes then
 							animerMembres(cf, fiche, t)
