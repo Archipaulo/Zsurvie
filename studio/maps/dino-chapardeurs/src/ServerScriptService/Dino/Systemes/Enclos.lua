@@ -332,10 +332,9 @@ function M.demarrer(ctx)
 	end
 
 	local ajusterEmplacement
-	-- ===== un dino tient dans son emplacement : dos au muret, tourné vers l'allée, réduit s'il est trop grand =====
-	local LARGEUR_EMPLACEMENT = 6.5  -- écart entre deux podiums d'une rangée (7) moins une marge
-	local LONGUEUR_EMPLACEMENT = 18  -- de la rangée jusqu'au milieu de l'allée
-	local RECUL = 2                  -- l'arrière du dino dépasse du centre du podium vers le muret
+	-- ===== un dino tient sur son podium : centré dessus, tourné vers l'allée, réduit une fois s'il est trop grand =====
+	local LARGEUR_EMPLACEMENT = 6.4  -- un dino ne dépasse pas la largeur du podium (pas des rangées : 7)
+	local LONGUEUR_EMPLACEMENT = 12  -- ni trop en longueur : il reste bien posé sur son podium
 
 	local function boiteLocale(dino)
 		local pivot = dino:GetPivot()
@@ -362,7 +361,7 @@ function M.demarrer(ctx)
 		return mn, mx
 	end
 
-	-- renvoie la CFrame du pivot : le dino (qui regarde vers -Z local) avance depuis le podium vers l'allée
+	-- renvoie la CFrame du pivot : le dino (qui regarde vers -Z local) est centré sur le plateau du podium
 	ajusterEmplacement = function(dino, cf)
 		local mn, mx = boiteLocale(dino)
 		if not mn then return cf end
@@ -374,8 +373,10 @@ function M.demarrer(ctx)
 				mn, mx = mn * f, mx * f
 			end
 		end
+		-- centré sur le podium (le centre de sa boîte, pas son pivot, tombe au milieu du plateau)
 		local centreX = (mn.X + mx.X) / 2
-		return cf * CFrame.new(-centreX, 0, -(mx.Z - RECUL))
+		local centreZ = (mn.Z + mx.Z) / 2
+		return cf * CFrame.new(-centreX, 0, -centreZ)
 	end
 
 	local function placer(dino, joueur, numero)

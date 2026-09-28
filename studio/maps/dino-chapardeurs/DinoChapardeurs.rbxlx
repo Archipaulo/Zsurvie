@@ -2825,7 +2825,7 @@ function M.construire(ctx)
 		local rangees = math.ceil(NB_EMPLACEMENTS / colonnes)
 		local zPremier = 13 -- premier rang derrière le bouton de verrou et la dalle de collecte
 		local PAS_RANGEE = 7
-		local X_RANGEE = demiL - 4 -- plateaux à 4 studs de l'axe des murets latéraux
+		local X_RANGEE = demiL - 9 -- podiums éloignés des murets, plus près de l'allée centrale
 		local HAUT_SOCLE = 1.3
 		for numero = 1, NB_EMPLACEMENTS do
 			local col = (numero - 1) % colonnes
@@ -2834,7 +2834,7 @@ function M.construire(ctx)
 			local z = zPremier - rang * PAS_RANGEE
 			local propsSocle = {
 				Name = "Socle",
-				Size = Vector3.new(5.2, HAUT_SOCLE, 5.2),
+				Size = Vector3.new(6.4, HAUT_SOCLE, 6.4),
 				CFrame = ici(x, H + HAUT_SOCLE / 2, z),
 				Color = couleurSombre,
 				Material = Mat.Slate,
@@ -2846,7 +2846,7 @@ function M.construire(ctx)
 			-- reste 0,05 sous celui du socle (pas de faces confondues)
 			part(Outils.bloc, decor, {
 				Name = "Anneau",
-				Size = Vector3.new(5.4, 0.28, 5.4),
+				Size = Vector3.new(6.6, 0.28, 6.6),
 				CFrame = ici(x, H + HAUT_SOCLE - 0.05 - 0.14, z),
 				Color = couleur,
 				Material = Mat.Neon,
@@ -2856,7 +2856,7 @@ function M.construire(ctx)
 			}, true)
 			local plaque = part(Outils.bloc, emplacements, {
 				Name = "E" .. numero,
-				Size = Vector3.new(4.2, 0.3, 4.2),
+				Size = Vector3.new(5.6, 0.3, 5.6),
 				CFrame = ici(x, H + HAUT_SOCLE + 0.15, z),
 				Color = couleurClaire,
 				Material = Mat.Metal,
@@ -21279,10 +21279,9 @@ function M.demarrer(ctx)
 	end
 
 	local ajusterEmplacement
-	-- ===== un dino tient dans son emplacement : dos au muret, tourné vers l'allée, réduit s'il est trop grand =====
-	local LARGEUR_EMPLACEMENT = 6.5  -- écart entre deux podiums d'une rangée (7) moins une marge
-	local LONGUEUR_EMPLACEMENT = 18  -- de la rangée jusqu'au milieu de l'allée
-	local RECUL = 2                  -- l'arrière du dino dépasse du centre du podium vers le muret
+	-- ===== un dino tient sur son podium : centré dessus, tourné vers l'allée, réduit une fois s'il est trop grand =====
+	local LARGEUR_EMPLACEMENT = 6.4  -- un dino ne dépasse pas la largeur du podium (pas des rangées : 7)
+	local LONGUEUR_EMPLACEMENT = 12  -- ni trop en longueur : il reste bien posé sur son podium
 
 	local function boiteLocale(dino)
 		local pivot = dino:GetPivot()
@@ -21309,7 +21308,7 @@ function M.demarrer(ctx)
 		return mn, mx
 	end
 
-	-- renvoie la CFrame du pivot : le dino (qui regarde vers -Z local) avance depuis le podium vers l'allée
+	-- renvoie la CFrame du pivot : le dino (qui regarde vers -Z local) est centré sur le plateau du podium
 	ajusterEmplacement = function(dino, cf)
 		local mn, mx = boiteLocale(dino)
 		if not mn then return cf end
@@ -21321,8 +21320,10 @@ function M.demarrer(ctx)
 				mn, mx = mn * f, mx * f
 			end
 		end
+		-- centré sur le podium (le centre de sa boîte, pas son pivot, tombe au milieu du plateau)
 		local centreX = (mn.X + mx.X) / 2
-		return cf * CFrame.new(-centreX, 0, -(mx.Z - RECUL))
+		local centreZ = (mn.Z + mx.Z) / 2
+		return cf * CFrame.new(-centreX, 0, -centreZ)
 	end
 
 	local function placer(dino, joueur, numero)
