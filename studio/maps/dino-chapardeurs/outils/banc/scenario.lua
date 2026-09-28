@@ -436,6 +436,24 @@ for _, espece in ipairs({ "Rex", "Tricera", "Stego", "Raptor", "Ankylo" }) do
 	end)
 end
 avancer(0.5)
+-- étage : 2 améliorations achetées à la borne, le 9e dino (rez-de-chaussée plein) monte sur le 1er podium de l'étage
+demander("AjouterArgent", A, 100000, "test")
+for _ = 1, 2 do
+	activer(bA and inviteSur(bA, "Etage"), A)
+	avancer(0.6)
+end
+controle("étage : 2 améliorations achetées", A:GetAttribute("Etage") == 2, tostring(A:GetAttribute("Etage")))
+controle("étage : 2 podiums créés (E13, E14)", bA and bA.Emplacements:FindFirstChild("E13") ~= nil and bA.Emplacements:FindFirstChild("E14") ~= nil
+	and bA.Emplacements:FindFirstChild("E15") == nil, "")
+local dinoEtage
+serveur(function()
+	dinoEtage = busServeur.demander("CreerDino", "Pachy", "Normal")
+	local n = busServeur.demander("ReserverEmplacement", A)
+	if dinoEtage and n then busServeur.demander("PlacerDino", dinoEtage, A, n) end
+end)
+avancer(0.5)
+controle("étage : le 9e dino est placé à l'étage", dinoEtage and dinoEtage:GetAttribute("Emplacement") == 13
+	and dinoEtage:GetPivot().Position.Y > 12, dinoEtage and tostring(dinoEtage:GetAttribute("Emplacement")))
 -- chaque dino de la base a les pieds posés sur son podium (bas du modèle au niveau du plateau, centre au-dessus)
 do
 	local malPoses, verifies = {}, 0

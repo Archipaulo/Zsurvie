@@ -882,7 +882,8 @@ function M.demarrer(ctx)
 	Bus.repondre("CFrameEmplacement", function(index, numero)
 		if not estIndex(index) or type(numero) ~= "number" then return nil end
 		numero = math.floor(numero)
-		if numero < 1 or numero > EMPLACEMENTS_MAX then return nil end
+		local etageMax = (ctx.Equilibrage.etages and ctx.Equilibrage.etages.max) or 0
+		if numero < 1 or numero > EMPLACEMENTS_MAX + etageMax then return nil end
 		return cframeEmplacement(index, numero)
 	end)
 

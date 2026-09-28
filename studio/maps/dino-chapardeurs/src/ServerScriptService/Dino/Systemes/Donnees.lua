@@ -15,7 +15,7 @@ local ATTENTE_BASE = 15
 local ATTENTE_FERMETURE = 25
 local MAX_CLES = 200
 
-local CHAMPS_NOMBRES = { "Argent", "Renaissances", "Vols", "BonusIndex", "Serie", "DerniereConnexion", "CoffreOuvert" }
+local CHAMPS_NOMBRES = { "Argent", "Renaissances", "Vols", "BonusIndex", "Serie", "DerniereConnexion", "CoffreOuvert", "Etage" }
 
 local function estFini(n)
 	return type(n) == "number" and n == n and n ~= math.huge and n ~= -math.huge

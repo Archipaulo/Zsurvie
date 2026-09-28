@@ -17,6 +17,8 @@ function M.demarrer(ctx)
 	local PART_VENTE = (E.vente and E.vente.part) or 0.5
 	local DUREE_VOL = (E.vol and E.vol.dureeAppui) or 1.2
 	local EMPLACEMENTS_MAX = (Plan.base and Plan.base.emplacementsMax) or 12
+	local ETAGE_MAX = (E.etages and E.etages.max) or 0 -- podiums de l'étage : E13 à E24
+	local NUMERO_MAX = EMPLACEMENTS_MAX + ETAGE_MAX
 	local EMPLACEMENTS_DEPART = (E.base and E.base.emplacementsDepart) or 8
 	local DISTANCE_INVITE = 10
 	local MARGE_DISTANCE = 6
@@ -146,6 +148,13 @@ function M.demarrer(ctx)
 		local uid = joueur.UserId
 		local n = nombreEmplacements(joueur)
 		for numero = 1, n do
+			if not estPris(uid, numero) then return numero end
+		end
+		-- puis l'étage : un podium par amélioration achetée
+		local etage = math.floor(nombre(joueur:GetAttribute("Etage"), 0))
+		if etage > ETAGE_MAX then etage = ETAGE_MAX end
+		for i = 1, etage do
+			local numero = EMPLACEMENTS_MAX + i
 			if not estPris(uid, numero) then return numero end
 		end
 		return nil
@@ -333,8 +342,8 @@ function M.demarrer(ctx)
 
 	local ajusterEmplacement
 	-- ===== un dino tient sur son podium : centré dessus, tourné vers l'allée, réduit une fois s'il est trop grand =====
-	local LARGEUR_EMPLACEMENT = 6.4  -- largeur d'une place dans la rangée (pas : 6,8) : seule vraie contrainte
-	local LONGUEUR_EMPLACEMENT = 13  -- plateau de 12 de long : les pattes avant et arrière restent dessus
+	local LARGEUR_EMPLACEMENT = 5.9  -- largeur du plateau (5,8) : le dino ne dépasse presque pas sur les côtés
+	local LONGUEUR_EMPLACEMENT = 12.2 -- longueur du plateau (12) : ni la tête ni la queue ne dépassent vraiment
 
 	local function boiteLocale(dino)
 		local pivot = dino:GetPivot()
@@ -386,7 +395,7 @@ function M.demarrer(ctx)
 		if not vivant(dino) or not estJoueur(joueur) or not joueur.Parent then return false end
 		if type(numero) ~= "number" then return false end
 		numero = math.floor(numero)
-		if numero < 1 or numero > EMPLACEMENTS_MAX then return false end
+		if numero < 1 or numero > NUMERO_MAX then return false end
 		local index = Bus.demander("BaseDe", joueur)
 		if type(index) ~= "number" then return false end
 		local uid = joueur.UserId

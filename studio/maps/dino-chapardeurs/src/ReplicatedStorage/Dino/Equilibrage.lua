@@ -174,6 +174,16 @@ E.recompenses = {
 -- Rareté complète : +10 % de revenu permanent (jusqu'à +70 % pour le Dinodex complet).
 E.index = { recompenseParEspece = 50, bonusCompletRarete = 0.1 } -- bonus de revenu permanent par rareté complète
 
+-- ===== l'étage de la Base =====
+-- chaque amélioration ajoute UN podium à l'étage (amélioration 1 : 1 podium, … amélioration 12 : 12 podiums)
+E.etages = {
+	max = 12,
+	hauteur = 12, -- hauteur du plancher de l'étage au-dessus du sol de la Base
+}
+function E.coutEtage(niveau) -- prix de l'amélioration numéro « niveau » (1 à 12)
+	return math.floor(2500 * 2.2 ^ (niveau - 1) + 0.5)
+end
+
 E.joueursMax = 8
 
 return E

@@ -122,6 +122,14 @@ Attributs posés par Systemes/Bases sur le Model : `Proprietaire` (UserId, 0),
 `NomProprietaire`, `Verrouillee` (bool), `FinVerrou` (heure serveur). Sur
 chaque `E<n>` : `Debloque` (bool, selon le nombre d'emplacements du joueur).
 
+### Étage de la Base (Systemes/Etages)
+
+Borne « Etage » à l'entrée de chaque Base (invite réservée au propriétaire) : chaque
+amélioration (prix `Equilibrage.coutEtage(n)`, 12 au maximum) ajoute un podium à l'étage
+(E13 à E24, dossier `Emplacements`) ; l'étage (plancher, escalier, garde-corps) apparaît à la
+première. Attribut joueur `Etage` (sauvegardé, conservé à la renaissance). Enclos remplit
+d'abord le rez-de-chaussée puis l'étage. Événement Bus `EtageAchete(joueur, niveau)`.
+
 ## 6. Attributs
 
 `ReplicatedStorage.DinoEtat` : `Evenement` ("" ou clé de
