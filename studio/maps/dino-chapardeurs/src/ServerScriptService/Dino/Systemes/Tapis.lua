@@ -8,6 +8,8 @@ local Players = game:GetService("Players")
 local M = {}
 
 local ANGLE_REGARD = -math.pi / 2 -- le regard (-Z local) tourné vers +X
+local MARGE_TAPIS = 1              -- chaque dino tient dans la largeur du tapis moins 1 stud de chaque côté
+local ECART_TAPIS = 6              -- espace libre minimal (studs) entre deux dinos : on voit le tapis entre eux
 local DANDINEMENT_ANGLE = 0.07    -- radians de roulis
 local DANDINEMENT_HAUTEUR = 0.15  -- studs de sautillement
 local DANDINEMENT_FREQUENCE = 7   -- radians par seconde
@@ -337,6 +339,14 @@ function M.demarrer(ctx)
 			p.Anchored = (not assemble) or p == corps
 			p.CanCollide = false
 		end
+		-- trop large pour le tapis : réduit (pivot au sol, proportions gardées)
+		local okBoite, mnB, mxB = pcall(boiteLocale, modele)
+		if okBoite then
+			local f = facteurLargeur(mnB, mxB)
+			if f < 1 then
+				pcall(function() modele:ScaleTo(modele:GetScale() * f) end)
+			end
+		end
 
 		compteur = compteur + 1
 		local prix = math.floor(infos.prix * mult)
@@ -445,10 +455,75 @@ function M.demarrer(ctx)
 	local nombreSurTapis = 0
 	local positionsJoueurs = {}
 
-	local function cadreTapis(x, t, phase)
+	-- boîte englobante d'un modèle dans le repère de son pivot (min, max)
+	local function boiteLocale(modele)
+		local pivot = modele:GetPivot()
+		local mn, mx
+		for _, p in ipairs(modele:GetDescendants()) do
+			if p:IsA("BasePart") and p.Transparency < 1 then
+				local cf = pivot:ToObjectSpace(p.CFrame)
+				local d = p.Size / 2
+				for _, sx in ipairs({ -1, 1 }) do
+					for _, sy in ipairs({ -1, 1 }) do
+						for _, sz in ipairs({ -1, 1 }) do
+							local c = cf * Vector3.new(sx * d.X, sy * d.Y, sz * d.Z)
+							if mn then
+								mn = Vector3.new(math.min(mn.X, c.X), math.min(mn.Y, c.Y), math.min(mn.Z, c.Z))
+								mx = Vector3.new(math.max(mx.X, c.X), math.max(mx.Y, c.Y), math.max(mx.Z, c.Z))
+							else
+								mn, mx = c, c
+							end
+						end
+					end
+				end
+			end
+		end
+		return mn or Vector3.new(-1, 0, -1), mx or Vector3.new(1, 1, 1)
+	end
+
+	-- facteur de réduction pour qu'un dino tienne dans la largeur du tapis
+	local function facteurLargeur(mn, mx)
+		local largeurMax = Plan.tapis.largeur - 2 * MARGE_TAPIS
+		local largeur = mx.X - mn.X
+		if largeur > largeurMax then
+			return largeurMax / largeur
+		end
+		return 1
+	end
+
+	-- encombrement sur le tapis (dino tourné vers +X) : avant, arrière, décalage latéral à corriger ; mis en cache par espèce
+	local encombrements = {}
+	local function encombrement(espece, modele)
+		local e = encombrements[espece]
+		if e then return e end
+		local source = modele or (ctx.stockage:FindFirstChild("Dinos") and ctx.stockage.Dinos:FindFirstChild(espece))
+		if not source then
+			return { avant = 6, arriere = 6, decal = 0, echelle = 1 }
+		end
+		local mn, mx = boiteLocale(source)
+		local echelle = modele and 1 or facteurLargeur(mn, mx)
+		local rot = CFrame.Angles(0, ANGLE_REGARD, 0)
+		local wmn, wmx
+		for _, sx in ipairs({ mn.X, mx.X }) do
+			for _, sz in ipairs({ mn.Z, mx.Z }) do
+				local w = rot * Vector3.new(sx * echelle, 0, sz * echelle)
+				if wmn then
+					wmn = Vector3.new(math.min(wmn.X, w.X), 0, math.min(wmn.Z, w.Z))
+					wmx = Vector3.new(math.max(wmx.X, w.X), 0, math.max(wmx.Z, w.Z))
+				else
+					wmn, wmx = w, w
+				end
+			end
+		end
+		e = { avant = wmx.X, arriere = -wmn.X, decal = -(wmn.Z + wmx.Z) / 2, echelle = echelle }
+		if not modele then encombrements[espece] = e end
+		return e
+	end
+
+	local function cadreTapis(x, t, phase, decal)
 		local oscillation = math.sin(t * DANDINEMENT_FREQUENCE + phase)
 		local y = Plan.tapis.hauteur + math.abs(oscillation) * DANDINEMENT_HAUTEUR
-		return CFrame.new(x, y, Plan.tapis.debut.Z)
+		return CFrame.new(x, y, Plan.tapis.debut.Z + (decal or 0))
 			* CFrame.Angles(0, ANGLE_REGARD, 0)
 			* CFrame.Angles(0, 0, oscillation * DANDINEMENT_ANGLE)
 	end
@@ -702,7 +777,13 @@ function M.demarrer(ctx)
 		if surTapis[dino] then
 			return
 		end
-		local fiche = { x = x, phase = alea:NextNumber() * math.pi * 2 }
+		local espece = dino:GetAttribute("Espece")
+		local okE, e = pcall(encombrement, espece or "?", nil)
+		if not okE or not e or not espece then
+			local okM, em = pcall(encombrement, "?", dino)
+			e = okM and em or { avant = 6, arriere = 6, decal = 0 }
+		end
+		local fiche = { x = x, phase = alea:NextNumber() * math.pi * 2, avant = e.avant, arriere = e.arriere, decal = e.decal }
 		local ok, groupes = pcall(analyserMembres, dino)
 		if ok then
 			fiche.groupes = groupes
@@ -724,6 +805,7 @@ function M.demarrer(ctx)
 	end
 
 	-- ===== apparition d'un dino =====
+	local dernierSorti = nil
 	local function apparaitre()
 		if nombreSurTapis >= E.tapis.maxDinos then
 			return
@@ -737,6 +819,18 @@ function M.demarrer(ctx)
 		local espece = liste[alea:NextInteger(1, #liste)]
 		local mutation = tirerMutation(nomEvenement, evenement)
 
+		-- attend qu'il y ait assez de place derrière le dernier dino (on voit le tapis entre eux)
+		local e = encombrement(espece, nil)
+		local attente = 0
+		while attente < 60 do
+			local fiche = dernierSorti and surTapis[dernierSorti]
+			if not fiche then break end
+			local arriereDernier = fiche.x - (fiche.arriere or 6)
+			if arriereDernier - (Plan.tapis.debut.X + e.avant) >= ECART_TAPIS then break end
+			task.wait(0.2)
+			attente = attente + 0.2
+		end
+
 		local dino = creerDino(espece, mutation)
 		if not dino then
 			return
@@ -744,8 +838,10 @@ function M.demarrer(ctx)
 		mutation = dino:GetAttribute("Mutation")
 		local prix = dino:GetAttribute("Prix")
 		local depart = Plan.tapis.debut
-		dino:PivotTo(cadreTapis(depart.X, 0, 0))
 		suivre(dino, depart.X)
+		local fiche = surTapis[dino]
+		dino:PivotTo(cadreTapis(depart.X, 0, 0, fiche and fiche.decal or 0))
+		dernierSorti = dino
 
 		local corps = dino:FindFirstChild("Corps") or dino.PrimaryPart
 		if corps then
@@ -828,7 +924,7 @@ function M.demarrer(ctx)
 					table.insert(aDetruire, dino)
 				else
 					local ok = pcall(function()
-						local cf = cadreTapis(fiche.x, t, fiche.phase)
+						local cf = cadreTapis(fiche.x, t, fiche.phase, fiche.decal)
 						dino:PivotTo(cf)
 						if fiche.anime and fiche.groupes then
 							animerMembres(cf, fiche, t)

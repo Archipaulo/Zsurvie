@@ -217,7 +217,7 @@ Sol à Y = 0. Ne rien construire hors de son emprise.
   Place vers le Tapis par les couloirs x = -56, 0, 56 entre les Bases), murs
   invisibles à `Plan.monde.bord`. Hauteur ≤ 0,3 hors murs.
 - **Tapis** : le tapis de `Plan.tapis.debut` à `fin` (largeur 10, dessus à Y =
-  `Plan.tapis.hauteur`) et ses rebords (|z| ≤ 7).
+  `Plan.tapis.hauteur`) et ses rebords (|z| ≤ 9,5).
 - **Nurserie** / **FinTapis** : disques de rayon 14 autour de leurs centres.
 - **Bases** : les 8 bases (voir §5), rien entre elles.
 - **Place** : disque r20 autour de `Plan.place.centre` : l'**unique**

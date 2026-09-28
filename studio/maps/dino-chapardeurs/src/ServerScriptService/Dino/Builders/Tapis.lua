@@ -4,17 +4,17 @@
 -- (chapeau clair, semelle, rivets), têtes de rouleaux visibles sur les côtés, pieds de soutien sur une
 -- plinthe sombre, chevrons rouge clair mats (SmoothPlastic, pas de Neon : pas de halo Bloom) tous les
 -- 16 studs, qui défilent côté client à la vitesse des dinos (genre « defile ») vers la Fin du tapis.
--- Emprise (CONTRAT §10) : de Plan.tapis.debut à Plan.tapis.fin, |z| <= 7 autour de l'axe. Budget : 300 parts.
+-- Emprise (CONTRAT §10) : de Plan.tapis.debut à Plan.tapis.fin, |z| <= 9,5 autour de l'axe. Budget : 300 parts.
 local M = {}
 
 local BUDGET = 300           -- parts au maximum pour ce constructeur
 local LONGUEUR_SEGMENT = 16  -- longueur d'un segment de bande (et pas des rouleaux)
 local PAS_FLECHE = 16        -- un chevron tous les 16 studs (période du défilement)
 local VITESSE_TAPIS = 7      -- studs/s, remplacée par Equilibrage.tapis.vitesse
-local EMPRISE_LATERALE = 7   -- rien au-delà de |z| = 7
+local EMPRISE_LATERALE = 9.5 -- rien au-delà de |z| = 9,5 (tapis de 14)
 
 -- profil en travers (distances à l'axe, hauteurs depuis le sol)
-local LARGEUR_BOMBE = 7      -- dessus central de la bande (au niveau Plan.tapis.hauteur)
+local LARGEUR_BOMBE = 11     -- dessus central de la bande (au niveau Plan.tapis.hauteur)
 local ABAISSE_BORD = 0.06    -- les bords de la bande sont un peu plus bas : effet bombé
 local DIAMETRE_ARRONDI = 0.36
 local EPAISSEUR_BANDE = 0.3

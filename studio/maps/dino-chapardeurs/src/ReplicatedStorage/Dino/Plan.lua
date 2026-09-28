@@ -14,7 +14,7 @@ Plan.monde = {
 Plan.tapis = {
 	debut = Vector3.new(-112, 0, 0), -- les dinos apparaissent ici (sortie de la Nurserie)
 	fin = Vector3.new(112, 0, 0),    -- ... et disparaissent ici (entrée de la Fin du tapis)
-	largeur = 10,
+	largeur = 14,                    -- les dinos voxel les plus larges sont réduits à la volée pour y tenir (Systemes/Tapis)
 	hauteur = 0.8,                   -- dessus du tapis : les dinos y marchent à Y = hauteur
 }
 Plan.nurserie = { centre = Vector3.new(-128, 0, 0), rayon = 14 }

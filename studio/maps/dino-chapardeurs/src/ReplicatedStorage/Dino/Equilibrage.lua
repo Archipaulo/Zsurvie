@@ -84,7 +84,7 @@ E.mutations = {
 -- 2,2 s entre deux dinos et ~32 s de traversée : ~15 dinos visibles en permanence,
 -- assez de choix pour 8 joueurs sans noyer les raretés.
 E.tapis = {
-	intervalle = 3.4,  -- secondes entre deux dinos (≈ 24 studs d'écart : les dinos voxel sont grands)
+	intervalle = 2,    -- secondes minimum entre deux dinos (le Tapis attend en plus 6 studs libres derrière le précédent)
 	vitesse = 7,       -- studs par seconde (environ 32 s pour traverser)
 	maxDinos = 24,     -- plafond de dinos présents sur le tapis (performances : ≈ 200 parts par dino)
 	vitesseMarche = 14, -- vitesse d'un dino acheté qui rejoint sa Base
