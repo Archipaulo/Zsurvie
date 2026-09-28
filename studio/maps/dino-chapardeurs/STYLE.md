@@ -138,14 +138,23 @@ local modele = V:construire(ctx.stockage.Dinos, { nom = "Rex", origine = CFrame.
 
 Règles : origine au sol sous le centre du dino, regard vers **-Z** ; groupes
 nommés `Corps` (contient la PrimaryPart), `Tete`, `PatteAvG/D`, `PatteArG/D`,
-`Queue`, `AileG/D` (animations de marche) ; **tête ≈ 40 % de la hauteur**
-(chibi), yeux de 2 x 2 à 3 x 3 cubes (blanc, pupille noire, reflet blanc),
-joues roses, bouche lisible ; volume par la couleur : cubes du haut plus clairs
-(`Charte.lumiere`), du bas plus foncés (`Charte.ombre`), ventre contrasté,
-motifs (taches, rayures, écailles) ; accessoires de couleur contrastée (crêtes,
-cornes, plaques, collerettes). Plus la rareté est haute, plus le dino est grand
-et détaillé : hauteur en cubes ≈ Commun 6-8, Rare 8-10, Épique 10-12,
-Légendaire 12-14, Mythique 14-16, Divin 15-17, Secret 16-18 ; touches `Neon`
-(yeux, cristaux, aura) à partir de Mythique, or et blanc pour Divin, cosmique
-(violet, étoiles Neon) pour Secret. Budget : **150 parts maximum par dino**
-(vérifié par `budget`), environ 1500 cubes au plus.
+`Queue`, `AileG/D` (animations de marche).
+
+**Ce sont des ANIMAUX en cubes, pas des têtes-masques** (erreur de la première
+version) : vue de profil, on doit reconnaître l'espèce à sa silhouette —
+corps bien visible, 4 pattes (ou 2 + bras), queue longue, cou, crêtes, cornes.
+- Proportions : tête ≈ 30 % de la hauteur, corps ≈ 50 % de la longueur ;
+  pattes épaisses de 2 x 2 cubes au moins, bien détachées du corps.
+- Yeux PETITS et sur les côtés du museau (1 x 2 ou 2 x 2 cubes : pupille noire
+  + 1 cube blanc de reflet), jamais un grand bloc noir en façade ; bouche
+  fine (1 cube de haut), dents blanches pour les carnivores, narines.
+- Couleurs : 2 ou 3 teintes par zone en « tramage » léger (quelques cubes
+  plus clairs ou plus foncés au hasard, graine fixe) pour l'effet matière des
+  références ; dessus plus clair, dessous plus foncé ; ventre contrasté ;
+  motifs (taches, rayures) nets.
+- Tailles (hauteur en cubes de 1 stud) : Commun 9-11, Rare 11-12, Épique
+  12-14, Légendaire 14-16, Mythique 16-18, Divin 17-19, Secret 18-20 ; les
+  longs cous et queues peuvent dépasser en longueur.
+- Rareté : plus c'est rare, plus c'est grand et orné (cristaux, auras, or) ;
+  `Neon` à partir de Mythique seulement.
+- Budget : **220 parts maximum par dino** (`budget = 220`), ≈ 3000 cubes au plus.
