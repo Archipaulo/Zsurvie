@@ -237,7 +237,13 @@ function M.demarrer(ctx)
 		dossier = Outils.dossier(racine, "Coffre")
 	end
 
-	local position = Plan.coffre or Vector3.new(160, 22, -158)
+	-- dessus de la plateforme des falaises (Builders/Falaises la pose exactement à Plan.coffre)
+	-- (secours si Plan.coffre manquait : au bord du Cratère, jamais une coordonnée en dur)
+	local position = Plan.coffre
+	if typeof(position) ~= "Vector3" then
+		warn("[Dino][Recompenses] Plan.coffre manquant : coffre posé au bord du Cratère")
+		position = Plan.cratere.centre + Vector3.new(0, 0, Plan.cratere.rayon + 4)
+	end
 	-- le coffre regarde vers le centre du monde (face avant = -Z local)
 	local cible = Vector3.new(0, position.Y, 0)
 	local origine

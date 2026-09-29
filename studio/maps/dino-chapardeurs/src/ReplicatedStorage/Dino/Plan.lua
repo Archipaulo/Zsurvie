@@ -22,8 +22,8 @@ Plan.tapis = {
 	hauteur = 0.8,                   -- dessus du tapis : les dinos y marchent à Y = hauteur
 	emprise = 9.5,                   -- rebords compris : rien d'autre à moins de 9,5 de l'axe
 }
-Plan.nurserie = { centre = Vector3.new(-157, 0, 0), rayon = 15 }
-Plan.finTapis = { centre = Vector3.new(157, 0, 0), rayon = 15 }
+Plan.nurserie = { centre = Vector3.new(-152, 0, 0), rayon = 15 } -- 9 studs de lisière derrière (jungle à |x| = 176)
+Plan.finTapis = { centre = Vector3.new(152, 0, 0), rayon = 15 }
 -- la promenade : bande libre de chaque côté du Tapis, entre ses rebords et l'entrée des Bases
 Plan.promenade = { zMin = 9.5, zMax = 27 }
 
@@ -47,6 +47,7 @@ Plan.allees = { x = { -66, 0, 66 }, largeur = 22, zMin = 27, zMax = 77 }
 Plan.place = { centre = Vector3.new(0, 0, 112), rayon = 22 }       -- SpawnLocation unique au centre
 Plan.comptoir = { centre = Vector3.new(-56, 0, 118), taille = Vector3.new(26, 16, 18) } -- boutique, ouverte vers +X
 Plan.autel = { centre = Vector3.new(56, 0, 118), rayon = 11 }      -- renaissances, tourné vers -X
+Plan.classement = { centre = Vector3.new(-30, 0, 90), regard = Vector3.new(0, 0, 112) } -- tableau d'honneur, hors de la Place, tourné vers elle
 Plan.riviere = { z = 157, largeur = 14, zMin = 150, zMax = 164, xMin = -198, xMax = 198 } -- d'ouest en est
 
 -- ===== le Nord : Cratère et Volcan =====
@@ -68,6 +69,14 @@ Plan.decor = {
 	jungleOuest = { min = Vector3.new(-198, 0, -230), max = Vector3.new(-176, 0, 146) },
 	jungleEst = { min = Vector3.new(176, 0, -230), max = Vector3.new(198, 0, 146) },
 	jungleNord = { min = Vector3.new(-176, 0, -230), max = Vector3.new(176, 0, -136) }, -- sauf le Volcan (rayon + 6) et le Cratère
+	-- bosquets : petits bois et massifs qui meublent les grandes pelouses (sans gêner les chemins)
+	bosquets = {
+		{ c = Vector3.new(150, 0, -60), r = 13 }, { c = Vector3.new(-150, 0, -60), r = 13 },
+		{ c = Vector3.new(150, 0, 60), r = 11 }, { c = Vector3.new(-150, 0, 60), r = 11 },
+		{ c = Vector3.new(-122, 0, 118), r = 12 }, { c = Vector3.new(122, 0, 118), r = 12 },
+		{ c = Vector3.new(-160, 0, 125), r = 10 }, { c = Vector3.new(160, 0, 125), r = 10 },
+		{ c = Vector3.new(-100, 0, -118), r = 11 }, { c = Vector3.new(100, 0, -118), r = 11 },
+	},
 	couloirs = { -- allées libres entre les bases : petits props seulement, en bordure
 		Vector3.new(-66, 0, 0), Vector3.new(0, 0, 0), Vector3.new(66, 0, 0),
 	},

@@ -3,6 +3,11 @@
 -- Version 2 : les éclats sont des ParticleEmitter (étincelles, fumée, feu) émis en rafale depuis une seule part
 -- support ; ondes de choc en anneaux segmentés Neon ; traînées (Trail) sur les fusées et les orbes.
 -- Un seul moteur (Heartbeat) anime les parts ; au plus MAX_PARTS parts et MAX_PARTICULES particules à la fois.
+-- Version 3 : le moteur sait suivre un dino en tournant autour, suivre une courbe vers une cible mobile
+-- (billets aspirés par le joueur), faire rebondir un éclat au sol et s'arrêter sur condition (« tant »).
+-- Achat : le dino file vers sa Base avec un ruban de sa rareté ; Collecte : billets qui volent au joueur ;
+-- Apparition : colonne à trois fûts, anneaux montants, onde au sol ; VolDebut : traînée rouge sur le voleur ;
+-- Eclosion : la coquille éclate en cubes, confettis.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -230,17 +235,46 @@ function M.demarrer(ctx)
 	local connexion = nil
 	local VERTICAL = CFrame.Angles(0, 0, math.pi / 2) -- un cylindre Roblox a son axe sur X
 
+	-- position d'un modèle suivi (nil s'il a disparu)
+	local function pivotDe(modele)
+		if not modele or modele.Parent == nil then return nil end
+		local ok, pivot = pcall(function() return modele:GetPivot() end)
+		if ok and pivot then return pivot.Position end
+		return nil
+	end
+
+	-- décalage d'une orbite au temps t (centre non compris)
+	local function decalageOrbite(o, t)
+		local angle = o.angle + o.vitesse * t
+		local rayon = math.max(0, o.rayon + (o.ouverture or 0) * t)
+		return Vector3.new(math.cos(angle) * rayon, o.montee * t, math.sin(angle) * rayon)
+	end
+
 	local function pas(dt)
 		for i = #particules, 1, -1 do
 			local q = particules[i]
 			local p = q.part
 			q.age = q.age + dt
+			-- condition de maintien (testée 4 fois par seconde) : l'effet s'arrête dès qu'elle devient fausse
+			if q.tant and q.age >= q.prochainTest then
+				q.prochainTest = q.age + 0.25
+				local ok, garder = pcall(q.tant)
+				if not ok or not garder then q.age = q.vie end
+			end
 			if q.age >= q.vie or p.Parent == nil then
 				table.remove(particules, i)
+				if q.auTerme and q.age >= q.vie then
+					local rappel, ou = q.auTerme, q.pos
+					task.spawn(function() pcall(rappel, ou) end)
+				end
 				if p.Parent ~= nil then
 					if q.garder then
 						-- la part s'éteint mais reste le temps que sa traînée s'efface (Debris la retire)
 						p.Transparency = 1
+						for _, enfant in ipairs(p:GetChildren()) do
+							if enfant:IsA("ParticleEmitter") then enfant.Enabled = false end
+						end
+						Debris:AddItem(p, 1.2)
 					else
 						p:Destroy()
 					end
@@ -250,25 +284,43 @@ function M.demarrer(ctx)
 				if q.anneau then
 					-- segment d'une onde de choc : glisse vers l'extérieur en s'allongeant et s'amincissant
 					local a = q.anneau
+					if a.suivre then
+						local ancre = pivotDe(a.suivre)
+						if ancre then a.centre = ancre + Vector3.new(0, a.leve, 0) end
+					end
 					local s = 1 - (1 - k) * (1 - k) * (1 - k)
 					local rayon = a.r0 + (a.r1 - a.r0) * s
 					q.pos = a.centre + Vector3.new(math.cos(a.angle) * rayon, a.montee * s, math.sin(a.angle) * rayon)
 					p.Size = Vector3.new(TAU * rayon / a.n * 1.12, q.taille.Y * (1 - 0.5 * k), q.taille.Z * (1 - 0.6 * k))
-				elseif q.cible and q.cible.Parent ~= nil then
-					-- suit un modèle (colonne sur un dino qui avance)
-					local ok, pivot = pcall(function() return q.cible:GetPivot() end)
-					if ok and pivot then q.pos = pivot.Position + q.decalage end
+				elseif q.courbe then
+					-- courbe de Bézier vers une cible mobile (billets aspirés par le joueur)
+					local c = q.courbe
+					local ok, but = pcall(c.but)
+					if ok and typeof(but) == "Vector3" then c.fin = but end
+					local s = k * k
+					local u = 1 - s
+					q.pos = c.depart * (u * u) + c.controle * (2 * u * s) + c.fin * (s * s)
+				elseif q.cible then
+					-- suit un modèle (colonne sur un dino qui avance), éventuellement en tournant autour
+					local ancre = pivotDe(q.cible)
+					if ancre then q.ancre = ancre end
+					local pos = q.ancre + q.decalage
+					if q.orbite then pos = pos + decalageOrbite(q.orbite, q.age) end
+					q.pos = pos
 				elseif q.orbite then
-					local o = q.orbite
-					local angle = o.angle + o.vitesse * q.age
-					local rayon = math.max(0, o.rayon + (o.ouverture or 0) * q.age)
-					q.pos = o.centre + Vector3.new(math.cos(angle) * rayon, o.montee * q.age, math.sin(angle) * rayon)
+					q.pos = q.orbite.centre + decalageOrbite(q.orbite, q.age)
 				else
 					q.vel = q.vel - Vector3.new(0, q.gravite * dt, 0)
 					if q.frein > 0 then
 						q.vel = q.vel * math.max(0, 1 - q.frein * dt)
 					end
 					q.pos = q.pos + q.vel * dt
+					-- rebond amorti sur le sol (éclats de coquille)
+					if q.sol and q.pos.Y < q.sol and q.vel.Y < 0 then
+						q.pos = Vector3.new(q.pos.X, q.sol, q.pos.Z)
+						q.vel = Vector3.new(q.vel.X * 0.55, -q.vel.Y * 0.35, q.vel.Z * 0.55)
+						q.vrot = q.vrot * 0.5
+					end
 				end
 				q.rot = q.rot + q.vrot * dt
 				if q.croissance ~= 0 then
@@ -327,8 +379,21 @@ function M.demarrer(ctx)
 			garder = o.garder == true,
 			decalage = o.decalage or Vector3.new(0, 0, 0),
 			base = o.base or CFrame.new(),
+			courbe = o.courbe,
+			sol = o.sol,
+			tant = o.tant,
+			prochainTest = 0.25,
+			auTerme = o.auTerme,
 		}
 		if q.anneau then q.pos = q.anneau.centre end
+		if q.courbe then
+			q.courbe.fin = q.courbe.fin or q.courbe.depart
+			q.pos = q.courbe.depart
+		end
+		if q.cible then
+			q.ancre = pivotDe(q.cible) or (q.pos - q.decalage)
+			q.pos = q.ancre + q.decalage
+		end
 		p.CFrame = CFrame.new(q.pos) * CFrame.Angles(q.rot.X, q.rot.Y, q.rot.Z) * q.base
 		table.insert(particules, q)
 		assurerMoteur()
@@ -405,11 +470,16 @@ function M.demarrer(ctx)
 	end
 
 	-- onde de choc : anneau de segments Neon qui s'ouvre au sol (horizontal) puis s'évanouit
-	-- o : depart, rayon, vie, epaisseur, hauteur, segments, transparence, montee, leve (hauteur au-dessus du sol)
+	-- o : depart, rayon, vie, epaisseur, hauteur, segments, transparence, montee, leve (hauteur au-dessus du sol),
+	-- suivre (modèle dont l'anneau garde le pivot pour centre : anneaux qui montent autour d'un dino en marche)
 	local function onde(centre, couleur, o)
 		if not centre then return end
 		o = o or {}
-		centre = auSol(centre) + Vector3.new(0, o.leve or 0.3, 0)
+		if o.suivre then
+			centre = (pivotDe(o.suivre) or centre) + Vector3.new(0, o.leve or 0.3, 0)
+		else
+			centre = auSol(centre) + Vector3.new(0, o.leve or 0.3, 0)
+		end
 		local n = math.min(o.segments or 16, placesLibres() - 12)
 		if n < 8 then return end
 		local vie = o.vie or 0.55
@@ -430,6 +500,8 @@ function M.demarrer(ctx)
 						r1 = o.rayon or 10,
 						n = n,
 						montee = o.montee or 0,
+						suivre = o.suivre,
+						leve = o.leve or 0.3,
 					},
 					rot = Vector3.new(0, -angle - math.pi / 2, 0),
 					vie = vie,
@@ -605,6 +677,62 @@ function M.demarrer(ctx)
 		SC.argent, SC.revenu, B.bleu[1], B.violet[1], B.rouge[1], B.rose[1], B.orange[1], SC.texte,
 	}
 
+	-- ===== repères dans le monde =====
+	-- dino de ctx.dinos le plus proche d'une position parmi les états acceptés ({ Tapis = true, ... })
+	local function dinoProche(position, etats, rayon, espece)
+		local trouve, meilleure = nil, rayon or 14
+		for _, dino in ipairs(ctx.dinos:GetChildren()) do
+			if dino:IsA("Model") and etats[dino:GetAttribute("Etat") or ""]
+				and (espece == nil or dino:GetAttribute("Espece") == espece) then
+				local pivot = pivotDe(dino)
+				if pivot then
+					local ecart = (pivot - position).Magnitude
+					if ecart < meilleure then
+						trouve = dino
+						meilleure = ecart
+					end
+				end
+			end
+		end
+		return trouve
+	end
+
+	-- encombrement d'un dino : largeur au sol et hauteur (valeurs sûres si le calcul échoue)
+	local function gabarit(dino)
+		local ok, taille = pcall(function() return dino:GetExtentsSize() end)
+		if ok and typeof(taille) == "Vector3" then
+			return math.clamp(math.min(taille.X, taille.Z), 2, 12), math.clamp(taille.Y, 2, 14)
+		end
+		return 5, 5
+	end
+
+	-- HumanoidRootPart du personnage le plus proche (nil si personne dans le rayon)
+	local function racineProche(position, rayon)
+		local trouvee, meilleure = nil, rayon
+		for _, j in ipairs(Players:GetPlayers()) do
+			local perso = j.Character
+			local racine = perso and perso:FindFirstChild("HumanoidRootPart")
+			if racine then
+				local ecart = (racine.Position - position).Magnitude
+				if ecart < meilleure then
+					trouvee = racine
+					meilleure = ecart
+				end
+			end
+		end
+		return trouvee
+	end
+
+	-- couleur d'effet d'un dino : sa rareté, ou sa mutation pour les raretés modestes
+	local function couleurDino(d)
+		local couleur = couleurRarete(d.rarete)
+		if type(d.mutation) == "string" and d.mutation ~= "Normal" and Charte.mutations[d.mutation]
+			and ordreRarete(d.rarete) < 4 then
+			couleur = Charte.mutations[d.mutation]
+		end
+		return couleur
+	end
+
 	local COULEURS_EVENEMENT = {
 		PluieDeMeteores = B.violet[2],
 		Eruption = B.orange[2],
@@ -673,49 +801,115 @@ function M.demarrer(ctx)
 	-- ===== les effets =====
 	local effets = {}
 
-	-- dino rare sur le Tapis : colonne de lumière qui le suit, pluie d'étincelles montantes, orbes à traînée
+	-- dino rare sur le Tapis : colonne de lumière à trois fûts (halo, colonne, cœur) qui s'ouvre d'un coup et suit
+	-- le dino, étoile au sommet, anneaux qui montent autour de lui, double onde au sol et tache de lumière
+	-- sous ses pattes, étincelles montantes et orbes à traînée qui s'enroulent
 	function effets.Apparition(position, d)
 		if not visible(position) then return end
-		local couleur = couleurRarete(d.rarete)
-		if d.mutation and d.mutation ~= "Normal" and Charte.mutations[d.mutation] and ordreRarete(d.rarete) < 4 then
-			couleur = Charte.mutations[d.mutation]
-		end
+		local couleur = couleurDino(d)
 		local clair = couleur:Lerp(SC.texte, 0.55)
 		local ordre = ordreRarete(d.rarete)
-		-- retrouve le dino le plus proche de la position annoncée
-		local cible, meilleure = nil, 14
-		for _, dino in ipairs(ctx.dinos:GetChildren()) do
-			if dino:IsA("Model") and dino:GetAttribute("Etat") == "Tapis"
-				and (d.espece == nil or dino:GetAttribute("Espece") == d.espece) then
-				local ok, pivot = pcall(function() return dino:GetPivot() end)
-				if ok and pivot then
-					local ecart = (pivot.Position - position).Magnitude
-					if ecart < meilleure then
-						cible = dino
-						meilleure = ecart
-					end
-				end
-			end
-		end
+		local cible = dinoProche(position, { Tapis = true }, 14, d.espece)
 		local duree = 3.5 + ordre * 0.5
-		local hauteur = 40 + ordre * 8
-		local colonne = nouvellePart({
-			Name = "Colonne",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(hauteur, 4 + ordre * 0.4, 4 + ordre * 0.4),
-			Color = couleur,
-			Transparency = 0.55,
-		}, duree + 1.5)
-		if colonne then
-			animer(colonne, {
-				pos = position + Vector3.new(0, hauteur / 2, 0),
+		local hauteur = 44 + ordre * 8
+		local largeur = 3.4 + ordre * 0.4
+		local milieuFut = Vector3.new(0, hauteur / 2, 0)
+
+		-- un fût : s'ouvre avec un rebond, se resserre en fin de vie pendant qu'il s'efface
+		local function fut(nom, diametre, teinte, transparence)
+			local p = nouvellePart({
+				Name = nom,
+				Shape = Enum.PartType.Cylinder,
+				Size = Vector3.new(hauteur, 0.2, 0.2),
+				Color = teinte,
+				Transparency = transparence,
+			}, duree + 1.5)
+			if not p then return nil end
+			animer(p, {
+				pos = position + milieuFut,
 				cible = cible,
-				decalage = Vector3.new(0, hauteur / 2, 0),
+				decalage = milieuFut,
 				vie = duree,
 				base = VERTICAL,
-				debutFondu = 0.6,
+				debutFondu = 0.65,
 				garder = true,
 			})
+			tween(p, 0.45, { Size = Vector3.new(hauteur, diametre, diametre) }, Enum.EasingStyle.Back)
+			task.delay(duree * 0.68, function()
+				if p.Parent then
+					tween(p, duree * 0.32, { Size = Vector3.new(hauteur, diametre * 0.15, diametre * 0.15) },
+						Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+				end
+			end)
+			return p
+		end
+
+		flash(position + Vector3.new(0, 2, 0), clair, 3 + ordre * 0.3, 0.35, 30)
+		local halo = fut("ColonneHalo", largeur * 2.2, couleur, 0.84)
+		local colonne = fut("Colonne", largeur, couleur, 0.5)
+		fut("ColonneCoeur", largeur * 0.3, clair, 0.1)
+
+		-- étoile au sommet de la colonne
+		local sommet = nouvellePart({
+			Name = "ColonneSommet",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.new(largeur * 1.6, largeur * 1.6, largeur * 1.6),
+			Color = clair,
+			Transparency = 0.3,
+		}, duree + 1)
+		if sommet then
+			animer(sommet, {
+				pos = position + Vector3.new(0, hauteur, 0),
+				cible = cible,
+				decalage = Vector3.new(0, hauteur, 0),
+				vie = duree,
+				debutFondu = 0.5,
+			})
+		end
+
+		-- tache de lumière sous les pattes, avec une vraie lueur qui éclaire le Tapis
+		local tache = nouvellePart({
+			Name = "TacheLumiere",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.12, 0.2, 0.2),
+			Color = couleur,
+			Transparency = 0.45,
+		}, duree + 1)
+		if tache then
+			local lueur = Instance.new("PointLight")
+			lueur.Color = couleur
+			lueur.Range = 14 + ordre
+			lueur.Brightness = 2.5
+			lueur.Parent = tache
+			tween(lueur, duree, { Brightness = 0 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+			animer(tache, {
+				pos = position + Vector3.new(0, 0.15, 0),
+				cible = cible,
+				decalage = Vector3.new(0, 0.15, 0),
+				vie = duree,
+				base = VERTICAL,
+				debutFondu = 0.55,
+			})
+			tween(tache, 0.5, { Size = Vector3.new(0.12, largeur * 3.2, largeur * 3.2) }, Enum.EasingStyle.Back)
+		end
+
+		-- onde au sol : un large anneau clair rapide, puis un second de la couleur de rareté
+		onde(position, clair, { depart = 1.5, rayon = 13 + ordre * 1.5, vie = 0.8, segments = 22, epaisseur = 0.9 })
+		task.delay(0.18, function()
+			onde(position, couleur, { depart = 1, rayon = 8 + ordre, vie = 0.9, segments = 16, epaisseur = 0.6, transparence = 0.2 })
+		end)
+		-- anneaux qui montent le long de la colonne en s'évasant (ils suivent le dino)
+		local anneaux = 2 + math.floor(ordre / 3)
+		for n = 1, anneaux do
+			task.delay(0.25 + (n - 1) * 0.55, function()
+				onde(position, (n % 2 == 1) and clair or couleur, {
+					depart = largeur * 0.7, rayon = largeur * 1.3, montee = hauteur * 0.7, vie = 1.5,
+					segments = 10, epaisseur = 0.35, hauteur = 0.35, leve = 1, suivre = cible, transparence = 0.15,
+				})
+			end)
+		end
+
+		if colonne then
 			-- étincelles qui montent le long de la colonne tant qu'elle brille (débit continu, budget réservé)
 			local debit = math.floor((8 + ordre * 2) * qualite(position))
 			if debit > 0 and reserver(debit * 1.6, duree) > 0 then
@@ -735,37 +929,22 @@ function M.demarrer(ctx)
 				end)
 			end
 		end
-		-- cœur blanc lumineux au centre de la colonne
-		local coeur = nouvellePart({
-			Name = "ColonneCoeur",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(hauteur, 1.2, 1.2),
-			Color = clair,
-			Transparency = 0.15,
-		}, duree + 1)
-		if coeur then
-			animer(coeur, {
-				pos = position + Vector3.new(0, hauteur / 2, 0),
-				cible = cible,
-				decalage = Vector3.new(0, hauteur / 2, 0),
-				vie = duree,
-				base = VERTICAL,
-				debutFondu = 0.6,
-			})
-		end
-		-- Divin : la colonne défile en arc-en-ciel ; Secret : clignote noir et blanc
+		-- Divin : la colonne et son halo défilent en arc-en-ciel ; Secret : clignotent noir et blanc
 		if colonne and (d.rarete == "Divin" or d.rarete == "Secret") then
 			task.spawn(function()
 				local debut = os.clock()
 				while colonne.Parent and os.clock() - debut < duree do
 					local t = os.clock() - debut
+					local teinte
 					if d.rarete == "Divin" then
-						colonne.Color = Color3.fromHSV((t * 0.6) % 1, 0.75, 1)
+						teinte = Color3.fromHSV((t * 0.6) % 1, 0.75, 1)
 					elseif math.floor(t * 4) % 2 == 0 then
-						colonne.Color = SC.texte
+						teinte = SC.texte
 					else
-						colonne.Color = Color3.fromRGB(40, 40, 40)
+						teinte = Color3.fromRGB(40, 40, 40)
 					end
+					colonne.Color = teinte
+					if halo and halo.Parent then halo.Color = teinte end
 					task.wait(0.08)
 				end
 			end)
@@ -791,14 +970,20 @@ function M.demarrer(ctx)
 				end)
 			end
 		end
-		-- éclat d'arrivée : onde au sol + gerbe d'étincelles
-		onde(position + Vector3.new(0, 0.6, 0), clair, { rayon = 9 + ordre, vie = 0.7, segments = 18 })
-		rafale(position + Vector3.new(0, 2, 0), {
-			etincelles(14 + ordre * 4, clair, couleur, { vitesse = { 12, 22 }, vie = { 0.6, 1.1 } }),
-		})
-		-- orbes à traînée qui s'enroulent autour du dino en montant
+		-- éclat d'arrivée : gerbe d'étincelles et poussière lumineuse qui file au ras du Tapis
+		rafale(position + Vector3.new(0, 0.8, 0), {
+			etincelles(16 + ordre * 4, clair, couleur, { vitesse = { 12, 22 }, ecart = 60, vie = { 0.6, 1.1 } }),
+			etincelles(10 + ordre * 2, SC.texte, clair, {
+				vitesse = { 10, 16 }, ecart = 88, acceleration = Vector3.new(0, 1, 0), frein = 3, vie = { 0.7, 1.1 },
+				taille = { 0, 0.5, 0.3, 0.6, 1, 0 },
+			}),
+		}, Vector3.new(3, 0.4, 3))
+		-- orbes à traînée qui s'enroulent autour du dino en montant (ils l'accompagnent sur le Tapis)
 		gerbe(position, 3 + math.floor(ordre / 2), function(i, pos)
 			local orbe = particule({ Name = "Orbe", Shape = Enum.PartType.Ball, Size = Vector3.new(0.5, 0.5, 0.5), Color = (i % 2 == 0) and SC.texte or clair }, {
+				pos = pos + Vector3.new(0, 0.5, 0),
+				cible = cible,
+				decalage = Vector3.new(0, 0.5, 0),
 				orbite = {
 					centre = pos + Vector3.new(0, 0.5, 0),
 					angle = i * 2.1,
@@ -815,16 +1000,89 @@ function M.demarrer(ctx)
 		end)
 	end
 
-	-- achat : gerbe d'étincelles de la couleur de rareté, onde dorée et confettis
+	-- le dino acheté file vers sa Base : ruban lumineux de la couleur de rareté, étincelles semées en chemin,
+	-- deux étoiles à traînée qui lui tournent autour ; éclat et onde quand il arrive à son emplacement
+	local function traineeAchat(position, couleur, clair, ordre)
+		local dino = dinoProche(position, { EnRoute = true, Tapis = true }, 12, nil)
+		if not dino then return end
+		local largeurDino, hauteurDino = gabarit(dino)
+		local milieu = Vector3.new(0, hauteurDino * 0.5, 0)
+		local function enRoute()
+			if dino.Parent == nil then return false end
+			local etat = dino:GetAttribute("Etat")
+			return etat == "EnRoute" or etat == "Tapis"
+		end
+		local function arrivee(ou)
+			if dino.Parent == nil or dino:GetAttribute("Etat") ~= "Enclos" then return end
+			local pied = pivotDe(dino) or (ou - milieu)
+			if not visible(pied) then return end
+			onde(pied, couleur, { rayon = 7, vie = 0.5, segments = 14 })
+			rafale(pied + Vector3.new(0, 1.5, 0), {
+				etincelles(14 + ordre * 2, clair, couleur, { vitesse = { 10, 18 }, vie = { 0.5, 0.9 } }),
+				etincelles(8, SC.texte, SC.revenu, { vitesse = { 3, 6 }, ecart = 20, acceleration = Vector3.new(0, 6, 0), vie = { 0.8, 1.2 }, frein = 1 }),
+			})
+		end
+		-- départ en trombe : petit nuage de poussière sous les pattes
+		rafale(position + Vector3.new(0, 0.6, 0), {
+			{
+				n = 8, texture = TEX.fumee, couleur = Charte.sable, couleur2 = Charte.creme, lumiere = 0, eclat = 1,
+				taille = { 0, 1.2, 1, 3.2 }, transparence = { 0, 0.4, 1, 1 },
+				vie = { 0.5, 0.9 }, vitesse = { 4, 8 }, ecart = 85, frein = 3, tourne = 60,
+			},
+		}, Vector3.new(2, 0.4, 2))
+		local comete = particule({ Name = "Comete", Size = Vector3.new(0.3, 0.3, 0.3), Transparency = 1 }, {
+			pos = position + milieu,
+			cible = dino,
+			decalage = milieu,
+			vie = 14,
+			fondu = false,
+			garder = true,
+			tant = enRoute,
+			auTerme = arrivee,
+		}, 1.5)
+		if not comete then return end
+		trainee(comete, clair, couleur, math.clamp(hauteurDino * 0.75, 1.5, 6), 0.6)
+		if reserver(8, 14) > 0 then
+			local semees = emetteur(comete, etincelles(0, clair, couleur, {
+				nom = "Semees", debit = 10, vitesse = { 1, 3 }, frein = 1, acceleration = Vector3.new(0, 2, 0),
+				vie = { 0.5, 0.8 }, taille = { 0, 0.55, 1, 0 },
+			}))
+			semees.Enabled = true
+		end
+		local rayon = math.clamp(largeurDino * 0.6 + 0.8, 2.5, 6)
+		for n = 1, 2 + math.floor(ordre / 5) do
+			local etoile = particule({ Name = "Orbe", Shape = Enum.PartType.Ball, Size = Vector3.new(0.45, 0.45, 0.45), Color = SC.texte }, {
+				pos = position + milieu,
+				cible = dino,
+				decalage = milieu + Vector3.new(0, (n - 1.5) * 0.8, 0),
+				orbite = { angle = n * 2.1, vitesse = 7, rayon = rayon, montee = 0 },
+				vie = 14,
+				fondu = false,
+				garder = true,
+				tant = enRoute,
+			}, 1.5)
+			if etoile then trainee(etoile, SC.texte, clair, 0.35, 0.35) end
+		end
+	end
+
+	-- achat : éclair et double onde, gerbe d'étincelles de la couleur de rareté, confettis, puis traînée du dino
 	function effets.Achat(position, d)
 		if not visible(position) then return end
 		local couleur = couleurRarete(d.rarete)
-		onde(position + Vector3.new(0, 0.4, 0), SC.revenu, { rayon = 8, vie = 0.5 })
+		local clair = couleur:Lerp(SC.texte, 0.45)
+		local ordre = ordreRarete(d.rarete)
+		flash(position + Vector3.new(0, 2.5, 0), clair, 2.5, 0.3, 24)
+		onde(position + Vector3.new(0, 0.4, 0), SC.revenu, { rayon = 9, vie = 0.5, segments = 16 })
+		onde(position + Vector3.new(0, 0.4, 0), couleur, { depart = 0.5, rayon = 6, vie = 0.45, segments = 12, epaisseur = 0.45, leve = 0.45 })
 		rafale(position + Vector3.new(0, 2.5, 0), {
-			etincelles(26, couleur:Lerp(SC.texte, 0.4), couleur, { vitesse = { 14, 24 } }),
+			etincelles(26, clair, couleur, { vitesse = { 14, 24 } }),
 			etincelles(12, SC.texte, SC.revenu, { vitesse = { 4, 8 }, ecart = 25, acceleration = Vector3.new(0, 6, 0), vie = { 0.8, 1.2 }, frein = 1 }),
 		})
-		gerbe(position, 20, function(i, pos)
+		-- l'état « EnRoute » est répliqué avec l'événement : on laisse un battement avant de chercher le dino
+		task.delay(0.1, function()
+			pcall(traineeAchat, position, couleur, clair, ordre)
+		end)
+		gerbe(position, 14, function(i, pos)
 			local teinte = CONFETTIS[(i % #CONFETTIS) + 1]
 			if i % 4 == 0 then teinte = couleur end
 			particule({ Name = "Confetti", Size = Vector3.new(0.7, 0.06, 0.4), Color = teinte, Material = Enum.Material.SmoothPlastic }, {
@@ -840,7 +1098,8 @@ function M.demarrer(ctx)
 		end)
 	end
 
-	-- collecte : fontaine d'étincelles dorées, onde verte, quelques billets et « +X $ »
+	-- collecte : les billets jaillissent de la dalle et filent en courbe jusqu'au joueur qui encaisse
+	-- (avec l'aimant ils arrivent de tout autour de lui) ; fontaine dorée, onde verte, éclat à la réception, « +X $ »
 	function effets.Collecte(position, d)
 		if not visible(position) then return end
 		local montant = tonumber(d.montant) or 0
@@ -848,20 +1107,81 @@ function M.demarrer(ctx)
 		if montant > 0 then
 			force = math.clamp(0.6 + math.log10(montant + 1) * 0.18, 0.7, 1.6)
 		end
-		if d.aimant then force = force * 0.5 end
+		local rayonRecherche = 30
+		if d.aimant then
+			force = force * 0.6
+			rayonRecherche = 8
+		end
+		local racine = racineProche(position, rayonRecherche)
 		onde(position + Vector3.new(0, 0.4, 0), SC.argent, { rayon = 6 + 2 * force, vie = 0.45, segments = 14 })
-		rafale(position + Vector3.new(0, 1.2, 0), {
-			etincelles(22 * force, Charte.dore:Lerp(SC.texte, 0.35), Charte.dore, {
-				vitesse = { 14, 22 }, ecart = 30, acceleration = Vector3.new(0, -28, 0), frein = 1, vie = { 0.7, 1.1 },
-			}),
-			etincelles(10 * force, SC.texte, SC.revenu, {
-				vitesse = { 3, 6 }, ecart = 15, acceleration = Vector3.new(0, 5, 0), frein = 0.5, vie = { 0.9, 1.4 },
-				taille = { 0, 0.3, 0.3, 0.8, 1, 0 },
-			}),
-		}, Vector3.new(2, 0.4, 2))
-		gerbe(position, math.floor(4 + 4 * force), function(i, pos)
+		if not d.aimant then
+			rafale(position + Vector3.new(0, 1.2, 0), {
+				etincelles(18 * force, Charte.dore:Lerp(SC.texte, 0.35), Charte.dore, {
+					vitesse = { 14, 22 }, ecart = 30, acceleration = Vector3.new(0, -28, 0), frein = 1, vie = { 0.7, 1.1 },
+				}),
+				etincelles(10 * force, SC.texte, SC.revenu, {
+					vitesse = { 3, 6 }, ecart = 15, acceleration = Vector3.new(0, 5, 0), frein = 0.5, vie = { 0.9, 1.4 },
+					taille = { 0, 0.3, 0.3, 0.8, 1, 0 },
+				}),
+			}, Vector3.new(2, 0.4, 2))
+		end
+		local nombre = math.min(math.floor((5 + 4 * force) * qualite(position) + 0.5), placesLibres())
+		if racine then
+			local function but()
+				if racine.Parent == nil then return nil end
+				return racine.Position + Vector3.new(0, 0.6, 0)
+			end
+			-- réception : petit éclat vert et blanc sur le joueur quand le dernier billet arrive
+			local function reception()
+				local ou = but()
+				if not ou then return end
+				flash(ou, SC.argent, 1.4, 0.25, 12)
+				rafale(ou, {
+					etincelles(12, SC.texte, SC.argent, { vitesse = { 6, 12 }, vie = { 0.3, 0.6 }, acceleration = Vector3.new(0, 4, 0) }),
+				})
+			end
+			for i = 1, nombre do
+				local angle = i / nombre * TAU + r(-0.3, 0.3)
+				local depart
+				if d.aimant then
+					local loin = r(7, 10)
+					depart = position + Vector3.new(math.cos(angle) * loin, r(0, 4), math.sin(angle) * loin)
+				else
+					local pres = r(0.4, 1.4)
+					depart = position + Vector3.new(math.cos(angle) * pres, 1, math.sin(angle) * pres)
+				end
+				local ecart = r(3, 6)
+				local controle = depart + Vector3.new(math.cos(angle) * ecart, r(7, 12), math.sin(angle) * ecart)
+				local dernier = i == nombre
+				task.delay((i - 1) * 0.045, function()
+					local billet = particule({ Name = "Billet", Size = Vector3.new(1.3, 0.08, 0.65), Color = (i % 2 == 0) and SC.argent or B.vert[2], Material = Enum.Material.SmoothPlastic }, {
+						courbe = { depart = depart, controle = controle, but = but },
+						rot = rotAleatoire(),
+						vrot = vrotAleatoire(9),
+						vie = r(0.75, 0.95),
+						debutFondu = 0.85,
+						garder = true,
+						auTerme = dernier and reception or nil,
+					}, 0.5)
+					if billet and i % 2 == 1 then
+						trainee(billet, SC.argent:Lerp(SC.texte, 0.4), SC.argent, 0.35, 0.18)
+					end
+				end)
+			end
+			if montant > 0 then
+				task.delay(0.5, function()
+					local ou = but()
+					if ou then
+						texteFlottant(ou + Vector3.new(0, 3.5, 0), "+" .. Style.argent(montant), SC.argent, 2.4, 1.8)
+					end
+				end)
+			end
+			return
+		end
+		-- personne à proximité : les billets retombent en pluie autour de la dalle
+		for i = 1, nombre do
 			particule({ Name = "Billet", Size = Vector3.new(1.2, 0.06, 0.6), Color = (i % 2 == 0) and SC.argent or B.vert[2], Material = Enum.Material.SmoothPlastic }, {
-				pos = pos + Vector3.new(0, 1.5, 0),
+				pos = position + Vector3.new(0, 1.5, 0),
 				vel = Vector3.new(r(-6, 6), r(16, 26), r(-6, 6)),
 				gravite = 38,
 				frein = 0.8,
@@ -870,7 +1190,7 @@ function M.demarrer(ctx)
 				vie = r(1.2, 1.8),
 				debutFondu = 0.55,
 			})
-		end)
+		end
 		if montant > 0 then
 			texteFlottant(position + Vector3.new(0, 5, 0), "+" .. Style.argent(montant), SC.argent, 2.4, 1.8)
 		end
@@ -900,8 +1220,81 @@ function M.demarrer(ctx)
 		end
 	end
 
-	-- début de vol : éclair rouge qui frappe le dino, gerbe d'étincelles et onde rouge
+	-- traînée rouge accrochée au voleur tant qu'il porte son butin : ruban vertical, étincelles, lueur rouge
+	-- (instances locales posées sur sa HumanoidRootPart, retirées dès que l'attribut « Porte » redevient vide)
+	local NOMS_VOL = { "DinoVolHaut", "DinoVolBas", "DinoTraineeVol", "DinoLueurVol" }
+
+	local function traineeVoleur(uid)
+		local voleur = nil
+		if type(uid) == "number" then voleur = Players:GetPlayerByUserId(uid) end
+		local perso = voleur and voleur.Character
+		local racine = perso and perso:FindFirstChild("HumanoidRootPart")
+		if not racine then return end
+		for _, nom in ipairs(NOMS_VOL) do
+			local ancien = racine:FindFirstChild(nom)
+			if ancien then ancien:Destroy() end
+		end
+		local rouge = Charte.alerte
+		local haut = Instance.new("Attachment")
+		haut.Name = "DinoVolHaut"
+		haut.Position = Vector3.new(0, 1.4, 0)
+		haut.Parent = racine
+		local bas = Instance.new("Attachment")
+		bas.Name = "DinoVolBas"
+		bas.Position = Vector3.new(0, -1.9, 0)
+		bas.Parent = racine
+		local ruban = Instance.new("Trail")
+		ruban.Name = "DinoTraineeVol"
+		ruban.Attachment0 = haut
+		ruban.Attachment1 = bas
+		ruban.Color = ColorSequence.new(rouge:Lerp(SC.texte, 0.35), rouge)
+		ruban.Transparency = suite({ 0, 0.1, 0.5, 0.5, 1, 1 })
+		ruban.WidthScale = suite({ 0, 1, 1, 0.25 })
+		ruban.Lifetime = 0.55
+		ruban.MinLength = 0.1
+		ruban.LightEmission = 1
+		ruban.LightInfluence = 0
+		ruban.FaceCamera = false
+		ruban.Parent = racine
+		local maxi = ((E.vol and E.vol.delaiMax) or 45) + 3
+		local braises = nil
+		if reserver(10, maxi) > 0 then
+			braises = emetteur(bas, etincelles(0, rouge:Lerp(SC.texte, 0.5), rouge, {
+				nom = "DinoEtincellesVol", debit = 12, vitesse = { 2, 5 }, ecart = 60, acceleration = Vector3.new(0, 3, 0),
+				frein = 1, vie = { 0.4, 0.8 }, taille = { 0, 0.6, 1, 0 },
+			}))
+			braises.Enabled = true
+		end
+		local lueur = Instance.new("PointLight")
+		lueur.Name = "DinoLueurVol"
+		lueur.Color = rouge
+		lueur.Range = 12
+		lueur.Brightness = 1.6
+		lueur.Parent = racine
+		task.spawn(function()
+			local debut = os.clock()
+			while racine.Parent and ruban.Parent do
+				task.wait(0.3)
+				local ecoule = os.clock() - debut
+				if ecoule > maxi then break end
+				local porte = nil
+				if voleur.Parent then porte = voleur:GetAttribute("Porte") end
+				-- une seconde de grâce : l'attribut peut arriver juste après l'événement
+				if ecoule > 1 and (type(porte) ~= "string" or porte == "") then break end
+			end
+			if ruban.Parent then ruban.Enabled = false end
+			if braises and braises.Parent then braises.Enabled = false end
+			if lueur.Parent then tween(lueur, 0.5, { Brightness = 0 }) end
+			task.wait(0.7)
+			for _, objet in ipairs({ haut, bas, ruban, lueur }) do
+				pcall(function() objet:Destroy() end)
+			end
+		end)
+	end
+
+	-- début de vol : éclair rouge qui frappe le dino, gerbe d'étincelles et onde rouge, traînée sur le voleur
 	function effets.VolDebut(position, d)
+		pcall(traineeVoleur, d.voleur)
 		if not visible(position) then return end
 		local depart = position + Vector3.new(r(-4, 4), 38, r(-4, 4))
 		local points = { depart }
@@ -1141,9 +1534,75 @@ function M.demarrer(ctx)
 
 	-- événement : titre géant à l'écran sur un bandeau sombre lisere d'or
 	local titreActif = nil
-	-- éclosion d'un Œuf mystère : spirale de renaissance aux couleurs de la rareté obtenue
+	-- éclosion d'un Œuf mystère : la coquille éclate en cubes crème mouchetés qui rebondissent au sol,
+	-- éclair et double onde de la couleur de rareté, gerbe d'étincelles, confettis et « 🐣 LÉGENDAIRE ! »
+	local COQUILLE = { Charte.creme, Charte.creme:Lerp(Charte.sable, 0.5), Charte.lumiere(Charte.creme), Charte.sable }
+
 	function effets.Eclosion(position, d)
-		effets.Renaissance(position, d)
+		if not visible(position) then return end
+		local couleur = couleurDino(d)
+		local clair = couleur:Lerp(SC.texte, 0.5)
+		local ordre = ordreRarete(d.rarete)
+		local divin = d.rarete == "Divin"
+		local centre = position + Vector3.new(0, 5, 0)
+		local sol = auSol(position).Y + 0.3
+		flash(centre, clair, 5, 0.45, 40)
+		onde(position, couleur, { depart = 2, rayon = 14, vie = 0.8, segments = 20, epaisseur = 0.9 })
+		onde(position, SC.texte, { depart = 1, rayon = 8, vie = 0.5, segments = 12, epaisseur = 0.5, leve = 0.45 })
+		rafale(centre, {
+			etincelles(22 + ordre * 3, clair, couleur, { vitesse = { 16, 28 }, vie = { 0.6, 1.1 } }),
+			etincelles(12, SC.texte, SC.texte, {
+				vitesse = { 6, 12 }, frein = 2, acceleration = Vector3.new(0, -4, 0), vie = { 0.8, 1.3 },
+				taille = { 0, 1, 0.5, 0.7, 1, 0 },
+			}),
+		}, Vector3.new(4, 5, 4))
+		-- la coquille éclate : cubes répartis sur l'ovale de l'œuf, projetés vers l'extérieur
+		gerbe(centre, 22, function(i, pos)
+			local dir = Vector3.new(r(-1, 1), r(-0.4, 1), r(-1, 1))
+			if dir.Magnitude < 0.1 then dir = Vector3.new(0, 1, 0) end
+			dir = dir.Unit
+			local cote = r(0.7, 1.3)
+			local teinte = COQUILLE[(i % #COQUILLE) + 1]
+			if i % 5 == 0 then teinte = CONFETTIS[alea:NextInteger(1, #CONFETTIS)] end
+			particule({ Name = "Coquille", Size = Vector3.new(cote, cote, cote), Color = teinte, Material = Enum.Material.SmoothPlastic }, {
+				pos = pos + Vector3.new(dir.X * 3.5, dir.Y * 4.5, dir.Z * 3.5),
+				vel = dir * r(14, 24) + Vector3.new(0, r(8, 14), 0),
+				gravite = 55,
+				frein = 0.4,
+				sol = sol + cote * 0.5,
+				rot = rotAleatoire(),
+				vrot = vrotAleatoire(12),
+				vie = r(1.8, 2.5),
+				debutFondu = 0.7,
+			})
+		end)
+		-- confettis qui virevoltent en retombant
+		gerbe(centre, 20, function(i, pos)
+			local teinte = CONFETTIS[(i % #CONFETTIS) + 1]
+			if divin then
+				teinte = Color3.fromHSV(i / 20, 0.75, 1)
+			elseif i % 3 == 0 then
+				teinte = couleur
+			end
+			particule({ Name = "Confetti", Size = Vector3.new(0.7, 0.06, 0.4), Color = teinte, Material = Enum.Material.SmoothPlastic }, {
+				pos = pos + Vector3.new(0, 2, 0),
+				vel = Vector3.new(r(-10, 10), r(18, 28), r(-10, 10)),
+				gravite = 26,
+				frein = 2,
+				rot = rotAleatoire(),
+				vrot = vrotAleatoire(10),
+				vie = r(1.8, 2.6),
+				debutFondu = 0.6,
+			})
+		end)
+		if type(d.rarete) == "string" then
+			texteFlottant(centre + Vector3.new(0, 4, 0), "🐣 " .. rareteMaj(d.rarete) .. " !", SC.texte, 2.8, 2.4, { rarete = d.rarete, contour = 5 })
+		end
+		-- confettis d'écran pour le propriétaire de l'œuf
+		local dino = dinoProche(position, { Enclos = true }, 8, d.espece)
+		if dino and dino:GetAttribute("Proprietaire") == joueur.UserId then
+			confettisEcran(24)
+		end
 	end
 
 	function effets.Evenement(position, d)

@@ -4,6 +4,9 @@
 -- Atmosphere légère bleu clair avec voile lointain, Bloom discret, rayons de soleil, couleurs vives
 -- et flou de profondeur très léger au loin. Cycle jour/nuit très lent calé sur l'heure serveur,
 -- avec une nuit courte et claire. Ambiances vives pendant les événements (Eruption, PluieDeMeteores, LuneDoree).
+-- Ciel vivant (plan v2) : nuages dont Cover/Density ondulent lentement et qui dérivent avec un vent global
+-- doux (workspace.GlobalWind, direction qui tourne lentement), longue heure dorée puis coucher pêche et rose,
+-- nuit étoilée au voile plus fin. Les ptérosaures sont côté client (Interface/Pterosaures).
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 
@@ -17,11 +20,17 @@ local DEFAUTS = {
 	heureCoucher = 20,
 	midiDebut = 13.6,      -- plateau de plein jour : l'heure reste entre midiDebut et midiFin (autour de 14 h)
 	midiFin = 14.4,
-	partMatin = 0.07,      -- part du jour passée à monter du lever au plateau
-	partSoir = 0.07,       -- part du jour passée à descendre du plateau au coucher
+	partMatin = 0.06,      -- part du jour passée à monter du lever au plateau
+	partSoir = 0.1,        -- part du jour passée à descendre du plateau au coucher (heure dorée comprise)
+	partDoree = 0.65,      -- dans la descente du soir, part passée entre 17 h 30 et le coucher (le beau moment)
 	dureeTransition = 2.5, -- secondes de fondu lors d'un changement d'événement
 	pas = 0.25,            -- secondes entre deux mises à jour du cycle
 	latitude = 23,         -- soleil haut de l'après-midi : ombres courtes, légèrement portées
+	etoiles = 5000,        -- étoiles de la nuit ordinaire
+	vent = 5,              -- force du vent global (les nuages dérivent avec lui)
+	periodeVent = 600,     -- secondes pour une oscillation complète de la direction du vent
+	pasVent = 2,           -- secondes entre deux mises à jour du vent
+	ampleurNuages = 0.08,  -- variation douce de Cover/Density des nuages autour de l'ambiance
 }
 
 local function reglage(ctx, cle)
@@ -137,6 +146,34 @@ local function ambiances(C, S)
 		profondeur = profondeurStandard,
 	}
 
+	-- coucher de soleil : ciel pêche et rose, horizon orange, nuages dorés à ventre rose,
+	-- grands rayons de soleil ; toujours lumineux, le terrain reste bien lisible
+	local rose = C.alerte:Lerp(C.creme, 0.45)
+	local peche = C.lave:Lerp(C.creme, 0.5)
+	A.Coucher = {
+		lighting = {
+			Brightness = 2.5,
+			Ambient = mul(peche:Lerp(C.violet, 0.12), 0.6),
+			OutdoorAmbient = mul(peche:Lerp(rose, 0.3), 0.76),
+			ColorShift_Top = mul(C.lave:Lerp(C.dore, 0.45), 0.85),
+			ColorShift_Bottom = mul(C.violet:Lerp(rose, 0.4), 0.16),
+			ExposureCompensation = 0.12,
+		},
+		atmosphere = {
+			Density = 0.3,
+			Offset = 0.18,
+			Color = rose:Lerp(C.dore, 0.35),
+			Decay = C.lave:Lerp(C.violet, 0.3),
+			Glare = 0.9,
+			Haze = 1.9,
+		},
+		clouds = { Cover = 0.54, Density = 0.44, Color = C.dore:Lerp(rose, 0.55) },
+		bloom = { Intensity = 0.68, Size = 28, Threshold = 1.12 },
+		correction = { Brightness = 0.02, Contrast = 0.14, Saturation = 0.3, TintColor = blanc:Lerp(peche, 0.14) },
+		rayons = { Intensity = 0.2, Spread = 0.75 },
+		profondeur = profondeurStandard,
+	}
+
 	-- nuit courte et claire : bleu lumineux, on voit tout le terrain, torches mises en valeur
 	A.Nuit = {
 		lighting = {
@@ -147,15 +184,16 @@ local function ambiances(C, S)
 			ColorShift_Bottom = mul(C.violet, 0.12),
 			ExposureCompensation = 0.35,
 		},
+		-- voile plus fin et nuages plus épars : les étoiles percent entre les nuages
 		atmosphere = {
-			Density = 0.26,
+			Density = 0.24,
 			Offset = 0.2,
 			Color = bleuNuit,
 			Decay = bleuNuit:Lerp(C.violet, 0.3),
 			Glare = 0,
-			Haze = 0.8,
+			Haze = 0.45,
 		},
-		clouds = { Cover = 0.4, Density = 0.3, Color = bleuNuit:Lerp(blanc, 0.55) },
+		clouds = { Cover = 0.33, Density = 0.26, Color = bleuNuit:Lerp(blanc, 0.55) },
 		bloom = { Intensity = 0.65, Size = 26, Threshold = 1.1 },
 		correction = { Brightness = 0.04, Contrast = 0.1, Saturation = 0.12, TintColor = blanc:Lerp(C.gemme, 0.1) },
 		rayons = { Intensity = 0.02, Spread = 0.4 },
@@ -165,6 +203,7 @@ local function ambiances(C, S)
 	-- éruption : ciel orange vif, lumière rouge-or, voile chaud sans noirceur
 	A.Eruption = {
 		heure = 17.4,
+		vent = 1.8, -- les nuages filent plus vite pendant l'éruption
 		lighting = {
 			Brightness = 2.8,
 			Ambient = mul(C.lave:Lerp(C.creme, 0.45), 0.62),
@@ -297,6 +336,13 @@ function M.construire(ctx)
 	local dureeHeuresNuit = 24 - (coucher - lever)
 	local transition = math.max(0.1, reglage(ctx, "dureeTransition"))
 	local pas = math.max(0.05, reglage(ctx, "pas"))
+	local partDoree = math.max(0.1, math.min(0.9, reglage(ctx, "partDoree")))
+	local heureDoree = math.max(midiFin, math.min(coucher - 0.5, 17.5))
+	local etoilesNuit = math.max(0, reglage(ctx, "etoiles"))
+	local forceVent = math.max(0, reglage(ctx, "vent"))
+	local periodeVent = math.max(30, reglage(ctx, "periodeVent"))
+	local pasVent = math.max(pas, reglage(ctx, "pasVent"))
+	local ampleurNuages = math.max(0, math.min(0.2, reglage(ctx, "ampleurNuages")))
 
 	-- ===== réglages généraux de Lighting =====
 	-- chaque propriété à part : si l'une est refusée (ex. Technology hors Studio), les autres passent
@@ -335,7 +381,7 @@ function M.construire(ctx)
 	local ciel = Instance.new("Sky")
 	ciel.Name = "DinoCiel"
 	pcall(function()
-		ciel.StarCount = 3000
+		ciel.StarCount = etoilesNuit
 		ciel.SunAngularSize = 12
 		ciel.MoonAngularSize = 11
 		ciel.CelestialBodiesShown = true
@@ -408,7 +454,13 @@ function M.construire(ctx)
 			if p < partMatin then
 				heure = lever + (midiDebut - lever) * p / partMatin
 			elseif p > 1 - partSoir then
-				heure = midiFin + (coucher - midiFin) * (p - (1 - partSoir)) / partSoir
+				-- descente du soir en deux temps : vite jusqu'à 17 h 30, puis lente heure dorée
+				local u = (p - (1 - partSoir)) / partSoir
+				if u < 1 - partDoree then
+					heure = midiFin + (heureDoree - midiFin) * u / (1 - partDoree)
+				else
+					heure = heureDoree + (coucher - heureDoree) * (u - (1 - partDoree)) / partDoree
+				end
 			else
 				heure = midiDebut + (midiFin - midiDebut) * (p - partMatin) / (1 - partMatin - partSoir)
 			end
@@ -431,11 +483,56 @@ function M.construire(ctx)
 		else
 			jour = 0
 		end
-		-- lumière dorée autour du lever et du coucher
-		local dore = math.max(0, 1 - math.abs(heure - lever) / 1.2) + math.max(0, 1 - math.abs(heure - (coucher - 0.3)) / 1.6)
-		dore = math.min(1, dore)
+		-- lumière dorée du lever, coucher pêche et rose (plus long et plus coloré)
+		local aube = math.max(0, 1 - math.abs(heure - lever) / 1.2)
+		local soir = math.max(0, 1 - math.abs(heure - (coucher - 0.4)) / 2)
+		-- le coucher monte en douceur (courbe en cloche lissée)
+		soir = soir * soir * (3 - 2 * soir)
 		local base = melanger(A.Nuit, A.Jour, jour)
-		return melanger(base, A.Crepuscule, dore * 0.8)
+		base = melanger(base, A.Crepuscule, aube * 0.8)
+		return melanger(base, A.Coucher, soir * 0.9)
+	end
+
+	-- nuages vivants : Cover et Density ondulent lentement autour des valeurs de l'ambiance
+	-- (sommes de sinus de périodes premières entre elles, calées sur l'heure serveur)
+	local function tempsServeur()
+		local ok, t = pcall(function()
+			return workspace:GetServerTimeNow()
+		end)
+		if ok and type(t) == "number" then
+			return t
+		end
+		return os.clock()
+	end
+
+	local DEUX_PI = math.pi * 2
+	local function nuagesVivants(groupe)
+		if not groupe then return groupe end
+		local t = tempsServeur()
+		local dc = 0.65 * math.sin(DEUX_PI * t / 173) + 0.35 * math.sin(DEUX_PI * t / 61 + 1.3)
+		local dd = 0.6 * math.sin(DEUX_PI * t / 131 + 0.7) + 0.4 * math.sin(DEUX_PI * t / 47 + 2.1)
+		local r = {}
+		for cle, valeur in pairs(groupe) do
+			r[cle] = valeur
+		end
+		if type(r.Cover) == "number" then
+			r.Cover = math.max(0.15, math.min(0.85, r.Cover + dc * ampleurNuages))
+		end
+		if type(r.Density) == "number" then
+			r.Density = math.max(0.1, math.min(0.8, r.Density + dd * ampleurNuages * 0.8))
+		end
+		return r
+	end
+
+	-- vent global : les nuages (et l'herbe du terrain) dérivent doucement, direction qui tourne lentement
+	local multiplicateurVent = 1
+	local function appliquerVent()
+		local t = tempsServeur()
+		local angle = math.rad(35) + math.rad(40) * math.sin(DEUX_PI * t / periodeVent)
+		local force = forceVent * multiplicateurVent * (0.85 + 0.15 * math.sin(DEUX_PI * t / 97))
+		pcall(function()
+			workspace.GlobalWind = Vector3.new(math.cos(angle) * force, 0, math.sin(angle) * force)
+		end)
 	end
 
 	local function appliquerAmbiance(amb)
@@ -480,7 +577,7 @@ function M.construire(ctx)
 		end)
 		if type(valeur) ~= "string" then return "" end
 		if valeur ~= "" and not A[valeur] then return "" end
-		if valeur == "Jour" or valeur == "Nuit" or valeur == "Crepuscule" then return "" end
+		if valeur == "Jour" or valeur == "Nuit" or valeur == "Crepuscule" or valeur == "Coucher" then return "" end
 		return valeur
 	end
 
@@ -496,24 +593,36 @@ function M.construire(ctx)
 		return amb.heure
 	end
 
+	-- copie d'une ambiance dont les nuages ondulent
+	local function vivante(amb)
+		local r = {}
+		for cle, valeur in pairs(amb) do
+			r[cle] = valeur
+		end
+		r.clouds = nuagesVivants(amb.clouds)
+		return r
+	end
+
 	local function changerMode(nom)
 		if nom == modeActuel then return end
 		modeActuel = nom
 		libreA = os.clock() + transition
 		if nom == "" then
+			multiplicateurVent = 1
 			pcall(function()
-				ciel.StarCount = 3000
+				ciel.StarCount = etoilesNuit
 				ciel.MoonAngularSize = 11
 			end)
 			local heure = heureDuCycle()
-			fondre(ambianceCycle(heure), heure)
+			fondre(vivante(ambianceCycle(heure)), heure)
 		else
 			local amb = A[nom]
+			multiplicateurVent = amb.vent or 1
 			pcall(function()
-				ciel.StarCount = amb.etoiles or 3000
+				ciel.StarCount = amb.etoiles or etoilesNuit
 				ciel.MoonAngularSize = amb.lune or 11
 			end)
-			fondre(amb, heureEvenement(amb))
+			fondre(vivante(amb), heureEvenement(amb))
 		end
 	end
 
@@ -528,21 +637,34 @@ function M.construire(ctx)
 
 	-- état de départ
 	local depart = heureDuCycle()
-	appliquerAmbiance(ambianceCycle(depart))
+	appliquerAmbiance(vivante(ambianceCycle(depart)))
 	pcall(function()
 		Lighting.ClockTime = depart
 	end)
+	appliquerVent()
 	pcall(changerMode, lireEvenement())
 
-	-- boucle du cycle : avance l'heure seulement hors événement et hors fondu
+	-- boucle du cycle : avance l'heure seulement hors événement et hors fondu ;
+	-- pendant un événement, seuls les nuages continuent d'onduler
 	task.spawn(function()
+		local prochainVent = os.clock() + pasVent
 		while true do
-			if modeActuel == "" and os.clock() >= libreA then
-				pcall(function()
-					local heure = heureDuCycle()
-					Lighting.ClockTime = heure
-					appliquerAmbiance(ambianceCycle(heure))
-				end)
+			if os.clock() >= libreA then
+				if modeActuel == "" then
+					pcall(function()
+						local heure = heureDuCycle()
+						Lighting.ClockTime = heure
+						appliquerAmbiance(vivante(ambianceCycle(heure)))
+					end)
+				elseif A[modeActuel] and nuages then
+					pcall(function()
+						appliquerDirect(nuages, nuagesVivants(A[modeActuel].clouds))
+					end)
+				end
+			end
+			if os.clock() >= prochainVent then
+				prochainVent = os.clock() + pasVent
+				appliquerVent()
 			end
 			task.wait(pas)
 		end

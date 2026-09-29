@@ -17,6 +17,9 @@ local HAUT_BAS = 2.4         -- hauteur du bas de l'écran au-dessus du sol
 local CADRE = 0.45           -- largeur des baguettes du cadre doré
 local ECART_POTEAU = 7.5     -- distance du centre à l'axe de chaque poteau
 local PIXELS = 50            -- pixels par stud du SurfaceGui
+-- place du tableau sur la Place (même repère que Builders/Place : 0° = est, 90° = sud, 270° = nord)
+local ANGLE_TABLEAU = 215    -- nord-ouest : hors de l'axe ouest vers le Comptoir (lien Sol z 112 à 124), le dos plein ne descend pas sous z ≈ 106,7
+local RECUL_TABLEAU = 1.0    -- × Plan.place.rayon : pied du tableau sur le bord de la Place, dos tourné vers l'extérieur
 
 local function nombre(v)
 	local n = tonumber(v)
@@ -586,13 +589,14 @@ local function construireTableau(ctx)
 	local dossier = O.dossier(ctx.racine, "Classement")
 	local modele = O.modele(dossier, "TableauHonneur")
 
-	-- au bord ouest de la Place, tourné vers le centre
-	local centre = ctx.Plan.place.centre
-	local pied = centre + Vector3.new(-17, 0, -6)
+	-- sur le bord nord-ouest de la Place (secteur laissé libre par Builders/Place), tourné vers le centre ;
+	-- tout se déduit de Plan.place : pied sur le cercle du rayon, l'axe ouest (lien du Comptoir) reste dégagé
+	local place = ctx.Plan.place
+	local centre = place.centre
+	local rayon = tonumber(place.rayon) or 22
+	local a = math.rad(ANGLE_TABLEAU)
+	local pied = centre + Vector3.new(math.cos(a), 0, math.sin(a)) * (rayon * RECUL_TABLEAU)
 	local cible = Vector3.new(centre.X, pied.Y, centre.Z)
-	-- léger recul vers le centre pour rester dans le disque de la Place (r20)
-	local vers = cible - pied
-	if vers.Magnitude > 0.01 then pied = pied + vers.Unit * 0.8 end
 	local orientation = CFrame.lookAt(pied, cible)
 	local function local_(x, y, z)
 		return orientation * CFrame.new(x, y, z)

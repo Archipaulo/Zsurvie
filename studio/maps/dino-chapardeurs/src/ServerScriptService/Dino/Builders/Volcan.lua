@@ -9,10 +9,14 @@
 -- (orange doré → rouge sombre) et finissent en lave figée (Basalt/CrackedLava non Neon) près des mares. Fumée (Smoke + panache), braises (ParticleEmitter), fumerolles.
 -- Pendant l'événement « Eruption » (ctx.Etat.Evenement) : projections, lumière vive qui scintille,
 -- lave jaune-orange qui pulse vite, fumée sombre et épaisse et alerte flottante « ÉRUPTION ! ».
--- Emprise (CONTRAT §10) : disque de rayon 34 autour de Plan.volcan.centre, hauteur ≤ 70.
+-- Plan v2 : plus haut et plus large (sommet ≈ 56), rebord du cratère dentelé et plus haut à l'arrière
+-- (le lac reste visible depuis la Place), petit cône adventif fumant sur le flanc est, orgues basaltiques
+-- au pied côté Cratère, halo de chaleur au-dessus du lac. La Bouche porte les attributs Sommet, RayonCratere,
+-- RayonLac et RayonBas : Interface/EclatsLave s'en sert pour faire retomber ses éclats sur les flancs.
+-- Emprise (CONTRAT §10) : disque de Plan.volcan.rayon (36) autour de Plan.volcan.centre, hauteur ≤ Plan.volcan.hauteur (75).
 local M = {}
 
-local BUDGET = 250 -- parts au maximum pour ce constructeur (le terrain ne compte pas)
+local BUDGET = 320 -- parts au maximum pour ce constructeur (le terrain ne compte pas)
 
 function M.construire(ctx)
 	local Charte = ctx.Charte
@@ -39,14 +43,15 @@ function M.construire(ctx)
 
 	-- position et limites de l'emprise
 	local infoVolcan = Plan.volcan or {}
-	local CENTRE = infoVolcan.centre or Vector3.new(0, 0, -150)
-	local RAYON_MAX = infoVolcan.rayon or 34
-	local HAUTEUR_MAX = infoVolcan.hauteur or 70
+	local CENTRE = infoVolcan.centre or Vector3.new(0, 0, -190)
+	local RAYON_MAX = infoVolcan.rayon or 36
+	local HAUTEUR_MAX = infoVolcan.hauteur or 75
 	local CX, CZ = CENTRE.X, CENTRE.Z
 
-	local SOMMET = borne(reglage("sommet", 44), 30, HAUTEUR_MAX - 14)
-	local RAYON_BAS = math.min(RAYON_MAX - 3.5, reglage("rayonBas", 30.5))
-	local RAYON_HAUT = borne(reglage("rayonHaut", 10), 8, RAYON_BAS - 8)
+	-- le titre flotte 16 studs au-dessus du lac : le sommet garde de la marge sous la hauteur maximale
+	local SOMMET = borne(reglage("sommet", 56), 30, HAUTEUR_MAX - 17)
+	local RAYON_BAS = math.min(RAYON_MAX - 3.5, reglage("rayonBas", 32.5))
+	local RAYON_HAUT = borne(reglage("rayonHaut", 11.5), 8, RAYON_BAS - 8)
 	local RAYON_LAC = RAYON_HAUT - 3.2
 	local RAYON_REBORD = RAYON_HAUT - 1
 	local NB_COULEES = math.floor(borne(reglage("coulees", 4), 2, 6))
@@ -323,6 +328,20 @@ function M.construire(ctx)
 					rad = 2.3
 				end
 				Outils.terrainBoule(cS + direction(a) * RAYON_REBORD + Vector3.new(0, 0.6 + rng:NextNumber(-0.4, 0.8), 0), rad, M_BASALTE)
+				-- dents du rebord : plus hautes à l'arrière (nord, -Z) pour une silhouette déchiquetée,
+				-- basses à l'avant pour qu'on voie le lac depuis la Place
+				local arriere = -math.sin(a) -- 1 plein nord, -1 plein sud (côté joueurs)
+				if ecartMin > math.rad(40) and arriere > -0.1 then
+					-- un mur de boules larges qui se chevauchent (pas des piles) : le rebord monte en crête vers le nord
+					local etages = math.floor((arriere + 0.1) * 1.7 + rng:NextNumber(0, 0.7))
+					local r = rad
+					for e = 1, etages do
+						r = r * rng:NextNumber(0.86, 0.95)
+						local aE = a + rng:NextNumber(-0.12, 0.12)
+						local derive = direction(aE) * (RAYON_REBORD + 0.4 + rng:NextNumber(-0.4, 0.6))
+						Outils.terrainBoule(cS + derive + Vector3.new(0, 0.6 + e * rad * 0.62, 0), r, M_BASALTE)
+					end
+				end
 			end
 		end
 		-- paroi intérieure fissurée (lueur orange sous le rebord)
@@ -393,7 +412,7 @@ function M.construire(ctx)
 	ajouterLave(lac)
 	local lueursPied = {}
 	local lueursCoulees = {}
-	local RESERVE = 30 -- parts gardées pour les fissures, rochers, fumerolles et la bouche
+	local RESERVE = 50 -- parts gardées pour les fissures, rochers, orgues, cône adventif, fumerolles et la bouche
 
 	-- teinte de la lave selon la hauteur : cœur doré au cratère, orange, puis rouge sombre en bas
 	local function teinteCoulee(y)
@@ -447,7 +466,7 @@ function M.construire(ctx)
 		return t
 	end
 
-	local NB_POINTS = math.max(8, math.floor(SOMMET / 4))
+	local NB_POINTS = math.max(8, math.floor(SOMMET / 4.5))
 	for k, tr in ipairs(traces) do
 		local coulee = Outils.modele(lave, "Coulee" .. k)
 		local figee = Outils.modele(laveFigee, "Coulee" .. k)
@@ -636,8 +655,122 @@ function M.construire(ctx)
 		end
 	end
 
+	-- hauteur du flanc à la distance r de l'axe (inverse du profil, par dichotomie)
+	local function hauteurFlanc(r)
+		if r >= RAYON_BAS then
+			return 0
+		end
+		if r <= RAYON_HAUT then
+			return SOMMET
+		end
+		local bas, haut = 0, SOMMET
+		for _ = 1, 16 do
+			local m = (bas + haut) / 2
+			if rayonA(m) > r then
+				bas = m
+			else
+				haut = m
+			end
+		end
+		return (bas + haut) / 2
+	end
+
+	-- ===== orgues basaltiques : deux bouquets de colonnes au pied, côté Cratère =====
+	for _, aVoulu in ipairs({ math.pi / 2 - 0.22, math.pi / 2 + 1.2 }) do
+		local aOrgue = nil
+		for _, d in ipairs({ 0, 0.22, -0.22, 0.4, -0.4 }) do
+			if not aOrgue and not presDUneCoulee(aVoulu + d, 1, 8) then
+				aOrgue = aVoulu + d
+			end
+		end
+		if aOrgue and compteur < BUDGET - 12 then
+			local orgue = Outils.modele(rochers, "Orgue")
+			-- tout au pied (le flanc n'y fait que 1 à 3 studs de haut) : les colonnes restent bien visibles
+			local cOrgue = centreA(0) + direction(aOrgue) * (RAYON_BAS - 0.8)
+			local versVolcan = -direction(aOrgue)
+			for c = 1, 7 do
+				local pos = cOrgue
+				if c > 1 then
+					local ang = (c - 2) / 6 * math.pi * 2 + aOrgue
+					pos = cOrgue + direction(ang) * rng:NextNumber(1.9, 2.3)
+				end
+				local diam = rng:NextNumber(1.8, 2.4)
+				pos = dansEmprise(Vector3.new(pos.X, 0, pos.Z), diam / 2)
+				-- plus hautes au centre et côté volcan : l'orgue monte en gradins vers le flanc
+				local h = rng:NextNumber(8, 9.5)
+				local ecart = Vector3.new(pos.X - cOrgue.X, 0, pos.Z - cOrgue.Z)
+				if c > 1 and ecart.Magnitude > 0.01 then
+					h = 5 + 2.6 * ecart.Unit:Dot(versVolcan) + rng:NextNumber(-0.8, 0.8)
+				end
+				local long = h + 1.5
+				part(Outils.cylindre, orgue, {
+					Name = "Colonne",
+					Size = Vector3.new(long, diam, diam),
+					CFrame = CFrame.new(pos.X, long / 2 - 1.5, pos.Z)
+						* CFrame.Angles(rng:NextNumber(-0.05, 0.05), rng:NextNumber(0, math.pi * 2), rng:NextNumber(-0.05, 0.05))
+						* CFrame.Angles(0, 0, math.pi / 2),
+					Color = ROCHE_PART:Lerp(CROUTE, rng:NextNumber(0.15, 0.5)),
+					Material = M_BASALTE,
+				})
+			end
+		end
+	end
+
+	-- ===== cône adventif : petite bouche secondaire qui fume sur un flanc (hors des coulées) =====
+	local R_ADVENTIF = 22
+	local fumeesAdventif = {}
+	do
+		local yA = hauteurFlanc(R_ADVENTIF)
+		local aC = nil
+		for _, a in ipairs({ 0.3, 2.85, -0.4, 3.5 }) do
+			if not aC and not presDUneCoulee(a, yA, 9) and not presDUneCoulee(a, yA * 0.5, 7) then
+				aC = a
+			end
+		end
+		if aC then
+			local base = centreA(yA) + direction(aC) * R_ADVENTIF
+			local HAUT_C = 7
+			if terrainOk then
+				local y = -5
+				while y < HAUT_C - 0.01 do
+					local t = (y + 5) / (HAUT_C + 5)
+					local rad = 7 - 4.4 * t
+					local pos = dansEmprise(Vector3.new(base.X, base.Y + y + 0.75, base.Z), rad)
+					Outils.terrainCylindre(CFrame.new(pos), 1.9, rad, M_BASALTE)
+					y = y + 1.5
+				end
+				Outils.terrainCylindre(CFrame.new(base + Vector3.new(0, HAUT_C + 0.2, 0)), 1, 2.6, M_FISSURE)
+			end
+			local gueule = part(Outils.boule, lave, propsLave({
+				Name = "BoucheAdventive",
+				Size = Vector3.new(2.8, 2.8, 2.8),
+				CFrame = CFrame.new(base + Vector3.new(0, HAUT_C + 0.5, 0)),
+				Color = COEUR:Lerp(LAVE, 0.4),
+			}))
+			if gueule then
+				ajouterLave(gueule)
+				local l = Outils.lumiere(gueule, { Range = 12, Brightness = 1.4, Color = LAVE })
+				l.Shadows = false
+				table.insert(lueursPied, l)
+				pcall(function()
+					local s = Instance.new("Smoke")
+					s.Name = "Fumee"
+					s.Color = FUMEE_CALME
+					s.Opacity = 0.1
+					s.RiseVelocity = 4
+					s.Size = 4
+					s.Parent = gueule
+					table.insert(fumeesAdventif, s)
+				end)
+			end
+		end
+	end
+
 	-- ===== fumerolles sur les flancs =====
 	local fumerolles = {}
+	for _, s in ipairs(fumeesAdventif) do
+		table.insert(fumerolles, s)
+	end
 	for n = 1, 2 do
 		local y = SOMMET * (0.55 + 0.15 * n)
 		local a = traces[1].a0 + (n * 2 - 3) * 0.9
@@ -677,8 +810,39 @@ function M.construire(ctx)
 		CastShadow = false,
 	})
 
-	local fumee, panache, braises, lumiere, projections, alerte
+	local fumee, panache, braises, lumiere, projections, alerte, chaleur
 	if bouche then
+		-- repères pour les effets locaux (Interface/EclatsLave) : profil du cône et taille du cratère
+		bouche:SetAttribute("Sommet", SOMMET)
+		bouche:SetAttribute("RayonCratere", RAYON_HAUT)
+		bouche:SetAttribute("RayonLac", RAYON_LAC)
+		bouche:SetAttribute("RayonBas", RAYON_BAS)
+
+		-- halo de chaleur orangé au-dessus du lac : le cratère rougeoie de loin
+		pcall(function()
+			chaleur = Instance.new("ParticleEmitter")
+			chaleur.Name = "Chaleur"
+			chaleur.Texture = "rbxasset://textures/particles/smoke_main.dds"
+			chaleur.Color = ColorSequence.new(COEUR, LAVE)
+			chaleur.LightEmission = 1
+			chaleur.LightInfluence = 0
+			chaleur.Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, RAYON_LAC * 1.4),
+				NumberSequenceKeypoint.new(1, RAYON_LAC * 2.4),
+			})
+			chaleur.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 1),
+				NumberSequenceKeypoint.new(0.3, 0.86),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			chaleur.Speed = NumberRange.new(1.5, 3)
+			chaleur.Lifetime = NumberRange.new(2.5, 4)
+			chaleur.Rotation = NumberRange.new(0, 360)
+			chaleur.RotSpeed = NumberRange.new(-10, 10)
+			chaleur.Rate = 1.5
+			chaleur.Parent = bouche
+		end)
+
 		pcall(function()
 			fumee = Instance.new("Smoke")
 			fumee.Name = "Fumee"
@@ -856,6 +1020,13 @@ function M.construire(ctx)
 					braises.Rate = 40
 				else
 					braises.Rate = 6
+				end
+			end
+			if chaleur then
+				if enEruption then
+					chaleur.Rate = 5
+				else
+					chaleur.Rate = 1.5
 				end
 			end
 			if panache then

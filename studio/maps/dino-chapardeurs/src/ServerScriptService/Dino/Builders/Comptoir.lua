@@ -17,9 +17,13 @@ function M.construire(ctx)
 	local dossier = ctx.dossier
 	local Style = ctx.Style
 
-	-- emprise
-	local infoComptoir = Plan.comptoir or {}
-	local CENTRE = infoComptoir.centre or Vector3.new(-50, 0, 104)
+	-- emprise : tout vient de Plan.comptoir (plan v2), aucune position écrite en dur
+	local infoComptoir = Plan.comptoir
+	if not infoComptoir or typeof(infoComptoir.centre) ~= "Vector3" then
+		warn("[Dino] Comptoir : Plan.comptoir.centre manquant, boutique non construite")
+		return
+	end
+	local CENTRE = infoComptoir.centre
 	local CX, CZ = CENTRE.X, CENTRE.Z
 	local SOL = 0.8 -- dessus du plancher
 
@@ -181,6 +185,31 @@ function M.construire(ctx)
 		piece(parent, "cylindre", "CulotLanterne", Vector3.new(0.2, 0.8, 0.8),
 			CFrame.new(px, yChapeau - 1.3, pz) * VERTICAL, METAL, mat(M_METAL, true))
 		lumiere(flamme, 16, 1.4)
+		-- la flamme vacille doucement (animation client, AnimationsDecor)
+		if flamme then
+			Outils.animer(flamme, "pulse", 2.6)
+		end
+	end
+
+	-- quelques étincelles dorées, très légères (effet client, rendu seulement de près)
+	local function etincelles(part, couleur, debit)
+		if not part then
+			return
+		end
+		pcall(function()
+			local e = Instance.new("ParticleEmitter")
+			e.Name = "Etincelles"
+			e.Color = ColorSequence.new(Charte.lumiere(couleur), couleur)
+			e.LightEmission = 1
+			e.Size = NumberSequence.new(0.22, 0)
+			e.Transparency = NumberSequence.new(0.15, 1)
+			e.Lifetime = NumberRange.new(1.2, 2)
+			e.Rate = debit or 1.5
+			e.Speed = NumberRange.new(0.3, 0.8)
+			e.SpreadAngle = Vector2.new(180, 180)
+			e.Acceleration = Vector3.new(0, 0.6, 0)
+			e.Parent = part
+		end)
 	end
 
 	local cabane = Outils.modele(dossier, "Cabane")
@@ -416,8 +445,9 @@ function M.construire(ctx)
 		CFrame.new(CX + xComptoir + 0.6, yPlateau + 0.3, CZ - 2.6), DORE, mat(M_METAL, true, { Reflectance = 0.2 }))
 	piece(modeleComptoir, "bloc", "GrandLivre", Vector3.new(1.1, 0.18, 1.6),
 		CFrame.new(CX + xComptoir + 0.2, yPlateau + 0.09, CZ - 0.6) * CFrame.Angles(0, math.rad(-10), 0), CREME, mat(Enum.Material.SmoothPlastic, true))
-	piece(modeleComptoir, "boule", "Pepite", Vector3.new(0.5, 0.5, 0.5),
+	local pepite = piece(modeleComptoir, "boule", "Pepite", Vector3.new(0.5, 0.5, 0.5),
 		CFrame.new(CX + xComptoir + 0.3, yPlateau + 0.25, CZ + 0.9), Charte.gemme, mat(M_VERRE, true, { Transparency = 0.15 }))
+	etincelles(pepite, Charte.gemme, 1)
 	if partComptoir then
 		partComptoir.Name = "Comptoir"
 		Outils.invite(partComptoir, { nom = "Boutique", action = "Acheter", objet = "Boutique", distance = 12 })
@@ -532,6 +562,8 @@ function M.construire(ctx)
 			objet.WorldPivot = centre
 		end)
 		Outils.animer(objet, "tourne", 0.6)
+		-- scintillement discret autour de l'objet exposé
+		etincelles(chapeau, DORE, 1.2)
 	end
 
 	-- ===== 8. le marchand jouet (regard vers +X) =====

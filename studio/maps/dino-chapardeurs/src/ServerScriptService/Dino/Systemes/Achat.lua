@@ -104,6 +104,32 @@ function M.demarrer(ctx)
 		return Vector3.new(b.centre.X, ySol, b.centre.Z + sens * profondeur / 2)
 	end
 
+	-- chemin de marche (plan v2) : le dino descend du Tapis sur la promenade, la longe en biais
+	-- jusque devant l'entrée de sa Base, puis entre tout droit (sans frôler la façade des Bases voisines).
+	local function cheminVersBase(depart, index, entree, arrivee)
+		local b = Plan.bases[index]
+		local cote = -((b and b.versTapis) or 1) -- côté du Tapis où se trouve la Base (signe de z)
+		local prom = Plan.promenade
+		local zPres = (Plan.tapis and Plan.tapis.emprise or 9.5) + 3
+		local zLoin = entree.Z * cote - 6
+		if prom then
+			zPres = prom.zMin + 3
+			zLoin = math.max(zPres, prom.zMax - 6)
+		end
+		local ySol = 0
+		local chemin = {}
+		-- 1. descente du Tapis, perpendiculaire à son axe
+		if math.abs(depart.Z) < zPres then
+			table.insert(chemin, Vector3.new(depart.X, ySol, cote * zPres))
+		end
+		-- 2. en face de l'entrée, sur la promenade
+		table.insert(chemin, Vector3.new(entree.X, ySol, cote * zLoin))
+		-- 3. l'entrée, puis l'emplacement
+		table.insert(chemin, entree)
+		table.insert(chemin, arrivee)
+		return chemin
+	end
+
 	-- ===== ligne « ➜ Joueur » sur l'étiquette pendant la marche (STYLE.md §3) =====
 	local LIGNE_ACHETEUR = 1.1 -- hauteur de la ligne, en studs
 
@@ -623,7 +649,7 @@ function M.demarrer(ctx)
 			index = index,
 			numero = numero,
 			position = depart.Position,
-			etapes = { entree, cfFin.Position },
+			etapes = cheminVersBase(depart.Position, index, entree, cfFin.Position),
 			etape = 1,
 			cfFin = cfFin,
 			regard = Vector3.new(depart.LookVector.X, 0, depart.LookVector.Z),

@@ -1,32 +1,35 @@
--- Constructeur Place : la grande place du sud où tout le monde apparaît (version 2, rendu « pro »).
+-- Constructeur Place : la grande place du sud où tout le monde apparaît (plan v2 « plus d'air », rendu « pro »).
 -- Dallage en pavés clairs (Cobblestone) dessiné d'anneaux et de rayons d'ardoise (Slate), bordé d'une
 -- plinthe en relief ; au centre, l'unique SpawnLocation encastrée dans une estrade de marbre ;
--- au nord, une fontaine de pierre sculptée (Marble / Slate) à l'eau de verre bleu, gardée par une
--- statue de dino en bronze qui crache de l'eau ; au bord sud, la borne Dinodex (coque Metal, écran Neon,
--- invite « Index ») ; bancs en lattes de bois sur pieds de métal, bacs à fleurs et lampadaires.
--- Titres flottants géants (« 🦖 DINO CHAPARDEURS » arc-en-ciel, « 📖 DINODEX » bleu).
--- Emprise (CONTRAT §10) : disque r20 autour de Plan.place.centre. Le secteur ouest-nord-ouest
--- reste libre pour le tableau d'honneur (Systemes/Classement), les axes est et ouest pour les
--- allées vers l'Autel et le Comptoir, l'axe nord pour l'allée du Tapis.
+-- au nord, une fontaine animée : bassin de pierre sculptée à l'eau de verre bleu éclairée par en dessous,
+-- statue de dino en bronze qui crache un grand jet, couronne de jets en arc (Beam) qui retombent en gerbes
+-- au pied du piédestal, et un petit ballet serveur (jets pairs / impairs, puis grande gerbe) ;
+-- au bord sud, la borne Dinodex (coque Metal, écran Neon, invite « Index ») ; bancs en lattes de bois,
+-- bacs à fleurs et lampadaires. Titres flottants géants (« 🦖 DINO CHAPARDEURS », « 📖 DINODEX »).
+-- Emprise (CONTRAT §10) : disque de rayon Plan.place.rayon (22) autour de Plan.place.centre ; toutes les
+-- distances sont des fractions de ce rayon (aucune coordonnée en dur). Le secteur ouest-nord-ouest reste
+-- libre pour le tableau d'honneur (Systemes/Classement), les axes est et ouest pour les allées vers l'Autel
+-- et le Comptoir, l'axe nord pour l'allée du Tapis, l'axe sud pour le sentier de la rivière.
 local M = {}
 
-local BUDGET = 260 -- parts au maximum pour ce constructeur
+local BUDGET = 290 -- parts au maximum pour ce constructeur
 
--- valeurs par défaut, remplaçables par Equilibrage.place
+-- valeurs par défaut, remplaçables par Equilibrage.place ; les distances « × rayon » suivent Plan.place.rayon
 local DEFAUTS = {
-	rayon = 20,              -- rayon du dallage (emprise)
 	epaisseurDalle = 0.22,   -- dessus du dallage (pavés du bord) à Y = 0,22
 	tailleApparition = 8,    -- SpawnLocation 8 x 8
 	hauteurApparition = 1,   -- dessus de la SpawnLocation à Y = 1
-	reculFontaine = 13.5,    -- distance du centre de la fontaine au centre (vers le nord)
-	rayonFontaine = 5,       -- rayon du bassin (axe de la margelle)
-	echelleStatue = 0.7,     -- échelle de la statue de dino
-	debitJet = 60,           -- particules par seconde crachées par le dino
-	distanceBorne = 16.5,    -- distance de la borne Dinodex au centre (vers le sud)
+	reculFontaine = 0.675,   -- × rayon : du centre de la Place au centre de la fontaine (vers le nord)
+	rayonFontaine = 0.25,    -- × rayon : rayon du bassin (axe de la margelle)
+	echelleStatue = 0.85,    -- échelle de la statue de dino (repère visible de toute la Place)
+	debitJet = 45,           -- particules par seconde crachées par le dino
+	jetsArc = 8,             -- jets en arc de la margelle vers le piédestal
+	cycleBallet = 2.6,       -- secondes entre deux figures du ballet des jets
+	distanceBorne = 0.83,    -- × rayon : de la borne Dinodex au centre (vers le sud)
 	distanceInvite = 10,     -- portée de l'invite « Index »
-	rayonBancs = 15,
-	rayonFleurs = 17.5,
-	rayonLampes = 18.5,
+	rayonBancs = 0.72,       -- × rayon
+	rayonFleurs = 0.87,      -- × rayon
+	rayonLampes = 0.92,      -- × rayon
 }
 
 local function lireReglages(ctx)
@@ -56,11 +59,24 @@ function M.construire(ctx)
 	local dossier = ctx.dossier
 	local R = lireReglages(ctx)
 
-	local infoPlace = Plan.place or {}
-	local CENTRE = infoPlace.centre or Vector3.new(0, 0, 100)
+	local infoPlace = Plan.place
+	if type(infoPlace) ~= "table" or typeof(infoPlace.centre) ~= "Vector3" or type(infoPlace.rayon) ~= "number" then
+		warn("[Dino] Place : Plan.place manquant, rien n'est construit")
+		return
+	end
+	local CENTRE = infoPlace.centre
 	local CX, CZ = CENTRE.X, CENTRE.Z
-	local RAYON = math.min(R.rayon, infoPlace.rayon or R.rayon)
+	local RAYON = infoPlace.rayon
 	local Y_SOL = R.epaisseurDalle -- niveau de pose des accessoires
+	-- distances dérivées du rayon de la Place (plan v2 : r22)
+	local D = {
+		fontaine = RAYON * R.reculFontaine,
+		bassin = RAYON * R.rayonFontaine,
+		borne = RAYON * R.distanceBorne,
+		bancs = RAYON * R.rayonBancs,
+		fleurs = RAYON * R.rayonFleurs,
+		lampes = RAYON * R.rayonLampes,
+	}
 	local Style = ctx.Style
 	local hex = Charte.hex
 	local ombre = Charte.ombre
@@ -190,7 +206,7 @@ function M.construire(ctx)
 		disque(m, "PavesCoeur", CX, CZ, RAYON * 0.62, Y_SOL + 0.04, 0, TEINTES.paveCoeur, MAT.Cobblestone)
 
 		-- rose des vents : huit rayons d'ardoise entre l'estrade et l'anneau
-		local rInt, rExt = 6.6, RAYON * 0.62
+		local rInt, rExt = R.tailleApparition * 0.707 + 1.9, RAYON * 0.62 -- de la marche de l'estrade à l'anneau
 		for k = 0, 7 do
 			local angle = k * 45 + 22.5
 			local p = autour((rInt + rExt) / 2, angle)
@@ -277,20 +293,27 @@ function M.construire(ctx)
 	-- ===== 3. fontaine de pierre sculptée et statue de dino en bronze =====
 	etape("fontaine", function()
 		local m = Outils.modele(dossier, "Fontaine")
-		local fx, fz = CX, CZ - R.reculFontaine
-		local rf = R.rayonFontaine
+		local fx, fz = CX, CZ - D.fontaine
+		local rf = D.bassin
 
-		-- socle, fond sombre, eau de verre bleu
+		-- socle, fond sombre, veilleuse Neon sous l'eau (le bassin luit), eau de verre bleu
 		disque(m, "Socle", fx, fz, rf + 0.8, 0.4, 0, TEINTES.ardoiseFonce, MAT.Slate)
 		disque(m, "Fond", fx, fz, rf - 0.3, 0.45, 0, TEINTES.eauFond, MAT.Slate)
+		local veilleuse = disque(m, "Veilleuse", fx, fz, rf - 0.9, 0.06, 0.45, TEINTES.eau, MAT.Neon, {
+			Transparency = 0.35,
+			CanCollide = false,
+		})
+		if veilleuse then
+			Outils.animer(veilleuse, "pulse", 0.35)
+		end
 		local eau = disque(m, "Eau", fx, fz, rf - 0.3, 0.25, 1.15, TEINTES.eau, MAT.Glass, {
 			Transparency = 0.35,
 			Reflectance = 0.15,
 			CanCollide = false,
 		})
 		-- margelle : mur de pierre et couronnement de marbre qui déborde
-		anneau(m, "Margelle", fx, fz, rf, 16, 0.8, 1.4, 0.3, TEINTES.pierre, MAT.Slate, ombre(TEINTES.pierre))
-		anneau(m, "Couronnement", fx, fz, rf, 16, 1.15, 0.28, 1.7, TEINTES.marbre, MAT.Marble)
+		anneau(m, "Margelle", fx, fz, rf, 18, 0.8, 1.4, 0.3, TEINTES.pierre, MAT.Slate, ombre(TEINTES.pierre))
+		anneau(m, "Couronnement", fx, fz, rf, 18, 1.15, 0.28, 1.7, TEINTES.marbre, MAT.Marble)
 
 		-- piédestal sculpté : base, fût, bague dorée, chapiteau et tablette
 		disque(m, "BasePiedestal", fx, fz, 1.9, 0.9, 0.3, TEINTES.pierre, MAT.Slate)
@@ -300,49 +323,90 @@ function M.construire(ctx)
 		disque(m, "Tablette", fx, fz, 1.75, 0.2, 3.55, TEINTES.marbreOmbre, MAT.Marble)
 		local yStatue = 3.75
 
-		-- quatre becs de pierre sur le fût, qui crachent un filet d'eau vers le bassin
-		for _, deg in ipairs({ 45, 135, 225, 315 }) do
-			local a = math.rad(deg)
+		-- couronne de jets en arc : une buse de bronze sur le couronnement lance un filet d'eau (Beam courbé)
+		-- qui retombe en gerbe au pied du piédestal ; le ballet (plus bas) les allume par moitiés
+		local jets = {}
+		local nbJets = math.max(0, math.floor(R.jetsArc))
+		local yCouronne = 1.98 -- dessus du couronnement
+		local yEau = 1.42      -- surface de l'eau
+		local rChute = 2.4     -- les arcs retombent juste devant la base du piédestal
+		for k = 0, nbJets - 1 do
+			local a = (k + 0.5) * 2 * math.pi / nbJets
 			local dx, dz = math.cos(a), math.sin(a)
-			local bec = bloc(m, {
-				Name = "Bec",
-				Size = Vector3.new(0.7, 0.35, 0.45),
-				CFrame = CFrame.new(fx + dx * 1.6, 1.95, fz + dz * 1.6) * CFrame.Angles(0, -a, 0),
-				Color = TEINTES.ardoise,
-				Material = MAT.Slate,
+			local buse = bloc(m, {
+				Name = "Buse",
+				Size = Vector3.new(0.6, 0.4, 0.5),
+				CFrame = CFrame.new(fx + dx * (rf - 0.15), yCouronne + 0.2, fz + dz * (rf - 0.15)) * CFrame.Angles(0, -a, 0),
+				Color = TEINTES.bronze,
+				Material = MAT.Metal,
+				CanCollide = false,
 			})
-			if bec then
-				pcall(function()
-					local att = Instance.new("Attachment")
-					att.Name = "Filet"
-					att.Parent = bec
-					att.WorldCFrame = CFrame.lookAt(Vector3.new(fx + dx * 1.95, 1.95, fz + dz * 1.95), Vector3.new(fx + dx * 3, 2.3, fz + dz * 3))
-					local filet = Instance.new("ParticleEmitter")
-					filet.Name = "Eau"
-					filet.EmissionDirection = Enum.NormalId.Front
+			if buse and eau then
+				local ok = pcall(function()
+					local vers = Vector3.new(-dx, 0, -dz) -- vers le centre de la fontaine
+					local depart = Vector3.new(fx + dx * (rf - 0.45), yCouronne + 0.3, fz + dz * (rf - 0.45))
+					local arrivee = Vector3.new(fx + dx * rChute, yEau, fz + dz * rChute)
+					-- l'axe X d'une attache donne la tangente de la courbe : vers le haut au départ, vers le bas à l'arrivée
+					local montee = (vers * 0.55 + Vector3.new(0, 1, 0)).Unit
+					local descente = (vers * 0.35 - Vector3.new(0, 1, 0)).Unit
+					local a0 = Instance.new("Attachment")
+					a0.Name = "Depart"
+					a0.Parent = buse
+					a0.WorldCFrame = CFrame.lookAt(depart, depart + montee) * CFrame.Angles(0, math.rad(90), 0)
+					local a1 = Instance.new("Attachment")
+					a1.Name = "Chute" .. (k + 1)
+					a1.Parent = eau
+					a1.WorldCFrame = CFrame.lookAt(arrivee, arrivee + descente) * CFrame.Angles(0, math.rad(90), 0)
+					local filet = Instance.new("Beam")
+					filet.Name = "Jet"
+					filet.Attachment0 = a0
+					filet.Attachment1 = a1
+					filet.CurveSize0 = 2.4
+					filet.CurveSize1 = 1.4
+					filet.Width0 = 0.32
+					filet.Width1 = 0.2
+					filet.Segments = 14
+					filet.FaceCamera = true
+					filet.LightEmission = 0.35
+					filet.LightInfluence = 0.6
 					filet.Color = ColorSequence.new(lumiere(TEINTES.eau), Color3.new(1, 1, 1))
-					filet.Size = NumberSequence.new({
-						NumberSequenceKeypoint.new(0, 0.18),
-						NumberSequenceKeypoint.new(1, 0.35),
-					})
 					filet.Transparency = NumberSequence.new({
 						NumberSequenceKeypoint.new(0, 0.2),
-						NumberSequenceKeypoint.new(1, 0.8),
+						NumberSequenceKeypoint.new(0.8, 0.35),
+						NumberSequenceKeypoint.new(1, 0.7),
 					})
-					filet.Lifetime = NumberRange.new(0.45, 0.55)
-					filet.Rate = 30
-					filet.Speed = NumberRange.new(3, 3.4)
-					filet.SpreadAngle = Vector2.new(3, 3)
-					filet.Acceleration = Vector3.new(0, -18, 0)
-					filet.LightEmission = 0.2
-					filet.Parent = att
+					filet.Parent = buse
+					-- gerbe à l'arrivée : quelques gouttes qui rebondissent
+					local gerbe = Instance.new("ParticleEmitter")
+					gerbe.Name = "Gerbe"
+					gerbe.EmissionDirection = Enum.NormalId.Top
+					gerbe.Color = ColorSequence.new(Color3.new(1, 1, 1), lumiere(TEINTES.eau))
+					gerbe.Size = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 0.22),
+						NumberSequenceKeypoint.new(1, 0.08),
+					})
+					gerbe.Transparency = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 0.2),
+						NumberSequenceKeypoint.new(1, 1),
+					})
+					gerbe.Lifetime = NumberRange.new(0.3, 0.45)
+					gerbe.Rate = 8
+					gerbe.Speed = NumberRange.new(1.5, 3)
+					gerbe.SpreadAngle = Vector2.new(40, 40)
+					gerbe.Acceleration = Vector3.new(0, -22, 0)
+					gerbe.LightEmission = 0.3
+					gerbe.Parent = a1
+					table.insert(jets, { filet = filet, gerbe = gerbe })
 				end)
+				if not ok then
+					for _, enfant in ipairs(buse:GetChildren()) do enfant:Destroy() end
+				end
 			end
 		end
 
 		-- statue : repère tourné vers le sud (le dino regarde l'apparition), reculé d'un stud
 		local S = R.echelleStatue
-		local repere = CFrame.new(fx, yStatue, fz) * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, 0, 1)
+		local repere = CFrame.new(fx, yStatue, fz) * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, 0, 0.5)
 		local bronze = TEINTES.bronze
 		local bronzeOmbre = ombre(TEINTES.bronze)
 		local ventre = TEINTES.bronzeClair
@@ -391,7 +455,9 @@ function M.construire(ctx)
 		morceau("Pic", 0.4, 0.8, 1, 0, 4.5, -3.1, TEINTES.or_, 0, "coin")
 		morceau("Pic", 0.4, 0.8, 1, 0, 6.9, 1.9, TEINTES.or_, 0, "coin")
 
-		-- le jet : de la gueule, presque vertical, retombe dans le bassin
+		-- le jet : de la gueule, presque vertical, retombe dans le bassin ; le « bouquet » (éteint)
+		-- ne s'allume que pendant la grande gerbe du ballet
+		local jetStatue, bouquet, gerbeImpact = nil, nil, nil
 		if machoire then
 			local okJet = pcall(function()
 				local attache = Instance.new("Attachment")
@@ -417,6 +483,29 @@ function M.construire(ctx)
 				jet.Acceleration = Vector3.new(0, -20, 0)
 				jet.LightEmission = 0.2
 				jet.Parent = attache
+				jetStatue = jet
+
+				local b = Instance.new("ParticleEmitter")
+				b.Name = "Bouquet"
+				b.EmissionDirection = Enum.NormalId.Top
+				b.Color = ColorSequence.new(Color3.new(1, 1, 1), lumiere(TEINTES.eau))
+				b.Size = NumberSequence.new({
+					NumberSequenceKeypoint.new(0, 0.35),
+					NumberSequenceKeypoint.new(1, 0.7),
+				})
+				b.Transparency = NumberSequence.new({
+					NumberSequenceKeypoint.new(0, 0.1),
+					NumberSequenceKeypoint.new(1, 0.85),
+				})
+				b.Lifetime = NumberRange.new(1.1, 1.4)
+				b.Rate = 70
+				b.Speed = NumberRange.new(8, 10)
+				b.SpreadAngle = Vector2.new(16, 16)
+				b.Acceleration = Vector3.new(0, -18, 0)
+				b.LightEmission = 0.35
+				b.Enabled = false
+				b.Parent = attache
+				bouquet = b
 			end)
 			if not okJet then
 				local reste = machoire:FindFirstChild("Jet")
@@ -446,6 +535,7 @@ function M.construire(ctx)
 				gerbe.SpreadAngle = Vector2.new(35, 35)
 				gerbe.Acceleration = Vector3.new(0, -20, 0)
 				gerbe.Parent = impact
+				gerbeImpact = gerbe
 
 				-- scintillements à la surface du bassin
 				local surface = Instance.new("Attachment")
@@ -504,12 +594,58 @@ function M.construire(ctx)
 				})
 			end
 		end
+
+		-- ballet des jets (serveur, quelques propriétés par figure, répliquées aux clients) :
+		-- jets pairs, jets impairs, tous, puis grande gerbe (bouquet du dino, jet plus haut, gerbes fournies)
+		if #jets > 0 or jetStatue then
+			local cycle = math.max(1, R.cycleBallet)
+			local function allumer(pairs_, impairs_)
+				for i, j in ipairs(jets) do
+					local actif = impairs_
+					if i % 2 == 0 then actif = pairs_ end
+					j.filet.Enabled = actif
+					j.gerbe.Enabled = actif
+				end
+			end
+			task.spawn(function()
+				local figure = 0
+				while m.Parent and dossier.Parent do
+					figure = figure % 4 + 1
+					local ok = pcall(function()
+						if figure == 1 then
+							allumer(true, false)
+						elseif figure == 2 then
+							allumer(false, true)
+						else
+							allumer(true, true)
+						end
+						if figure == 4 then
+							if bouquet then bouquet.Enabled = true end
+							if jetStatue then jetStatue.Speed = NumberRange.new(8, 8.8) end
+							if gerbeImpact then gerbeImpact.Rate = 60 end
+						end
+					end)
+					if not ok then break end
+					if figure == 4 then
+						task.wait(math.min(1.8, cycle))
+						pcall(function()
+							if bouquet then bouquet.Enabled = false end
+							if jetStatue then jetStatue.Speed = NumberRange.new(6, 6.5) end
+							if gerbeImpact then gerbeImpact.Rate = 25 end
+						end)
+						task.wait(math.max(0.2, cycle - 1.8))
+					else
+						task.wait(cycle)
+					end
+				end
+			end)
+		end
 	end)
 
 	-- ===== 4. borne Dinodex au bord sud : coque Metal, écran Neon =====
 	etape("dinodex", function()
 		local m = Outils.modele(dossier, "Dinodex")
-		local bx, bz = CX, CZ + R.distanceBorne
+		local bx, bz = CX, CZ + D.borne
 		-- la borne regarde le nord (face avant -Z vers le centre de la Place)
 		local function ici(x, y, z)
 			return CFrame.new(bx + x, y, bz + z)
@@ -778,7 +914,6 @@ function M.construire(ctx)
 	-- ===== 5. bancs : lattes de bois sur pieds de métal =====
 	etape("bancs", function()
 		local m = Outils.modele(dossier, "Bancs")
-		local fontaine = Vector3.new(CX, 0, CZ - R.reculFontaine)
 		local bois = TEINTES.bois
 		local function banc(pos, cible)
 			-- l'avant (-Z local) regarde la cible
@@ -794,11 +929,10 @@ function M.construire(ctx)
 				bloc(m, { Name = "Montant", Size = Vector3.new(0.22, 1.7, 0.22), CFrame = dos * CFrame.new(sx, 2.05, 0.15), Color = TEINTES.metal, Material = MAT.Metal })
 			end
 		end
-		banc(autour(R.rayonBancs, 45), CENTRE)
-		banc(autour(R.rayonBancs, 135), CENTRE)
-		-- de part et d'autre de la fontaine, face à elle
-		banc(Vector3.new(CX - 8.5, 0, fontaine.Z), fontaine)
-		banc(Vector3.new(CX + 8.5, 0, fontaine.Z), fontaine)
+		-- seulement au sud-est (45°) et au sud-ouest (135°), tournés vers le centre : l'axe nord
+		-- (allée du Tapis) reste dégagé de part et d'autre de la margelle de la fontaine
+		banc(autour(D.bancs, 45), CENTRE)
+		banc(autour(D.bancs, 135), CENTRE)
 	end)
 
 	-- ===== 6. bacs à fleurs : terre cuite, rebord d'ardoise, buisson fleuri =====
@@ -831,13 +965,14 @@ function M.construire(ctx)
 				})
 			end
 		end
-		for _, a in ipairs({ 25, 155, 340 }) do
-			local p = autour(R.rayonFleurs, a)
+		-- 55° et 125° : entre les bancs et les lampadaires du sud ; 340° : côté Autel, hors des panneaux-flèches
+		for _, a in ipairs({ 55, 125, 340 }) do
+			local p = autour(D.fleurs, a)
 			bac(p.X, p.Z, a)
 		end
 		-- de part et d'autre de la borne Dinodex
-		bac(CX - 5.3, CZ + R.distanceBorne + 0.3, 0)
-		bac(CX + 5.3, CZ + R.distanceBorne + 0.3, 0)
+		bac(CX - 5.5, CZ + D.borne + 0.3, 0)
+		bac(CX + 5.5, CZ + D.borne + 0.3, 0)
 	end)
 
 	-- ===== 7. lampadaires (fonte sombre, lanterne chaude à ombres) =====
@@ -863,7 +998,7 @@ function M.construire(ctx)
 			end
 		end
 		for _, a in ipairs({ 45, 135, 235, 305 }) do
-			lampadaire(autour(R.rayonLampes, a))
+			lampadaire(autour(D.lampes, a))
 		end
 	end)
 

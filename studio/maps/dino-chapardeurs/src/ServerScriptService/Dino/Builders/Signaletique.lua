@@ -1,31 +1,47 @@
--- Constructeur Signaletique : panneaux-flèches en bois, finition « pro » (STYLE.md §4).
--- Chaque panneau : socle de pierre rond, poteau en bois coiffé d'une boule peinte, planche en WoodPlanks
--- aux bords biseautés côté arrière (coins) et pointe de flèche peinte côté destination (deux coins).
--- Sur chaque face, une plaque peinte en dégradé, cerclée de noir, avec reflet, clous et texte blanc cerné.
--- Sur la Place, quatre panneaux-flèches : Boutique (Comptoir, ouest, orange), Renaissance (Autel, est, violet),
--- Dinos à vendre (Tapis, nord, rouge), Dinodex (borne, sud, bleu). Au-dessus de chacun, un titre géant flottant.
--- Au début du Tapis « NURSERIE → », à la fin « GRANDE PORTE → », de chaque côté du Tapis.
--- Au nord de la Place, face aux joueurs qui apparaissent, un tableau des règles à toit de bardeaux.
--- Les flèches du texte sont recalculées pour chaque face : elles pointent toujours dans la bonne direction.
--- Emprise (CONTRAT §10) : Place (hors secteur du tableau d'honneur) et bouts du Tapis.
+-- Constructeur Signaletique (plan v2 « plus d'air ») : panneaux-flèches en bois, finition « pro » (STYLE.md §4).
+-- Chaque panneau : socle de pierre rond, poteau en bois coiffé d'une petite gemme Neon qui « respire »,
+-- planche en WoodPlanks aux bords biseautés côté arrière (coins) et pointe de flèche peinte côté destination.
+-- Sur chaque face, une plaque peinte en dégradé, cerclée de noir, avec reflet, clous et texte blanc cerné ;
+-- les flèches du texte sont recalculées pour chaque face : elles pointent toujours dans la bonne direction.
+-- Placement (tout est lu dans Plan.lua, aucune coordonnée en dur) :
+--   * Place : Boutique et Renaissance au bord de la Place, sur le côté sud du lien vers le Comptoir / l'Autel
+--     (le côté nord de l'ouest est au tableau d'honneur) ; Dinos à l'est de l'entrée nord, dans
+--     l'alignement de la torche nord-est et du lampadaire (hors de l'entrée et de la margelle) ; Dinodex entre l'apparition
+--     et la borne. Distances en fractions de Plan.place.rayon.
+--   * bouts du Tapis : « ← NURSERIE » et « GRANDE PORTE → » des deux côtés, au bord extérieur de la
+--     promenade (|z| = Plan.promenade.zMax - bordPromenade), sur le côté des demi-lunes, un peu au-delà des
+--     bouts du Tapis : hors des contre-allées, des disques Nurserie / Grande Porte et loin des torches ;
+--     la promenade reste entièrement libre de |z| = 11 à 23 sur toute sa longueur.
+--   * entrée des allées centrales (Plan.allees) : le long du mur est, juste après le coin des Bases, « PLACE »
+--     au sud et « CRATÈRE » au nord ; le milieu de l'allée et la promenade restent libres.
+--   * tableau des règles à toit de bardeaux : sur l'herbe au nord-est de la Place, entre son anneau et le
+--     chemin de ronde des Bases, tourné vers le centre de la Place.
+-- Emprise (CONTRAT §10) : Place et ses abords, bouts du Tapis, entrées des allées (props en bordure seulement).
 local M = {}
 
-local BUDGET = 120 -- parts au maximum pour ce constructeur
+local BUDGET = 120 -- parts au maximum pour ce constructeur (≈ 102 utilisées)
 
--- valeurs par défaut, remplaçables par Equilibrage.signaletique
+-- valeurs par défaut, remplaçables par Equilibrage.signaletique (distances, jamais de position)
 local DEFAUTS = {
 	largeurFleche = 9,      -- largeur d'une planche indicatrice
-	reculBoutPlace = 17,    -- distance des panneaux Boutique / Renaissance au centre (sur l'axe est-ouest)
-	decalageAllee = 6.5,    -- décalage vers le sud : allées libres, et hors du champ du tableau d'honneur (z > 106)
-	tapisX = 6.5,           -- panneau vers le Tapis : décalage est (hors de la margelle de la fontaine, rayon 5,45)
-	tapisRecul = 17.5,      -- ... et distance au nord du centre
-	dinodexX = -4.5,        -- panneau vers le Dinodex : décalage ouest
-	dinodexRecul = 8.5,     -- ... et distance au sud du centre
-	distanceBorne = 16.5,   -- position de la borne si elle est introuvable
-	bordTapis = 6,          -- écart entre le rebord du Tapis et les panneaux des bouts
-	retraitTapis = 3,       -- retrait des panneaux vers l'intérieur du Tapis
-	reglesX = 16,           -- grand panneau des règles : décalage est
-	reglesRecul = 29,       -- ... et distance au nord du centre (entre la Place et les Bases)
+	-- Place (« × rayon » : fractions de Plan.place.rayon)
+	reculLien = 1,          -- × rayon : panneaux Boutique / Renaissance, du centre vers le Comptoir / l'Autel
+	gardeLien = 7.2,        -- décalage vers le sud depuis l'axe du lien (bord du chemin de sable)
+	tapisX = 0.65,          -- × rayon : panneau vers le Tapis, décalage est (x ≈ 14 : à l'est de la torche nord-est
+	                        -- et du lampadaire à 305°, hors de l'entrée nord et loin de la margelle de la fontaine)
+	tapisRecul = 0.875,     -- × rayon : ... et distance au nord du centre (z ≈ 92,75 : talon à ~3 du lampadaire)
+	dinodexX = -0.2,        -- × rayon : panneau vers le Dinodex, décalage ouest (hors de l'apparition)
+	dinodexRecul = 0.39,    -- × rayon : ... et distance au sud du centre
+	distanceBorne = 0.83,   -- × rayon : position de la borne Dinodex si elle est introuvable
+	-- bouts du Tapis
+	bordPromenade = 2.2,    -- poteau à cette distance du bord extérieur de la promenade (socle hors des galets)
+	reculBout = 4,          -- poteau à cette distance au-delà du bout du Tapis, sur le côté de la demi-lune
+	-- entrée des allées
+	reculAllee = 0.5,       -- le talon du panneau commence à cette distance après le coin des Bases (dans l'allée)
+	retraitAllee = 3,       -- distance entre le mur de la Base et le poteau (hors des piliers d'angle)
+	-- tableau des règles (« × rayon » depuis le centre de la Place)
+	reglesX = 1.4,          -- × rayon : décalage est
+	reglesRecul = 0.62,     -- × rayon : distance au nord
 	reglesLargeur = 12,
 	reglesHauteur = 6,
 	reglesBas = 3,          -- hauteur du bas du panneau
@@ -37,7 +53,7 @@ local HAUTEUR_PLANCHE = 2.6
 local EPAISSEUR_PLANCHE = 0.7
 local LONGUEUR_POINTE = 1.6   -- pointe de flèche (côté destination)
 local BISEAU = 0.55           -- coins coupés (côté arrière)
-local PARTS_FLECHE = 9        -- socle, poteau, boule, planche, talon, 2 biseaux, 2 demi-pointes
+local PARTS_FLECHE = 9        -- socle, poteau, gemme, planche, talon, 2 biseaux, 2 demi-pointes
 local PIXELS_PAR_STUD = 40
 
 local function lireReglages(ctx)
@@ -64,14 +80,18 @@ function M.construire(ctx)
 	local Charte = ctx.Charte
 	local Outils = ctx.Outils
 	local Style = ctx.Style
-	local Plan = ctx.Plan
+	local Plan = ctx.Plan or {}
 	local E = ctx.Equilibrage or {}
 	local dossier = ctx.dossier
 	local R = lireReglages(ctx)
 
-	local infoPlace = Plan.place or {}
-	local CENTRE = infoPlace.centre or Vector3.new(0, 0, 100)
-	local CX, CZ = CENTRE.X, CENTRE.Z
+	-- la Place (centre et rayon) : sans elle, pas de panneaux de Place ni de règles
+	local infoPlace = Plan.place
+	local placeOk = type(infoPlace) == "table" and typeof(infoPlace.centre) == "Vector3" and type(infoPlace.rayon) == "number"
+	local CX, CZ, RAYON = 0, 0, 0
+	if placeOk then
+		CX, CZ, RAYON = infoPlace.centre.X, infoPlace.centre.Z, infoPlace.rayon
+	end
 
 	local NOIR = Charte.encre
 	local BLANC = Charte.creme
@@ -83,12 +103,10 @@ function M.construire(ctx)
 	-- bois en trois teintes (base, ombre, lumière) et pierre des socles
 	local BOIS = Charte.bois
 	local BOIS_SOMBRE = Charte.ombre(Charte.bois)
-	local BOIS_CLAIR = Charte.lumiere(Charte.bois)
 	local PIERRE = Charte.lumiere(Charte.pierre)
 	local MAT_PLANCHES = Enum.Material.WoodPlanks
 	local MAT_BOIS = Enum.Material.Wood
 	local MAT_PIERRE = Enum.Material.Slate
-	local METAL = Charte.ombre(Charte.pierre)
 
 	-- palette { haut, bas } d'une couleur de bouton (Style.boutons), avec repli sur la Charte
 	local function palette(nom, repli)
@@ -238,7 +256,7 @@ function M.construire(ctx)
 	end
 
 	-- panneau-flèche : poteau de bois, planche en WoodPlanks orientée vers la destination,
-	-- talon biseauté à l'arrière, pointe peinte au bout, titre flottant
+	-- talon biseauté à l'arrière, pointe peinte au bout, gemme lumineuse au sommet du poteau
 	-- info : { nom, titre, droite, gauche, couleurs = { haut, bas } }
 	local function fleche(parent, info, position, direction)
 		local d = Vector3.new(direction.X, 0, direction.Z)
@@ -278,15 +296,16 @@ function M.construire(ctx)
 			Color = BOIS_SOMBRE,
 			Material = MAT_BOIS,
 		})
-		-- boule peinte au sommet du poteau
-		Outils.boule(m, {
+		-- gemme Neon aux couleurs de la destination, qui « respire » doucement (client, Interface/AnimationsDecor)
+		local gemme = Outils.boule(m, {
 			Name = "Boule",
-			Size = Vector3.new(0.9, 0.9, 0.9),
-			CFrame = CFrame.new(x, y0 + hPoteau + 0.3, z),
-			Color = couleurs[2],
-			Material = MAT_BOIS,
+			Size = Vector3.new(0.95, 0.95, 0.95),
+			CFrame = CFrame.new(x, y0 + hPoteau + 0.35, z),
+			Color = couleurs[1],
+			Material = Enum.Material.Neon,
 			CanCollide = false,
 		})
+		Outils.animer(gemme, "pulse", 1.6)
 
 		local planche = Outils.bloc(m, {
 			Name = "Planche",
@@ -357,8 +376,7 @@ function M.construire(ctx)
 			end)
 		end
 
-		-- titre flottant facultatif : discret, juste au-dessus de la planche (sous la boule du poteau).
-		-- Les panneaux de la Place n'en portent plus : la borne, le Comptoir et la fontaine ont déjà le leur.
+		-- titre flottant facultatif : discret, juste au-dessus de la gemme
 		if info.titre then
 			titreFlottant(planche, {
 				{ texte = info.titre, couleur = couleurs[1], titre = true, contour = 4 },
@@ -366,128 +384,205 @@ function M.construire(ctx)
 				Name = "Titre",
 				largeur = 9,
 				hauteurLigne = 1.6,
-				StudsOffset = Vector3.new(0, 2.2, 0),
-				MaxDistance = 70,
+				StudsOffset = Vector3.new(0, 2.6, 0),
+				MaxDistance = 90,
 			})
 		end
 		return m
 	end
 
+	-- longueur du panneau derrière le poteau (talon compris)
+	local DEMI_ARRIERE = R.largeurFleche / 2 + BISEAU
+
 	-- ===== 1. panneaux-flèches sur la Place =====
-	etape("place", function()
-		local m = Outils.modele(dossier, "Place")
+	if placeOk then
+		etape("place", function()
+			local m = Outils.modele(dossier, "Place")
 
-		-- Boutique : façade du Comptoir, ouverte vers la Place (+X)
-		local cibleComptoir = Vector3.new(CX - 50, 0, CZ + 4)
-		if Plan.comptoir and Plan.comptoir.centre then
-			local demiLargeur = 13
-			if Plan.comptoir.taille then
-				demiLargeur = Plan.comptoir.taille.X / 2
+			-- Boutique : façade du Comptoir, ouverte vers la Place (+X) ; panneau au bord sud du lien
+			if Plan.comptoir and typeof(Plan.comptoir.centre) == "Vector3" then
+				local demiLargeur = 0
+				if typeof(Plan.comptoir.taille) == "Vector3" then
+					demiLargeur = Plan.comptoir.taille.X / 2
+				end
+				local cible = Plan.comptoir.centre + Vector3.new(demiLargeur, 0, 0)
+				local sensX = 1
+				if cible.X < CX then
+					sensX = -1
+				end
+				local pos = Vector3.new(CX + sensX * RAYON * R.reculLien, 0, Plan.comptoir.centre.Z + R.gardeLien)
+				fleche(m, {
+					nom = "VersBoutique",
+					droite = "BOUTIQUE →",
+					gauche = "← BOUTIQUE",
+					couleurs = palette("orange", Charte.lave),
+				}, pos, cible - pos)
 			end
-			cibleComptoir = Plan.comptoir.centre + Vector3.new(demiLargeur, 0, 0)
-		end
-		local posBoutique = Vector3.new(CX - R.reculBoutPlace, 0, CZ + R.decalageAllee)
-		fleche(m, {
-			nom = "VersBoutique",
-			droite = "BOUTIQUE →",
-			gauche = "← BOUTIQUE",
-			couleurs = palette("orange", Charte.lave),
-		}, posBoutique, cibleComptoir - posBoutique)
 
-		-- Renaissance : l'Autel, à l'est
-		local cibleAutel = Vector3.new(CX + 50, 0, CZ + 4)
-		if Plan.autel and Plan.autel.centre then
-			cibleAutel = Plan.autel.centre
-		end
-		local posAutel = Vector3.new(CX + R.reculBoutPlace, 0, CZ + R.decalageAllee)
-		fleche(m, {
-			nom = "VersRenaissance",
-			droite = "RENAISSANCE →",
-			gauche = "← RENAISSANCE",
-			couleurs = palette("violet", Charte.violet),
-		}, posAutel, cibleAutel - posAutel)
-
-		-- Tapis : vers le nord, par l'allée centrale
-		local cibleTapis = Vector3.new(CX, 0, 0)
-		if Plan.tapis and Plan.tapis.debut and Plan.tapis.fin then
-			local milieu = (Plan.tapis.debut + Plan.tapis.fin) / 2
-			cibleTapis = Vector3.new(CX, 0, milieu.Z)
-		end
-		local posTapis = Vector3.new(CX + R.tapisX, 0, CZ - R.tapisRecul)
-		fleche(m, {
-			nom = "VersTapis",
-			droite = "DINOS →",
-			gauche = "← DINOS",
-			couleurs = palette("rouge", Charte.tapis),
-		}, posTapis, cibleTapis - posTapis)
-
-		-- Dinodex : la borne au bord sud de la Place (position réelle si elle existe)
-		local cibleBorne = Vector3.new(CX, 0, CZ + R.distanceBorne)
-		local place = ctx.racine and ctx.racine:FindFirstChild("Place")
-		local borne = place and place:FindFirstChild("Dinodex")
-		if borne and borne:IsA("Model") then
-			local ok, pivot = pcall(function()
-				return borne:GetPivot()
-			end)
-			if ok and pivot then
-				cibleBorne = Vector3.new(pivot.Position.X, 0, pivot.Position.Z)
+			-- Renaissance : l'Autel ; panneau au bord sud du lien (symétrique de la Boutique)
+			if Plan.autel and typeof(Plan.autel.centre) == "Vector3" then
+				local cible = Plan.autel.centre
+				local sensX = 1
+				if cible.X < CX then
+					sensX = -1
+				end
+				local pos = Vector3.new(CX + sensX * RAYON * R.reculLien, 0, cible.Z + R.gardeLien)
+				fleche(m, {
+					nom = "VersRenaissance",
+					droite = "RENAISSANCE →",
+					gauche = "← RENAISSANCE",
+					couleurs = palette("violet", Charte.violet),
+				}, pos, cible - pos)
 			end
-		end
-		local posDinodex = Vector3.new(CX + R.dinodexX, 0, CZ + R.dinodexRecul)
-		fleche(m, {
-			nom = "VersDinodex",
-			droite = "DINODEX →",
-			gauche = "← DINODEX",
-			couleurs = palette("bleu", Charte.gemme),
-		}, posDinodex, cibleBorne - posDinodex)
-	end)
 
-	-- ===== 2. les deux bouts du Tapis (des deux côtés) =====
-	etape("tapis", function()
-		local m = Outils.modele(dossier, "Tapis")
-		local tapis = Plan.tapis or {}
-		local debut = tapis.debut or Vector3.new(-112, 0, 0)
-		local fin = tapis.fin or Vector3.new(112, 0, 0)
-		local sens = fin - debut
-		if sens.Magnitude < 0.01 then
-			sens = Vector3.new(1, 0, 0)
-		end
-		sens = Vector3.new(sens.X, 0, sens.Z).Unit
-		local cote = Vector3.new(-sens.Z, 0, sens.X) -- perpendiculaire au Tapis, dans le plan
-		local ecart = (tapis.largeur or 10) / 2 + R.bordTapis
+			-- Tapis : vers le nord, par l'allée centrale (à côté de la fontaine)
+			if Plan.tapis and typeof(Plan.tapis.debut) == "Vector3" and typeof(Plan.tapis.fin) == "Vector3" then
+				local milieu = (Plan.tapis.debut + Plan.tapis.fin) / 2
+				local cible = Vector3.new(CX, 0, milieu.Z)
+				local versNord = 1
+				if milieu.Z < CZ then
+					versNord = -1
+				end
+				local pos = Vector3.new(CX + RAYON * R.tapisX, 0, CZ + versNord * RAYON * R.tapisRecul)
+				fleche(m, {
+					nom = "VersTapis",
+					droite = "DINOS →",
+					gauche = "← DINOS",
+					couleurs = palette("rouge", Charte.tapis),
+				}, pos, cible - pos)
+			end
 
-		for _, s in ipairs({ 1, -1 }) do
-			-- début : les dinos sortent de la Nurserie et partent dans le sens du Tapis
-			local posDebut = debut + sens * R.retraitTapis + cote * (ecart * s)
+			-- Dinodex : la borne au bord sud de la Place (position réelle si elle existe)
+			local cibleBorne = Vector3.new(CX, 0, CZ + RAYON * R.distanceBorne)
+			local place = ctx.racine and ctx.racine:FindFirstChild("Place")
+			local borne = place and place:FindFirstChild("Dinodex", true)
+			if borne and borne:IsA("Model") then
+				local ok, pivot = pcall(function()
+					return borne:GetPivot()
+				end)
+				if ok and pivot then
+					cibleBorne = Vector3.new(pivot.Position.X, 0, pivot.Position.Z)
+				end
+			end
+			local posDinodex = Vector3.new(CX + RAYON * R.dinodexX, 0, CZ + RAYON * R.dinodexRecul)
 			fleche(m, {
-				nom = "Nurserie",
-				droite = "NURSERIE →",
-				gauche = "← NURSERIE",
-				couleurs = palette("vert", Charte.herbe),
-			}, Vector3.new(posDebut.X, 0, posDebut.Z), sens)
+				nom = "VersDinodex",
+				droite = "DINODEX →",
+				gauche = "← DINODEX",
+				couleurs = palette("bleu", Charte.gemme),
+			}, posDinodex, cibleBorne - posDinodex)
+		end)
+	end
 
-			-- fin : les dinos invendus passent la Grande Porte
-			local posFin = fin - sens * R.retraitTapis + cote * (ecart * s)
-			fleche(m, {
-				nom = "GrandePorte",
-				droite = "GRANDE PORTE →",
-				gauche = "← GRANDE PORTE",
-				couleurs = palette("jaune", Charte.dore),
-			}, Vector3.new(posFin.X, 0, posFin.Z), sens)
-		end
-	end)
+	-- ===== 2. les deux bouts du Tapis (des deux côtés, au bord extérieur de la promenade) =====
+	local tapis = Plan.tapis
+	if type(tapis) == "table" and typeof(tapis.debut) == "Vector3" and typeof(tapis.fin) == "Vector3" then
+		etape("tapis", function()
+			local m = Outils.modele(dossier, "Tapis")
+			local debut, fin = tapis.debut, tapis.fin
+			local sens = Vector3.new(fin.X - debut.X, 0, fin.Z - debut.Z)
+			if sens.Magnitude < 0.01 then
+				return
+			end
+			sens = sens.Unit
+			local cote = Vector3.new(-sens.Z, 0, sens.X) -- perpendiculaire au Tapis, dans le plan
+			-- bord extérieur de la promenade (côté façade des Bases) : la bande où l'on circule reste libre
+			local zPromenade = nil
+			if type(Plan.promenade) == "table" and type(Plan.promenade.zMax) == "number" then
+				zPromenade = Plan.promenade.zMax
+			else
+				local emprise = tapis.emprise
+				if type(emprise) ~= "number" then
+					emprise = (tapis.largeur or 0) / 2 + 2.5
+				end
+				zPromenade = emprise + 17.5
+			end
+			local ecart = zPromenade - R.bordPromenade
 
-	-- ===== 3. tableau des règles, face à la Place =====
-	-- entre la Place et l'arrière des Bases du sud, visible dès l'apparition (on regarde vers le nord)
+			for _, s in ipairs({ 1, -1 }) do
+				-- début : la flèche montre la Nurserie (d'où sortent les dinos) ; poteau au-delà du bout du Tapis,
+				-- hors de l'embouchure de la contre-allée qui longe la dernière Base
+				local posDebut = debut - sens * R.reculBout + cote * (ecart * s)
+				fleche(m, {
+					nom = "Nurserie",
+					droite = "NURSERIE →",
+					gauche = "← NURSERIE",
+					couleurs = palette("vert", Charte.herbe),
+				}, Vector3.new(posDebut.X, 0, posDebut.Z), -sens)
+
+				-- fin : les dinos invendus passent la Grande Porte
+				local posFin = fin + sens * R.reculBout + cote * (ecart * s)
+				fleche(m, {
+					nom = "GrandePorte",
+					droite = "GRANDE PORTE →",
+					gauche = "← GRANDE PORTE",
+					couleurs = palette("jaune", Charte.dore),
+				}, Vector3.new(posFin.X, 0, posFin.Z), sens)
+			end
+		end)
+	end
+
+	-- ===== 3. entrée des allées centrales, côté promenade =====
+	-- l'allée la plus proche de la Place (au sud) mène à la Place, celle la plus proche du Cratère (au nord) au Cratère
+	local allees = Plan.allees
+	if type(allees) == "table" and type(allees.x) == "table" and #allees.x > 0 and type(allees.zMin) == "number" then
+		etape("allees", function()
+			local m = Outils.modele(dossier, "Allees")
+			local demi = (allees.largeur or 0) / 2
+			local zAxe = 0
+			if tapis and typeof(tapis.debut) == "Vector3" and typeof(tapis.fin) == "Vector3" then
+				zAxe = (tapis.debut.Z + tapis.fin.Z) / 2
+			end
+
+			local function plusProche(xCible)
+				local meilleur = allees.x[1]
+				for _, xa in ipairs(allees.x) do
+					if math.abs(xa - xCible) < math.abs(meilleur - xCible) then
+						meilleur = xa
+					end
+				end
+				return meilleur
+			end
+
+			-- panneau le long du mur est de l'allée, juste après le coin des Bases, la flèche vers le fond de l'allée
+			local function entree(nom, cible, texteDestination, couleurs)
+				local s = 1
+				if cible.Z < zAxe then
+					s = -1
+				end
+				local xa = plusProche(cible.X)
+				local pos = Vector3.new(xa + demi - R.retraitAllee, 0, zAxe + s * (allees.zMin + R.reculAllee + DEMI_ARRIERE))
+				fleche(m, {
+					nom = nom,
+					droite = texteDestination .. " →",
+					gauche = "← " .. texteDestination,
+					couleurs = couleurs,
+				}, pos, Vector3.new(0, 0, s))
+			end
+
+			if placeOk then
+				entree("VersPlace", infoPlace.centre, "PLACE", palette("rose", Charte.alerte))
+			end
+			if Plan.cratere and typeof(Plan.cratere.centre) == "Vector3" then
+				entree("VersCratere", Plan.cratere.centre, "CRATÈRE", palette("orange", Charte.lave))
+			end
+		end)
+	end
+
+	-- ===== 4. tableau des règles, au nord-est de la Place =====
+	-- sur l'herbe entre l'anneau de la Place et le chemin de ronde des Bases, tourné vers le centre de la Place
+	if not placeOk then
+		dossier:SetAttribute("Parts", nbParts)
+		return
+	end
 	etape("regles", function()
 		local m = Outils.modele(dossier, "Regles")
 		local L = R.reglesLargeur
 		local H = R.reglesHauteur
 		local bas = R.reglesBas
-		local px, pz = CX + R.reglesX, CZ - R.reglesRecul
-		-- repère au sol, face avant du panneau (-Z local) tournée vers la Place (plein sud),
-		-- parallèle à l'arrière des Bases pour ne pas déborder sur elles
-		local repere = CFrame.lookAt(Vector3.new(px, 0, pz), Vector3.new(px, 0, CZ))
+		local px, pz = CX + RAYON * R.reglesX, CZ - RAYON * R.reglesRecul
+		-- repère au sol, face avant du panneau (-Z local) tournée vers le centre de la Place
+		local repere = CFrame.lookAt(Vector3.new(px, 0, pz), Vector3.new(CX, 0, CZ))
 		local function ici(x, y, z)
 			return repere * CFrame.new(x, y, z)
 		end
@@ -575,7 +670,7 @@ function M.construire(ctx)
 			local l = Outils.lumiere(lampe, { Range = 12, Brightness = 1.2, Color = Charte.dore })
 			l.Shadows = true
 		end
-		-- œuf doré qui flotte au-dessus du faîtage
+		-- œuf doré qui flotte au-dessus du faîtage, entouré de quelques étincelles
 		local yOeuf = yToit + hToit + 1.5
 		local oeuf = boule(m, {
 			Name = "Oeuf",
@@ -588,6 +683,23 @@ function M.construire(ctx)
 		if oeuf then
 			Outils.animer(oeuf, "flotte", 0.7)
 			Outils.lumiere(oeuf, { Range = 14, Brightness = 1, Color = Charte.dore })
+			local ok, err = pcall(function()
+				local e = Instance.new("ParticleEmitter")
+				e.Name = "Etincelles"
+				e.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+				e.Color = ColorSequence.new(Charte.dore, Charte.creme)
+				e.LightEmission = 1
+				e.Rate = 3
+				e.Lifetime = NumberRange.new(1, 1.6)
+				e.Speed = NumberRange.new(0.4, 1)
+				e.SpreadAngle = Vector2.new(180, 180)
+				e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 0) })
+				e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+				e.Parent = oeuf
+			end)
+			if not ok then
+				warn("[Dino] Signaletique / étincelles : " .. tostring(err))
+			end
 		end
 		if not planche then
 			return

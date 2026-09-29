@@ -38,8 +38,14 @@ function M.construire(ctx)
 		return defaut
 	end
 
-	local infoCratere = Plan.cratere or {}
-	local CENTRE = infoCratere.centre or Vector3.new(0, 0, -96)
+	-- tout vient du plan (v2 : Plan.cratere) ; aucune coordonnée du décor n'est écrite ici
+	local infoCratere = Plan.cratere
+	if type(infoCratere) ~= "table" or typeof(infoCratere.centre) ~= "Vector3" then
+		warn("[Cratere] Plan.cratere absent : cratère non construit")
+		dossier:SetAttribute("Parts", 0)
+		return
+	end
+	local CENTRE = infoCratere.centre
 	local RAYON = infoCratere.rayon or 16
 	local CX, CZ = CENTRE.X, CENTRE.Z
 	local rng = Outils.aleatoire(reglage("graine", 1996))

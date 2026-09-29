@@ -1,15 +1,19 @@
--- Constructeur Autel : l'Autel des Renaissances, à l'est de la Place (version 2, rendu soigné).
+-- Constructeur Autel : l'Autel des Renaissances, à l'est de la Place (plan v2 « plus d'air »).
 -- Un temple ancien : parvis rond en ardoise cerclé de Neon violet et de runes, trois gradins de marbre
 -- à plinthes d'ardoise, un tapis violet qui monte vers la table de l'autel, un œuf fossile en or
 -- (métal réfléchissant) qui flotte dans un halo au milieu de cristaux en orbite, six colonnes
 -- de marbre aux arêtes arrondies gravées de runes Neon, un fronton « RENAISSANCE » à pignon
--- tourné vers la Place (-X), des bannières et deux braseros à flammes violettes.
+-- tourné vers la Place, des bannières et deux braseros à flammes violettes.
+-- Animations (client, Interface/AnimationsDecor) : l'œuf flotte, deux anneaux d'éclats tournent en sens
+-- contraires, les runes pulsent en vagues ; le serveur fait « battre » l'œuf de loin en loin (gerbe
+-- d'étincelles et éclair violet, quelques dixièmes de seconde toutes les 9 à 15 s).
 -- L'invite « Renaissance » est posée sans rappel : le client ouvre le panneau (Client.client.lua)
 -- et Systemes/Renaissance traite la demande réseau.
--- Emprise (CONTRAT §10) : disque r11 autour de Plan.autel.centre.
+-- Emprise (CONTRAT §10) : disque r11 autour de Plan.autel.centre ; l'orientation (façade vers la Place)
+-- se déduit de Plan.place.centre, aucune coordonnée en dur.
 local M = {}
 
-local BUDGET = 220 -- parts au maximum pour ce constructeur
+local BUDGET = 250 -- parts au maximum pour ce constructeur
 
 -- valeurs par défaut, remplaçables par Equilibrage.autel
 local DEFAUTS = {
@@ -20,6 +24,7 @@ local DEFAUTS = {
 	vitessePulse = 2,        -- vitesse de pulsation des Neon
 	distanceInvite = 12,     -- portée de l'invite « Renaissance »
 	graine = 1104,           -- graine du hasard (légères variations des runes)
+	pouls = 12,              -- secondes (en moyenne) entre deux battements de l'œuf
 }
 
 local function lireReglages(ctx)
@@ -74,8 +79,25 @@ function M.construire(ctx)
 
 	local R = lireReglages(ctx)
 	local C = Vector3.new(Plan.autel.centre.X, 0, Plan.autel.centre.Z)
-	-- repère local : -Z local = vers la Place (-X monde), Y vers le haut
-	local repere = CFrame.lookAt(C, C + Vector3.new(-1, 0, 0))
+	-- repère local : -Z local = vers la Place, Y vers le haut. La direction suit l'axe principal
+	-- (X ou Z) qui mène à la Place : la façade reste alignée sur le chemin qui y conduit (Builders/Sol).
+	local versPlace = Vector3.new(-1, 0, 0)
+	if Plan.place and typeof(Plan.place.centre) == "Vector3" then
+		local dx = Plan.place.centre.X - C.X
+		local dz = Plan.place.centre.Z - C.Z
+		local function signe(v)
+			if v < 0 then
+				return -1
+			end
+			return 1
+		end
+		if math.abs(dx) >= math.abs(dz) and math.abs(dx) > 0.5 then
+			versPlace = Vector3.new(signe(dx), 0, 0)
+		elseif math.abs(dz) > 0.5 then
+			versPlace = Vector3.new(0, 0, signe(dz))
+		end
+	end
+	local repere = CFrame.lookAt(C, C + versPlace)
 
 	local Style = ctx.Style
 	local M_NEON = Enum.Material.Neon
@@ -246,7 +268,8 @@ function M.construire(ctx)
 				CastShadow = false,
 			})
 			if nez then
-				Outils.animer(nez, "pulse", R.vitessePulse)
+				-- vitesses décalées d'une marche à l'autre : la lumière semble monter vers l'œuf
+				Outils.animer(nez, "pulse", R.vitessePulse * (0.8 + 0.25 * i))
 			end
 			hautAutel = hautAutel + h
 		end
@@ -495,6 +518,120 @@ function M.construire(ctx)
 			orbite.WorldPivot = loc(0, yc, 0)
 		end)
 		Outils.animer(orbite, "tourne", 0.5)
+
+		-- second anneau : poussière d'or plus serrée, qui tourne en sens contraire, un peu plus bas
+		local poussiere = Outils.modele(modele, "OrbitePoussiere")
+		for i = 0, 7 do
+			local a = math.rad(i * 45 + 22.5)
+			bloc(poussiere, {
+				Name = "Paillette",
+				Size = Vector3.new(0.35, 0.35, 0.35),
+				CFrame = loc(math.cos(a) * 3.3, yc - 2.4, math.sin(a) * 3.3) * CFrame.Angles(math.rad(45), a, math.rad(45)),
+				Color = OR_CLAIR,
+				Material = M_NEON,
+				CanCollide = false,
+				CanQuery = false,
+				CastShadow = false,
+			})
+		end
+		pcall(function()
+			poussiere.WorldPivot = loc(0, yc - 2.4, 0)
+		end)
+		Outils.animer(poussiere, "tourne", -0.9)
+
+		-- taches violettes de l'œuf (un vrai œuf de dino), elles suivent l'œuf qui flotte
+		for i = 0, 3 do
+			local a = math.rad(i * 90 + 40)
+			-- en haut sur le ventre (rayon 2,2), en bas sur la coque (rayon 2,5) ; la tache dépasse un peu
+			local dy, r = 0.6, 1.95
+			if i % 2 == 1 then
+				dy, r = -1.2, 2.25
+			end
+			local pos = loc(math.cos(a) * r, yc + dy, math.sin(a) * r).Position
+			boule(oeuf, {
+				Name = "Tache",
+				Size = Vector3.new(1.1, 1.1, 1.1),
+				CFrame = CFrame.new(pos),
+				Color = VIOLET_CLAIR,
+				Material = Enum.Material.SmoothPlastic,
+				CanCollide = false,
+				CanQuery = false,
+			})
+		end
+
+		-- colonne de lumière douce entre le sceau de l'autel et l'œuf
+		local bas_ = hautAutel + 2.4
+		local haut_ = yc - 2.2
+		if haut_ - bas_ > 0.5 then
+			local rayonLumiere = cylindre(modele, {
+				Name = "RayonLumiere",
+				Size = Vector3.new(haut_ - bas_, 1.3, 1.3),
+				CFrame = vertical(loc(0, (bas_ + haut_) / 2, 0)),
+				Color = VIOLET_CLAIR,
+				Material = M_NEON,
+				Transparency = 0.55,
+				CanCollide = false,
+				CanQuery = false,
+				CanTouch = false,
+				CastShadow = false,
+			})
+			if rayonLumiere then
+				Outils.animer(rayonLumiere, "pulse", R.vitessePulse * 1.3)
+				-- particules qui montent doucement vers l'œuf
+				pcall(function()
+					local monte = Instance.new("ParticleEmitter")
+					monte.Name = "Montee"
+					monte.Color = ColorSequence.new(VIOLET_CLAIR, OR_CLAIR)
+					monte.LightEmission = 1
+					monte.Size = NumberSequence.new(0.25, 0)
+					monte.Transparency = NumberSequence.new(0.2, 1)
+					monte.Lifetime = NumberRange.new(1.2, 1.8)
+					monte.Rate = 6
+					monte.Speed = NumberRange.new(1.5, 2.5)
+					monte.SpreadAngle = Vector2.new(8, 8)
+					monte.EmissionDirection = Enum.NormalId.Right -- axe du cylindre = vers le haut
+					monte.Parent = rayonLumiere
+				end)
+			end
+		end
+
+		-- battement : de loin en loin, une gerbe d'étincelles et un éclair violet (quelques dixièmes de seconde)
+		if halo then
+			pcall(function()
+				local gerbe = Instance.new("ParticleEmitter")
+				gerbe.Name = "Battement"
+				gerbe.Color = ColorSequence.new(VIOLET_CLAIR, Charte.gemme)
+				gerbe.LightEmission = 1
+				gerbe.Size = NumberSequence.new(0.6, 0)
+				gerbe.Transparency = NumberSequence.new(0, 1)
+				gerbe.Lifetime = NumberRange.new(0.8, 1.4)
+				gerbe.Rate = 70
+				gerbe.Speed = NumberRange.new(6, 10)
+				gerbe.Drag = 3
+				gerbe.SpreadAngle = Vector2.new(180, 180)
+				gerbe.Enabled = false
+				gerbe.Parent = halo
+				local eclair = Outils.lumiere(halo, { Range = 26, Brightness = 0, Color = VIOLET_VIF })
+				local hasardPouls = Outils.aleatoire(R.graine + 7)
+				task.spawn(function()
+					while modele.Parent and halo.Parent do
+						task.wait(R.pouls * (0.75 + 0.5 * hasardPouls:NextNumber()))
+						if not (modele.Parent and halo.Parent) then
+							break
+						end
+						gerbe.Enabled = true
+						if eclair then
+							eclair.Brightness = 4
+						end
+						task.wait(0.35)
+						gerbe.Enabled = false
+						if eclair then
+							eclair.Brightness = 0
+						end
+					end
+				end)
+			end)
+		end
 	end)
 
 	-- ===== 4. colonnes de marbre arrondies, gravées de runes =====

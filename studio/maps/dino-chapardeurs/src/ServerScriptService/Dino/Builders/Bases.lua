@@ -1,15 +1,17 @@
 -- Constructeur Bases : les 8 Bases des joueurs (CONTRAT §5), rendu « version 2 » (STYLE.md §4).
 -- Chaque Base se reconnaît à la couleur de son sol : dalle d'ardoise teintée (couleur claire de la base) bordée d'ardoise
 -- sur 44 x 50 avec rampe d'entrée de la même teinte, allée dans l'ombre de la couleur, murets de brique peints sous
--- couvertine d'ardoise, piliers d'angle arrondis coiffés d'une lanterne, portique de métal peint éclairé par deux spots,
+-- couvertine d'ardoise, piliers d'angle arrondis coiffés d'une petite lanterne de verre au cœur qui pulse, portique de
+-- métal peint éclairé par deux spots et bordé d'un halo lumineux discret de la couleur de la base (seuil, montants, traverse),
 -- enseigne encadrée lisible des deux côtés, gros bouton de verrou rouge sur socle de métal, dalle de collecte en tôle verte,
 -- 12 podiums (2 rangées de 6 le long des murs, face à face) carrés aux arêtes arrondies à plateau de métal et bandeau lumineux,
--- point d'apparition au fond, plantes et caisses contre les murs.
+-- point d'apparition au fond (cercle qui respire), drapeaux en laizes qui ondulent, plantes et caisses contre les murs.
+-- Les positions viennent toutes de Plan.bases / Plan.base (plan v2) ; les animations passent par Outils.animer (client).
 -- Repère local d'une base : x en travers, z positif vers le Tapis (l'entrée). Les bases du sud sont tournées de 180°.
--- Emprise (CONTRAT §10) : le rectangle 44 x 50 de chaque base, rien entre elles. Budget : 170 parts par base.
+-- Emprise (CONTRAT §10) : le rectangle 44 x 50 de chaque base, rien entre elles. Budget : 192 parts par base.
 local M = {}
 
-local BUDGET = 170
+local BUDGET = 192
 local OBLIGATOIRES = 20 -- Sol, Rampe, Entree, Enseigne, BoutonVerrou, Collecte, E1..E12, Apparition, Zone
 local LARGEUR_ENTREE = 12
 local HAUTEUR_ZONE = 30
@@ -244,15 +246,44 @@ function M.construire(ctx)
 				Color = ARDOISE,
 				Material = Mat.Slate,
 			}, true)
-			part(Outils.boule, decor, {
+			-- petite lanterne : cage de verre, cœur lumineux qui pulse doucement, toit d'ardoise
+			local yLanterne = H + HAUT_PILIER + 0.5 + 0.85
+			part(Outils.bloc, decor, {
+				Name = "Cage",
+				Size = Vector3.new(1.5, 1.7, 1.5),
+				CFrame = ici(p[1], yLanterne, p[2]),
+				Color = couleurClaire:Lerp(Color3.new(1, 1, 1), 0.5),
+				Material = Mat.Glass,
+				Transparency = 0.6,
+				CanCollide = false,
+				CastShadow = false,
+			}, true)
+			local coeur = part(Outils.boule, decor, {
 				Name = "Lanterne",
-				Size = Vector3.new(1.3, 1.3, 1.3),
-				CFrame = ici(p[1], H + HAUT_PILIER + 1.1, p[2]),
+				Size = Vector3.new(1.15, 1.15, 1.15),
+				CFrame = ici(p[1], yLanterne, p[2]),
 				Color = couleurClaire,
 				Material = Mat.Neon,
 				CanCollide = false,
 				CastShadow = false,
 			}, true)
+			part(Outils.bloc, decor, {
+				Name = "ToitLanterne",
+				Size = Vector3.new(2, 0.35, 2),
+				CFrame = ici(p[1], yLanterne + 0.85 + 0.175, p[2]),
+				Color = METAL_SOMBRE,
+				Material = Mat.Metal,
+			}, true)
+			if coeur then
+				Outils.animer(coeur, "pulse", 1.8)
+				-- seules les lanternes de façade éclairent (budget de lumières raisonnable)
+				if p[2] > 0 then
+					local l = Outils.lumiere(coeur, { genre = "Point", Range = 9, Brightness = 1.2, Color = couleurClaire })
+					pcall(function()
+						l.Shadows = false
+					end)
+				end
+			end
 		end
 
 		-- ===== portique d'entrée en métal peint, socles d'ardoise, deux spots vers le sol =====
@@ -304,6 +335,39 @@ function M.construire(ctx)
 		-- enseigne lisible des deux côtés : panneau de métal peint serti dans un cadre sombre centré sur la façade.
 		-- Le panneau (1,3) est un peu plus épais que le cadre (1,0) : il dépasse de 0,15 de chaque côté et le cadre
 		-- forme une bordure de 0,6 tout autour, vue du Tapis comme de l'intérieur de la base.
+		-- halo de l'entrée : cadre lumineux discret de la couleur de la base (seuil, montants, traverse) qui respire
+		-- lentement, et lueur colorée sur le seuil. Tout reste dans le plan de la façade, à l'intérieur de l'emprise.
+		local halo = Outils.modele(decor, "HaloEntree")
+		local xMontant = xPoteau - 1.25 - 0.12
+		local propsHalo = {
+			Color = couleurClaire,
+			Material = Mat.Neon,
+			Transparency = 0.3,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+			CastShadow = false,
+		}
+		local function morceauHalo(nom, taille, cf)
+			local t = { Name = nom, Size = taille, CFrame = cf }
+			for k, v in pairs(propsHalo) do
+				t[k] = v
+			end
+			return part(Outils.bloc, halo, t, true)
+		end
+		local seuil = morceauHalo("Seuil", Vector3.new(2 * xMontant, 0.12, 1.2), ici(0, H + 0.07, zFacade))
+		for _, cote in ipairs({ -1, 1 }) do
+			morceauHalo("Montant", Vector3.new(0.24, HAUT_PORTIQUE - 0.24, 0.5), ici(cote * xMontant, H + (HAUT_PORTIQUE - 0.24) / 2, zFacade + 1))
+		end
+		morceauHalo("Traverse", Vector3.new(2 * xMontant, 0.24, 0.5), ici(0, yLinteau - 1.12, zFacade + 1))
+		Outils.animer(halo, "pulse", 1.1)
+		if seuil then
+			local l = Outils.lumiere(seuil, { genre = "Point", Range = 12, Brightness = 1.3, Color = couleur })
+			pcall(function()
+				l.Shadows = false
+			end)
+		end
+
 		local yEnseigne = yLinteau + 1 + 2.9
 		part(Outils.bloc, decor, {
 			Name = "CadreEnseigne",
@@ -477,7 +541,7 @@ function M.construire(ctx)
 			CanTouch = false,
 			CastShadow = false,
 		})
-		part(Outils.cylindre, decor, {
+		local cercle = part(Outils.cylindre, decor, {
 			Name = "CercleApparition",
 			Size = Vector3.new(0.2, 6, 6),
 			CFrame = ici(0, H + 0.12, zApparition, VERTICAL),
@@ -485,7 +549,11 @@ function M.construire(ctx)
 			Material = Mat.Neon,
 			Transparency = 0.3,
 			CanCollide = false,
+			CastShadow = false,
 		}, true)
+		if cercle then
+			Outils.animer(cercle, "pulse", 1.4)
+		end
 
 		-- drapeaux de tissu de la couleur de la base aux coins du fond
 		for _, cote in ipairs({ -1, 1 }) do
@@ -499,16 +567,30 @@ function M.construire(ctx)
 				Material = Mat.Metal,
 				CanCollide = false,
 			}, true)
-			local drapeau = part(Outils.bloc, decor, {
-				Name = "Drapeau",
-				Size = Vector3.new(4.5, 2.8, 0.2),
-				CFrame = ici(xMat - cote * 2.5, H + 8.4, zMat),
-				Color = couleur,
-				Material = Mat.Fabric,
+			part(Outils.boule, decor, {
+				Name = "Pommeau",
+				Size = Vector3.new(0.9, 0.9, 0.9),
+				CFrame = ici(xMat, H + 10.3, zMat),
+				Color = Charte.dore,
+				Material = Mat.Metal,
 				CanCollide = false,
 			}, true)
-			if drapeau then
-				Outils.animer(drapeau, "flotte", 0.6)
+			-- drapeau en 3 laizes qui s'affinent vers le bout : la laize du mât reste fixe, les deux autres
+			-- ondulent à des rythmes différents (Outils.animer « flotte ») pour que le tissu semble claquer au vent
+			local laizes = { { 2.8, 0 }, { 2.5, 2.1 }, { 2.1, 2.7 } }
+			for k, laize in ipairs(laizes) do
+				local drapeau = part(Outils.bloc, decor, {
+					Name = "Drapeau",
+					Size = Vector3.new(1.5, laize[1], 0.2),
+					CFrame = ici(xMat - cote * (0.25 + 1.5 * (k - 0.5)), H + 8.4 + (2.8 - laize[1]) / 2, zMat),
+					Color = (k == 2) and couleurClaire or couleur,
+					Material = Mat.Fabric,
+					CanCollide = false,
+					CastShadow = k == 1,
+				}, true)
+				if drapeau and laize[2] > 0 then
+					Outils.animer(drapeau, "flotte", laize[2])
+				end
 			end
 		end
 

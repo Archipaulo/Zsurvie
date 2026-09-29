@@ -14,7 +14,7 @@ const cible = arg("cible", "0,2,10"), dist = arg("dist", "80"), haut = arg("haut
 const sortie = path.resolve(arg("sortie", "photo.png"));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "photo-dino-"));
 if (!process.argv.includes("--sans-banc")) {
-  try { execFileSync("node", [path.join(ICI, "banc", "banc.js"), "--sortie", tmp], { stdio: "pipe", timeout: 400000 }); }
+  try { execFileSync("node", [path.join(ICI, "banc", "banc.js"), "--sortie", tmp], { stdio: "pipe", timeout: 1500000 }); }
   catch (e) { console.log((e.stdout || "").toString().split("\n").filter(l => /❌|•|💥/.test(l)).slice(0, 12).join("\n")); }
 }
 if (process.argv.includes("--interface")) {
@@ -41,6 +41,11 @@ if (process.argv.includes("--interface")) {
   process.exit(0);
 }
 const fichierParts = process.argv.includes("--vitrine") ? "parts-vitrine.json" : "parts-pendant.json";
+// le banc qui vient de tourner sert aussi aux photos suivantes (--sans-banc) : on le recopie dans banc/sortie
+if (!process.argv.includes("--sans-banc")) {
+  if (!fs.existsSync(path.join(tmp, fichierParts))) { console.error("banc non exécuté jusqu'au bout : photo annulée"); process.exit(1); }
+  for (const f of fs.readdirSync(tmp)) if (f.endsWith(".json")) fs.copyFileSync(path.join(tmp, f), path.join(ICI, "banc", "sortie", f));
+}
 const parts = fs.existsSync(path.join(tmp, fichierParts)) ? path.join(tmp, fichierParts) : path.join(ICI, "banc", "sortie", fichierParts);
 const html = path.join(tmp, "apercu.html");
 execFileSync("node", [path.join(ICI, "apercu.js"), parts, html], { stdio: "pipe" });

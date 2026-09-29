@@ -40,6 +40,8 @@ function M.construire(ctx)
 	local ECART = math.min(6, math.max(1, reglage("ecart", 2)))   -- vide horizontal entre deux marches
 	local HERBE_T = 2 -- épaisseur du dessus d'herbe (terrain)
 	local PLAFOND = 36 -- rien ne dépasse cette hauteur (sauf l'arrière-pays lointain, ≤ 50, hors des murs)
+	local ARR_BASE = 28 -- pied de l'arrière-pays, au ras des murs : le dos des falaises le rejoint sans creux
+	local ARR_PLAFOND = 50 -- rien de l'arrière-pays ne dépasse cette hauteur
 
 	local rng = Outils.aleatoire(reglage("graine", 1968))
 
@@ -590,6 +592,56 @@ function M.construire(ctx)
 		return math.sqrt(dx * dx + dz * dz) >= volcan.rayon + 2 + r
 	end
 
+	-- croupe allongée : 2 ou 3 boules de rayons décroissants qui se chevauchent le long d'une courbe douce
+	-- (jamais une boule isolée). o.sol(a, d) : hauteur du sol sous la boule ; o.enfonce : part du rayon sous le sol ;
+	-- o.plafond : rien ne dépasse ; o.herbe : matériau du dessus ; o.flancs : flancs de roche sous une calotte d'herbe
+	-- (sinon tout en herbe) ; o.verifier : contrôle libre() (volcan, anse du sentier) ; o.dMax : profondeur max.
+	local function croupe(bande, a, d, r, o)
+		local n = rng:NextInteger(2, 3)
+		local dir = 1
+		if rng:NextNumber() < 0.5 then
+			dir = -1
+		end
+		local virage = rng:NextNumber(-0.45, 0.45) -- la courbe s'écarte en profondeur d'une boule à l'autre
+		local ak, dk, rk = a, d, r
+		for k = 1, n do
+			if k > 1 then
+				local pas = rk * rng:NextNumber(0.75, 0.95)
+				ak = ak + dir * pas
+				dk = dk + virage * pas
+				rk = rk * rng:NextNumber(0.62, 0.82)
+			end
+			local dB = dk
+			if o.dMax then
+				dB = math.min(dB, o.dMax - rk * 0.6)
+			end
+			local y = o.sol(ak, dB) - rk * (o.enfonce or 0.45)
+			local haut = rk
+			if o.flancs then
+				haut = rk * 1.13 -- calotte d'herbe : centre + 0,18 r, rayon 0,95 r (la roche ne se voit qu'au pied)
+			end
+			y = math.min(y, o.plafond - haut)
+			local pos = point(bande, ak, dB, y)
+			if y + haut > o.sol(ak, dB) + 1 and (not o.verifier or libre(pos, rk)) then
+				if o.flancs then
+					Outils.terrainBoule(pos, rk, Mat.Rock)
+					Outils.terrainBoule(pos + Vector3.new(0, rk * 0.18, 0), rk * 0.95, o.herbe)
+				else
+					Outils.terrainBoule(pos, rk, o.herbe)
+				end
+			end
+		end
+	end
+
+	-- affleurement anguleux : deux coins de roche dos à dos (en toit), inclinés, à moitié enfoncés
+	local function arete(centre, L, H, P, inclDeg, materiau)
+		local incl = math.rad(inclDeg)
+		local cf = CFrame.new(centre) * CFrame.Angles(0, rng:NextNumber(0, DEUX_PI), 0)
+			* CFrame.Angles(incl, 0, math.rad(rng:NextNumber(-12, 12)))
+		Outils.terrainCoin(cf * CFrame.new(0, 0, -P / 4), Vector3.new(L, H, P / 2), materiau)
+		Outils.terrainCoin(cf * CFrame.new(0, 0, P / 4) * CFrame.Angles(0, math.pi, 0), Vector3.new(L, H, P / 2), materiau)
+	end
+
 	-- la tranche d'une terrasse qui couvre la position a
 	local function morceauEn(morceaux, a)
 		for _, mc in ipairs(morceaux) do
@@ -681,10 +733,24 @@ function M.construire(ctx)
 				end
 				local aC = (tr[g].a0 + tr[g1].a1) / 2
 				local larg = tr[g1].a1 - tr[g].a0 + 0.1
-				local yDos = math.max(6, math.min(yMin - 3, 17)) -- rejoint le pied de l'arrière-pays (≈ 17)
+				-- le dos rejoint exactement le pied de l'arrière-pays (ARR_BASE) au mur : ni douve ni marche.
+				-- Crête haute : il redescend vers l'extérieur ; crête basse : il remonte doucement (colline derrière).
+				-- Roche dessous, herbe dessus (la crête ne montre jamais de terre nue vue d'en haut).
+				local yDos = ARR_BASE -- (toujours ≥ 24 : plus de creux entre la crête et l'arrière-pays)
 				if D - dDos >= 1 then
-					blocT(bande, aC, larg, 0, dDos, D, -4, yDos, 0, o.materiau)
-					penteT(bande, aC, larg, 0, dDos, D, yDos - 0.5, yMin, 0, o.materiau, true)
+					local yCorps = math.min(yDos, yMin) - 0.5
+					blocT(bande, aC, larg, 0, dDos, D, -4, yCorps, 0, o.materiau)
+					if yMin - yDos >= 1 then
+						-- redescente vers le mur
+						blocT(bande, aC, larg, 0, dDos, D, yCorps - HERBE_T, yDos + 0.1, 0, herbe)
+						penteT(bande, aC, larg, 0, dDos, D, yDos - 0.5, yMin + 0.1, 0, herbe, true)
+					elseif yDos - yMin >= 1 then
+						-- remontée vers le pied de l'arrière-pays
+						blocT(bande, aC, larg, 0, dDos, D, yCorps - HERBE_T, yMin + 0.1, 0, herbe)
+						penteT(bande, aC, larg, 0, dDos, D, yMin - 0.5, yDos + 0.1, 0, herbe)
+					else
+						blocT(bande, aC, larg, 0, dDos, D, yCorps - HERBE_T, math.max(yMin, yDos) + 0.1, 0, herbe)
+					end
 				end
 			end
 		end
@@ -798,20 +864,23 @@ function M.construire(ctx)
 			end
 		end
 
-		-- dessus de crête large (falaise sud) : quelques bosses d'herbe et de roche pour casser le plat
+		-- dessus de crête large : de petites croupes d'herbe allongées (2 ou 3 boules qui se chevauchent) cassent le plat
 		for i = 1, #tr, 3 do
 			local mc = T3[i]
 			if AR - mc.d > 10 then
-				local r = rng:NextNumber(4.5, 7)
+				local r = rng:NextNumber(4.5, 6.5)
 				local dP = rng:NextNumber(mc.d + r + 1, AR - 1)
-				local p = point(bande, tr[i].a + rng:NextNumber(-1, 1), dP, mc.y - r * 0.55)
-				if p.Y + r <= PLAFOND and libre(p, r) then
-					local materiau = Mat.Grass
-					if rng:NextNumber() < 0.35 then
-						materiau = Mat.Rock
-					end
-					Outils.terrainBoule(p, r, materiau)
+				local herbe = Mat.Grass
+				if rng:NextNumber() < 0.4 then
+					herbe = Mat.LeafyGrass
 				end
+				croupe(bande, tr[i].a + rng:NextNumber(-1, 1), dP, r, {
+					sol = function(a)
+						return morceauEn(T3, a).y
+					end,
+					enfonce = 0.6, plafond = PLAFOND, herbe = herbe, flancs = rng:NextNumber() < 0.3,
+					verifier = true, dMax = AR,
+				})
 			end
 		end
 
@@ -829,22 +898,20 @@ function M.construire(ctx)
 				local P = rng:NextNumber(6, 8)
 				local aK = aA + cote * (k - 1) * rng:NextNumber(4, 6)
 				local mK = morceauEn(T3, aK)
-				local incl = math.rad(rng:NextNumber(15, 30))
+				local inclDeg = rng:NextNumber(15, 30)
 				if rng:NextNumber() < 0.5 then
-					incl = -incl
+					inclDeg = -inclDeg
 				end
+				local incl = math.rad(inclDeg)
 				local yC = mK.y + H * 0.15
 				local demiHaut = (H * math.cos(incl) + P * math.abs(math.sin(incl))) / 2
 				local centre = point(bande, aK, math.min(AR - 1, mK.d + rng:NextNumber(2, 4)), yC)
 				if yC + demiHaut <= PLAFOND + 0.5 and libre(centre, 6) then
-					local cf = CFrame.new(centre) * CFrame.Angles(0, rng:NextNumber(0, DEUX_PI), 0)
-						* CFrame.Angles(incl, 0, math.rad(rng:NextNumber(-12, 12)))
 					local materiau = Mat.Rock
 					if k == 2 then
 						materiau = Mat.Slate
 					end
-					Outils.terrainCoin(cf * CFrame.new(0, 0, -P / 4), Vector3.new(L, H, P / 2), materiau)
-					Outils.terrainCoin(cf * CFrame.new(0, 0, P / 4) * CFrame.Angles(0, math.pi, 0), Vector3.new(L, H, P / 2), materiau)
+					arete(centre, L, H, P, inclDeg, materiau)
 				end
 			end
 		end
@@ -1117,9 +1184,17 @@ function M.construire(ctx)
 		end
 	end
 
-	-- ===== 4. arrière-pays : collines de roche derrière les murs invisibles (40 studs), l'horizon est toujours de la roche =====
+	-- ===== 4. arrière-pays : collines d'herbe derrière les murs invisibles (80 studs), l'horizon est toujours fermé =====
+	-- Chaque côté part du pied ARR_BASE, là où le dos des falaises arrive au mur (pas de creux), monte en pente douce
+	-- jusqu'à une arête (D1), puis plus raide jusqu'au dernier rang (D2 → PROF), plus haut. Chaque côté est découpé en
+	-- tronçons de 30 à 50 studs dont le SOMMET (38 à 50) vient de nouveauBruit ; le terrain est posé en tranches de
+	-- 8 studs qui passent en douceur d'un sommet au suivant (pas de marche entre deux tronçons). Les côtés nord et
+	-- sud couvrent aussi les carrés de coin : les deux rampes s'y superposent et le terrain garde la plus haute,
+	-- l'horizon n'a plus d'encoche. Ordre : un socle de roche par côté, puis les tranches d'herbe de tous les côtés,
+	-- puis les plaques de terre, les croupes d'herbe (flancs de roche) et les arêtes de roche anguleuses.
 	local function construireArrierePays()
-		local PROF = 40
+		local PROF = 80
+		local TRANCHE_AP = 8
 		if not (F.est and F.ouest and F.nord and F.sud) then
 			return
 		end
@@ -1127,31 +1202,169 @@ function M.construire(ctx)
 		local cotes = {
 			{ axe = "z", avant = xE, sens = 1, a0 = zN - PROF, a1 = zS + PROF },
 			{ axe = "z", avant = xO, sens = -1, a0 = zN - PROF, a1 = zS + PROF },
-			{ axe = "x", avant = zN, sens = -1, a0 = xO, a1 = xE },
-			{ axe = "x", avant = zS, sens = 1, a0 = xO, a1 = xE },
+			{ axe = "x", avant = zN, sens = -1, a0 = xO - PROF, a1 = xE + PROF },
+			{ axe = "x", avant = zS, sens = 1, a0 = xO - PROF, a1 = xE + PROF },
 		}
+		local function lisse(k)
+			k = math.max(0, math.min(1, k))
+			return k * k * (3 - 2 * k)
+		end
+
+		-- tronçons de 30 à 50 studs : un sommet chacun (38 à 50), herbe rase ou touffue
+		local tous = {}
 		for _, bande in ipairs(cotes) do
-			-- une seule rampe de roche par côté (pas de marches ni de dents de scie), de 18 à 42 studs vers l'extérieur
-			local aC, L = (bande.a0 + bande.a1) / 2, bande.a1 - bande.a0
-			local BASE, SOMMET = 18, 42
-			blocT(bande, aC, L, 0, -1, PROF, -12, BASE, 0, Mat.Rock)
-			penteT(bande, aC, L, 0, -1, PROF, BASE - 0.5, SOMMET, 0, Mat.Rock)
-			-- bosses espacées irrégulièrement : croupes d'herbe sur la pente, têtes de roche sur la ligne de crête
-			local a = bande.a0 + rng:NextNumber(5, 25)
-			while a < bande.a1 - 5 do
-				if rng:NextNumber() < 0.55 then
-					local r = rng:NextNumber(12, 18)
-					local dG = rng:NextNumber(8, 22)
-					local ySurf = BASE + (SOMMET - BASE) * (dG / PROF)
-					Outils.terrainBoule(point(bande, a, dG, math.min(ySurf - r * 0.7, 50 - r)), r, Mat.Grass)
-				else
-					-- tête de roche enfoncée dans la rampe (rien ne dépasse l'arrière ni 50 studs de haut)
-					local r = rng:NextNumber(8, 12)
-					local dR = PROF - r - rng:NextNumber(0, 3)
-					local ySurf = BASE + (SOMMET - BASE) * (dR / PROF)
-					Outils.terrainBoule(point(bande, a, dR, math.min(ySurf - r * 0.65, 50 - r)), r, Mat.Rock)
+			local bruitS = nouveauBruit(6, 190, 83)
+			bande.bruitD = nouveauBruit(5, 110, 47)
+			bande.bruitY = nouveauBruit(0.07, 130, 61)
+			bande.bruitD2 = nouveauBruit(2.5, 97, 41)
+			bande.troncons = {}
+			local t0 = bande.a0
+			while t0 < bande.a1 - 0.5 do
+				local reste = bande.a1 - t0
+				local pas = reste
+				if reste > 50 then
+					pas = rng:NextNumber(30, 50)
+					if reste - pas < 30 then
+						pas = reste / 2
+					end
 				end
-				a = a + rng:NextNumber(26, 48)
+				local t1 = t0 + pas
+				local aC = (t0 + t1) / 2
+				local herbe = Mat.Grass
+				if rng:NextNumber() < 0.35 then
+					herbe = Mat.LeafyGrass
+				end
+				local herbeHaut = Mat.LeafyGrass
+				if rng:NextNumber() < 0.4 then
+					herbeHaut = Mat.Grass
+				end
+				local t = {
+					bande = bande, t0 = t0, t1 = t1, aC = aC, L = pas,
+					S = math.max(38, math.min(ARR_PLAFOND, 44 + bruitS(aC) + rng:NextNumber(-2, 2))),
+					herbe = herbe, herbeHaut = herbeHaut,
+				}
+				table.insert(bande.troncons, t)
+				table.insert(tous, t)
+				t0 = t1
+			end
+		end
+
+		-- relief continu d'un côté en a : sommet interpolé en douceur entre les centres des tronçons, arêtes ondulantes
+		local function relief(bande, a)
+			local tr = bande.troncons
+			local S = tr[1].S
+			if a >= tr[#tr].aC then
+				S = tr[#tr].S
+			else
+				for k = 1, #tr - 1 do
+					if a >= tr[k].aC and a < tr[k + 1].aC then
+						S = tr[k].S + (tr[k + 1].S - tr[k].S) * lisse((a - tr[k].aC) / (tr[k + 1].aC - tr[k].aC))
+						break
+					end
+				end
+			end
+			return {
+				S = S,
+				D1 = 40 + bande.bruitD(a),                                   -- arête de la pente douce
+				y1 = ARR_BASE + (S - ARR_BASE) * (0.42 + bande.bruitY(a)),   -- sa hauteur
+				D2 = PROF - 10 + bande.bruitD2(a),                            -- début du dernier rang (plat)
+			}
+		end
+		-- hauteur du dessus (herbe comprise) en (a, d)
+		local function sol(bande, a, d)
+			local r = relief(bande, a)
+			local h = r.S
+			if d <= r.D1 then
+				h = ARR_BASE + (r.y1 - ARR_BASE) * math.max(0, d + 1) / (r.D1 + 1)
+			elseif d <= r.D2 then
+				h = r.y1 + (r.S - r.y1) * (d - r.D1) / (r.D2 - r.D1)
+			end
+			return h + 1
+		end
+		local function tronconEn(bande, a)
+			for _, t in ipairs(bande.troncons) do
+				if a <= t.t1 then
+					return t
+				end
+			end
+			return bande.troncons[#bande.troncons]
+		end
+
+		-- socle de roche (un bloc par côté), puis les tranches d'herbe de tous les côtés
+		for _, bande in ipairs(cotes) do
+			blocT(bande, (bande.a0 + bande.a1) / 2, bande.a1 - bande.a0, 0, -1, PROF, -12, ARR_BASE, 0, Mat.Rock)
+		end
+		for _, bande in ipairs(cotes) do
+			local n = math.max(1, math.floor((bande.a1 - bande.a0) / TRANCHE_AP + 0.5))
+			local l = (bande.a1 - bande.a0) / n
+			for i = 1, n do
+				local a = bande.a0 + (i - 0.5) * l
+				local r = relief(bande, a)
+				local t = tronconEn(bande, a)
+				local lg = l + RECOUVRE
+				blocT(bande, a, lg, 0, -1, r.D1, ARR_BASE - 1.5, ARR_BASE + 0.6, 0, t.herbe)
+				penteT(bande, a, lg, 0, -1, r.D1, ARR_BASE + 0.5, r.y1 + 1, 0, t.herbe)
+				blocT(bande, a, lg, 0, r.D1 - 0.5, PROF, ARR_BASE - 0.5, r.y1 + 0.6, 0, t.herbeHaut)
+				penteT(bande, a, lg, 0, r.D1 - 0.5, r.D2, r.y1 + 0.5, r.S + 1, 0, t.herbeHaut)
+				blocT(bande, a, lg, 0, r.D2 - 0.5, PROF, r.y1 + 0.5, r.S + 1, 0, t.herbeHaut)
+			end
+		end
+
+		for _, t in ipairs(tous) do
+			local b = t.bande
+			-- plaque de terre (Ground) en disque au ras de l'herbe, seulement le long de l'arête du dernier rang (plat)
+			if t.L > 12 and rng:NextNumber() < 0.5 then
+				local a = rng:NextNumber(t.t0 + 5, t.t1 - 5)
+				local rP = rng:NextNumber(2.5, 4)
+				local d = relief(b, a).D2 + rP + 0.5
+				if d + rP < PROF then
+					Outils.terrainCylindre(CFrame.new(point(b, a, d, sol(b, a, d) - 0.65)), 1.5, rP, Mat.Ground)
+				end
+			end
+
+			local r = relief(b, t.aC)
+			-- croupe haute à la jointure avec le tronçon suivant (en retrait progressif, 40 à 50 de haut)
+			if t.t1 < b.a1 - 1 then
+				local d = rng:NextNumber(r.D1 + 4, r.D2 - 2)
+				croupe(b, t.t1 + rng:NextNumber(-3, 3), d, rng:NextNumber(10, 14), {
+					sol = function(a, dd)
+						return sol(b, a, dd)
+					end,
+					enfonce = 0.35, plafond = ARR_PLAFOND, herbe = t.herbeHaut, flancs = rng:NextNumber() < 0.6,
+					dMax = PROF,
+				})
+			end
+			-- de temps en temps, une croupe basse sur la pente douce (25 à 38 de haut)
+			if t.L > 20 and rng:NextNumber() < 0.4 then
+				local d = rng:NextNumber(6, math.max(8, r.D1 - 8))
+				croupe(b, rng:NextNumber(t.t0 + 6, t.t1 - 6), d, rng:NextNumber(6, 9), {
+					sol = function(a, dd)
+						return sol(b, a, dd)
+					end,
+					enfonce = 0.45, plafond = ARR_PLAFOND, herbe = t.herbe, flancs = rng:NextNumber() < 0.3,
+					dMax = PROF,
+				})
+			end
+			-- arête de roche anguleuse sur le dernier rang : casse la ligne d'horizon
+			if t.L > 20 and rng:NextNumber() < 0.4 then
+				local a = rng:NextNumber(t.t0 + 6, t.t1 - 6)
+				local d = rng:NextNumber(relief(b, a).D2 - 6, PROF - 7)
+				local L, H, P = rng:NextNumber(10, 16), rng:NextNumber(8, 12), rng:NextNumber(8, 12)
+				local inclDeg = rng:NextNumber(15, 30)
+				if rng:NextNumber() < 0.5 then
+					inclDeg = -inclDeg
+				end
+				local incl = math.rad(inclDeg)
+				local demiHaut = (H * math.cos(incl) + P * math.abs(math.sin(incl))) / 2
+				local ySol = sol(b, a, d)
+				local yC = math.min(ySol + H * 0.1, ARR_PLAFOND - demiHaut)
+				if yC + demiHaut > ySol + 2 then
+					local materiau = Mat.Rock
+					if rng:NextNumber() < 0.4 then
+						materiau = Mat.Slate
+					end
+					arete(point(b, a, d, yC), L, H, P, inclDeg, materiau)
+				end
 			end
 		end
 	end

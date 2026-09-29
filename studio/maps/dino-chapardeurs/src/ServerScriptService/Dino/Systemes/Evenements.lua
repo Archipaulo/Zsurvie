@@ -176,6 +176,16 @@ function M.demarrer(ctx)
 		if Plan.place and ctx.Outils.distanceXZ(p, Plan.place.centre) <= 8 then
 			return true
 		end
+		-- ni dans la Rivière, ni sur le toit de la Nurserie ou de la Grande Porte
+		local r = Plan.riviere
+		if r and z >= r.zMin - 2 and z <= r.zMax + 2 then
+			return true
+		end
+		for _, abri in ipairs({ Plan.nurserie, Plan.finTapis }) do
+			if abri and ctx.Outils.distanceXZ(p, abri.centre) <= abri.rayon + 3 then
+				return true
+			end
+		end
 		return false
 	end
 
@@ -193,12 +203,25 @@ function M.demarrer(ctx)
 		return y
 	end
 
+	-- zone de chute : Plan.monde sans les bandes de falaises (bord du monde, hors de portée des joueurs)
+	local function zoneDeChute()
+		local xMin, xMax = Plan.monde.min.X + 12, Plan.monde.max.X - 12
+		local zMin, zMax = Plan.monde.min.Z + 12, Plan.monde.max.Z - 12
+		local f = Plan.falaises
+		if f then
+			if f.ouest then xMin = math.max(xMin, f.ouest.xMax + 6) end
+			if f.est then xMax = math.min(xMax, f.est.xMin - 6) end
+			if f.nord then zMin = math.max(zMin, f.nord.zMax + 6) end
+			if f.sud then zMax = math.min(zMax, f.sud.zMin - 6) end
+		end
+		return xMin, xMax, zMin, zMax
+	end
+
 	local function pointAleatoire()
-		local mini = Plan.monde.min
-		local maxi = Plan.monde.max
+		local xMin, xMax, zMin, zMax = zoneDeChute()
 		for _ = 1, 25 do
-			local x = alea:NextNumber(mini.X + 12, maxi.X - 12)
-			local z = alea:NextNumber(mini.Z + 12, maxi.Z - 12)
+			local x = alea:NextNumber(xMin, xMax)
+			local z = alea:NextNumber(zMin, zMax)
 			if not pointInterdit(x, z) then
 				return Vector3.new(x, hauteurSol(x, z), z)
 			end

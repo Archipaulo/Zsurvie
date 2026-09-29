@@ -2,11 +2,13 @@
 -- Herbe Grass vert vif (dessus à Y = 0, brins d'herbe activés), sous-bois d'herbe touffue (LeafyGrass) sous
 -- les jungles et plaques touffues fleuries en périphérie, terre battue (Ground) sous les bâtiments.
 -- Réseau de chemins de sable (Sand) au ras de l'herbe, tout calculé depuis Plan :
---   promenades de part et d'autre du Tapis sur toute sa longueur, terminées en demi-lune devant la Nurserie
---   et la Grande Porte ; allées entre les Bases (Plan.allees) jusqu'aux chemins de ronde derrière les Bases ;
+--   promenades de part et d'autre du Tapis sur toute sa longueur (bande d'herbe des torches, bande de sable,
+--   herbe devant les façades ouverte devant chaque portique), terminées en demi-lune devant la Nurserie
+--   et la Grande Porte ; allées entre les Bases (Plan.allees : sable au milieu, herbe sur les côtés) jusqu'aux
+--   chemins de ronde derrière les Bases ;
 --   contre-allées le long des Bases extrêmes ; liaison Tapis <-> Place par l'allée x = 0 ; anneau de la Place,
 --   liens vers le Comptoir et l'Autel ; parvis du Cratère ; sentier vers la rivière et ses plages.
--- Sentiers de terre (Ground) avec pas japonais vers le Volcan et vers les plages.
+-- Sentiers de terre (Ground) avec pas japonais vers le Volcan, vers les sentes de la Jungle nord et vers les plages.
 -- Bordures de galets posées automatiquement là où un chemin de sable touche l'herbe (ouvertures aux croisements).
 -- Murs invisibles aux bords (Plan.monde.bord, bordNord, bordSud).
 local M = {}
@@ -21,6 +23,10 @@ local DEFAUTS = {
 	dessusTerre = 0.04,     -- dessus de la terre battue sous les bâtiments
 	dessusTouffue = 0.02,   -- dessus des plaques d'herbe touffue
 	margeJungle = 2,        -- la demi-lune des bouts du Tapis s'arrête à cette distance des jungles
+	promenadeSableMin = 13, -- promenade : herbe des torches de l'emprise du Tapis à |z| = 13 (torches à |z| ≈ 12)
+	promenadeSableMax = 23, -- ... sable de 13 à 23, puis herbe jusqu'aux façades des Bases
+	demiPortique = 7,       -- ouverture de sable devant chaque portique : x = centre de la Base ± 7
+	demiAllee = 6,          -- allées entre les Bases : sable de 12 au milieu, herbe de chaque côté
 	ecartRonde = 3,         -- herbe entre le fond des Bases et le chemin de ronde
 	largeurRonde = 8,       -- chemin de ronde derrière les Bases
 	ecartContre = 2,        -- herbe entre les Bases extrêmes et la contre-allée
@@ -35,7 +41,7 @@ local DEFAUTS = {
 	largeurBordure = 1,
 	hauteurBordure = 0.5,   -- enfoncée de 0,2 : dessus à 0,3
 	pas = 1,                -- pas d'échantillonnage des bords de chemin
-	segment = 16,           -- longueur maximale d'une pierre de bordure droite
+	segment = 24,           -- longueur maximale d'une pierre de bordure droite (plan v2 : plus de bords herbe/sable)
 	segmentArc = 7,         -- corde maximale d'une pierre de bordure en arc
 	jointure = 0.3,         -- petit joint entre deux pierres
 	hauteurMur = 80,
@@ -229,6 +235,16 @@ function M.construire(ctx)
 			table.insert(sentiers, chemin(ruban(cratere.centre.X, zA, volcan.centre.X, zB, dSentier, M_TERRE)))
 		end
 	end
+	-- vers les sentes de la Jungle : dans le prolongement des allées latérales, du chemin de ronde nord
+	-- jusque sous la lisière (les sentes de la Jungle démarrent à la lisière nord)
+	if allees and decor.jungleNord then
+		local zLisiere = decor.jungleNord.max.Z - 2
+		for _, ax in ipairs(allees.x) do
+			if ax ~= 0 and zLisiere < -zRondeB then
+				table.insert(sentiers, chemin(ruban(ax, -zRondeB, ax, zLisiere, dSentier, M_TERRE)))
+			end
+		end
+	end
 	-- vers les plages : des coins sud du chemin de ronde, en biais vers la rivière
 	local zPlageA, zPlageB
 	if riviere then
@@ -257,24 +273,37 @@ function M.construire(ctx)
 	if decor.jungleEst then
 		xBout = math.min(xBout, math.abs(decor.jungleEst.min.X) - margeJ - zP)
 	end
-	chemin(rect(-xBout, xBout, -zP, zP, M_SABLE, true))
-	chemin(disque(-xBout, 0, zP, M_SABLE, true))
-	chemin(disque(xBout, 0, zP, M_SABLE, true))
+	-- chaque promenade : herbe des torches (de l'emprise du Tapis à zSableA), bande de sable (zSableA..zSableB),
+	-- herbe devant les façades (zSableB..zP) ouverte en sable devant chaque portique
+	local zSableA = reglage(ctx, "promenadeSableMin")
+	local zSableB = reglage(ctx, "promenadeSableMax")
+	local dPortique = reglage(ctx, "demiPortique")
+	for _, s in ipairs({ -1, 1 }) do
+		chemin(rect(-xBout, xBout, s * zSableA, s * zSableB, M_SABLE, true))
+	end
+	chemin(disque(-xBout, 0, zSableB, M_SABLE, true))
+	chemin(disque(xBout, 0, zSableB, M_SABLE, true))
+	for _, b in ipairs(bases) do
+		local s = 1
+		if b.centre.Z < 0 then s = -1 end
+		chemin(rect(b.centre.X - dPortique, b.centre.X + dPortique, s * (zSableB - 1), s * zP, M_SABLE, true))
+	end
 
-	-- allées entre les Bases, de la promenade au chemin de ronde (nord et sud)
+	-- allées entre les Bases, de la bande de sable de la promenade au chemin de ronde (nord et sud) :
+	-- sable au milieu, herbe de chaque côté (les props de Fossiles y sont posés)
 	if allees then
+		local l = math.min(allees.largeur / 2, reglage(ctx, "demiAllee"))
 		for _, ax in ipairs(allees.x) do
-			local l = allees.largeur / 2
-			chemin(rect(ax - l, ax + l, allees.zMin - 1, zRondeA + 1, M_SABLE, true))
-			chemin(rect(ax - l, ax + l, -zRondeA - 1, -allees.zMin + 1, M_SABLE, true))
+			chemin(rect(ax - l, ax + l, zSableB - 1, zRondeA + 1, M_SABLE, true))
+			chemin(rect(ax - l, ax + l, -zRondeA - 1, -zSableB + 1, M_SABLE, true))
 		end
 	end
 	-- chemins de ronde derrière les Bases et contre-allées le long des Bases extrêmes
 	chemin(rect(-xContreB, xContreB, zRondeA, zRondeB, M_SABLE, true))
 	chemin(rect(-xContreB, xContreB, -zRondeB, -zRondeA, M_SABLE, true))
 	for _, s in ipairs({ -1, 1 }) do
-		chemin(rect(s * xContreA, s * xContreB, zP - 1, zRondeA + 1, M_SABLE, true))
-		chemin(rect(s * xContreA, s * xContreB, -zRondeA - 1, -zP + 1, M_SABLE, true))
+		chemin(rect(s * xContreA, s * xContreB, zSableB - 1, zRondeA + 1, M_SABLE, true))
+		chemin(rect(s * xContreA, s * xContreB, -zRondeA - 1, -zSableB + 1, M_SABLE, true))
 	end
 
 	-- la Place : anneau, liens vers le Comptoir et l'Autel, sentier vers la rivière

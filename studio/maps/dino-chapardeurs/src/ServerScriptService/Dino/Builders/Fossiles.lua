@@ -3,35 +3,47 @@
 -- Os et crânes fossiles en Limestone / Sandstone, caisses WoodPlanks à ferrures Metal, tonneaux cerclés,
 -- jeeps d'explorateurs détaillées (Metal peint, pneus, arceau, roue de secours), rochers en Slate moussu,
 -- campements sur une clairière de terre battue en Terrain, chantier de fouille (fosse, squelette, ruban), lanternes.
--- Emprise (CONTRAT §10) :
---   * couloirs entre les Bases (|x - c| ≤ 5 pour c = -56, 0, 56 et 20 ≤ |z| ≤ 66) : props rangés contre
---     les murs des Bases (3 ≤ |x - c| ≤ 5), l'allée centrale reste libre et rien n'y bloque (CanCollide false) ;
---   * anneau 21..28 de la Place : hors de l'allée en anneau, des torches, des liens vers Comptoir / Autel,
---     de la borne Dinodex et de l'arrivée des couloirs au nord ;
---   * de part et d'autre de la Nurserie et de la Fin du tapis (|z| 16..30) : un chantier de fouille
---     (squelette entouré de ruban) et un campement d'explorateurs.
--- Graine fixe : la map est identique à chaque démarrage. Budget : 400 parts.
+-- Feu de camp aux flammes Neon qui palpitent (étincelles), éclats d'ambre qui flottent et scintillent.
+-- Emprise (CONTRAT §10, plan v2 « plus d'air ») — tout est lu dans Plan, aucune coordonnée en dur :
+--   * allées entre les Bases (Plan.allees) : props rangés dans une bande de bordure contre les murs des Bases,
+--     le milieu de l'allée reste libre (≥ 13 studs) et rien n'y bloque (CanCollide false) ; une composition
+--     et une lanterne par demi-allée, jamais à l'entrée côté promenade ;
+--   * anneau de la Place, sur l'HERBE au-delà de l'anneau de sable (Plan.place.anneau, la même valeur que Sol) :
+--     r = rayon + anneau + 1 .. rayon + anneau + 5 (29..33), dans les secteurs libres (hors liens vers Comptoir /
+--     Autel, sentier de la rivière, allée du nord) ;
+--   * de part et d'autre de la Nurserie et de la Grande Porte (|x - cx| <= rayon, rayon + 3 <= |dz| <= rayon + 27),
+--     au-delà de la demi-lune de sable qui termine la promenade : un chantier de fouille (squelette sous ruban,
+--     ambre) et un campement d'explorateurs (jeep, feu de camp), centrés à promenade.zMax + 8 (35) de l'axe du Tapis.
+--   Anneau et côtés : chaque prop (et chaque clairière de terre) garde au moins `margeSable` d'herbe entre lui et
+--   les chemins de sable de Sol (galets de bordure compris), recalculés ici depuis Plan : jamais sur un passage.
+-- Graine fixe : la map est identique à chaque démarrage. Budget : 480 parts (≈ 460 utilisées).
 local M = {}
 
--- réglages par défaut (remplaçables par Equilibrage.fossiles)
+-- réglages par défaut (remplaçables par Equilibrage.fossiles) : distances et marges, jamais de position
 local DEFAUTS = {
-	budget = 400,          -- parts au maximum pour ce constructeur
+	budget = 480,          -- parts au maximum pour ce constructeur
 	graine = 1842,         -- année où le mot « dinosaure » est né
-	gardeCouloir = 3,      -- distance minimale à l'axe d'un couloir (allée libre)
-	demiCouloir = 5,       -- distance maximale à l'axe d'un couloir
-	zCouloirMin = 20,
-	zCouloirMax = 66,
-	gardeEntree = 3,       -- recul depuis le bord intérieur des Bases (entrées)
-	decalageProp = 4,      -- distance à l'axe où l'on pose les props d'un couloir
-	anneauMin = 21,
-	anneauMax = 28,
-	margeAllee = 0.3,      -- marge au-delà du bord extérieur de l'allée en anneau
-	zCoteMin = 16,
-	zCoteMax = 30,
-	gardeTorche = 6,       -- demi-angle (degrés) laissé libre autour des torches de la Place
-	gardeLien = 22,        -- demi-angle laissé libre vers le Comptoir et l'Autel
-	gardeNord = 48,        -- demi-angle laissé libre vers le nord (couloirs, traverse)
-	gardeDinodex = 12,     -- demi-angle laissé libre au sud (borne Dinodex)
+	bandeAllee = 4.5,      -- profondeur de la bande de bordure (depuis le mur d'une Base) où l'on pose
+	jeuMur = 0.3,          -- jeu laissé contre le mur des Bases
+	retraitMur = 2.2,      -- distance du mur au centre d'une composition
+	retraitLanterne = 1.4, -- distance du mur au poteau d'une lanterne
+	gardeEntree = 4,       -- rien à moins de ... de l'entrée d'une allée (côté promenade)
+	gardeFond = 2,         -- ... ni du fond de l'allée (chemin de ronde)
+	fractionPres = 0.33,   -- position des compositions le long de l'allée (0 = promenade, 1 = fond)
+	fractionLoin = 0.7,    -- position des lanternes
+	anneauSable = 6,       -- repli si Plan.place.anneau manque : l'anneau de sable de Sol dépasse la Place de ...
+	anneauDebut = 1,       -- props de la Place sur l'herbe : du bord du sable + 1 ...
+	anneauFin = 5,         -- ... au bord du sable + 5 (r 29..33 avec rayon 22 et anneau 6)
+	margeSable = 1,        -- herbe laissée entre un prop et le bord d'un chemin de sable (galets compris)
+	margeAnneau = 0.2,     -- recul depuis le bord extérieur de l'anneau
+	rayonTorches = 23,     -- torches de la Place (Builders/Lumieres, placeRayon)
+	ecartCote = 3,         -- côtés de la Nurserie / Grande Porte : de rayon + 3 ...
+	profondeurCote = 24,   -- ... sur 24 studs (jusqu'à rayon + 27)
+	ancreCote = 7,         -- compositions des côtés centrées à promenade.zMax + margeSable + 7 de l'axe du Tapis
+	gardeTorche = 5,       -- demi-angle (degrés) laissé libre autour des torches de la Place
+	gardeLien = 22,        -- demi-angle laissé libre vers le Comptoir et l'Autel (au moins 18)
+	gardeNord = 42,        -- demi-angle laissé libre vers le nord (allée x = centre, chemin de ronde)
+	gardeDinodex = 18,     -- demi-angle laissé libre au sud (borne Dinodex, sentier de la rivière)
 }
 
 function M.construire(ctx)
@@ -121,6 +133,8 @@ function M.construire(ctx)
 	local TERRE_FONCEE = Charte.ombre(TERRE)
 	local RUBAN = hex("FFD23F")
 	local POCHOIR = hex("C8412E")       -- marquage peint des caisses
+	local FLAMME = hex("FF8A2A")        -- flammes du feu de camp
+	local AMBRE = hex("FFA82E")         -- ambre fossile translucide
 
 	-- ===== fabrication des parts (budget compté ici) =====
 	local function reglerPart(p, collide)
@@ -510,8 +524,144 @@ function M.construire(ctx)
 		end
 	end
 
+	-- ===== effets légers (particules), jamais bloquants =====
+	local function particules(part, props)
+		pcall(function()
+			local p = Instance.new("ParticleEmitter")
+			p.Name = props.nom or "Particules"
+			p.Texture = props.texture or "rbxasset://textures/particles/sparkles_main.dds"
+			p.Color = ColorSequence.new(props.couleur or FEU)
+			p.LightEmission = props.emission or 1
+			p.LightInfluence = 0
+			local taille = props.taille or 0.25
+			p.Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, taille),
+				NumberSequenceKeypoint.new(1, props.tailleFin or 0),
+			})
+			p.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, props.transparence or 0.2),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			p.Lifetime = NumberRange.new(props.vieMin or 0.8, props.vieMax or 1.6)
+			p.Rate = props.debit or 2
+			p.Speed = NumberRange.new(props.vitesseMin or 0.5, props.vitesseMax or 1.5)
+			p.SpreadAngle = Vector2.new(props.ouverture or 20, props.ouverture or 20)
+			p.Acceleration = props.acceleration or Vector3.new(0, 0.6, 0)
+			p.RotSpeed = NumberRange.new(-60, 60)
+			p.Parent = part
+		end)
+	end
+
+	-- feu de camp : couronne de pierres, deux bûches croisées, flammes Neon qui palpitent,
+	-- lueur orangée et quelques étincelles qui montent (10 parts)
+	function fabriques.feu(m, cf, s)
+		for k = 0, 5 do
+			local a = math.rad(k * 60 + 15)
+			boule(m, {
+				Name = "Pierre",
+				Size = V(0.7 * s, 0.5 * s, 0.7 * s),
+				CFrame = ici(cf, math.cos(a) * 1.15 * s, 0.18 * s, math.sin(a) * 1.15 * s),
+				Color = (k % 2 == 0) and ROCHE or ROCHE_OMBRE,
+				Material = M_ROCHE,
+			})
+		end
+		for _, ry in ipairs({ 35, -35 }) do
+			cylindre(m, {
+				Name = "Buche",
+				Size = V(1.9 * s, 0.34 * s, 0.34 * s),
+				CFrame = ici(cf, 0, 0.22 * s, 0, 0, ry, 0),
+				Color = BOIS_FONCE,
+				Material = M_BOIS,
+			})
+		end
+		local flamme = bloc(m, {
+			Name = "Flamme",
+			Size = V(0.62 * s, 0.95 * s, 0.62 * s),
+			CFrame = ici(cf, 0, 0.78 * s, 0, 0, 45, 0),
+			Color = FLAMME,
+			Material = NEON,
+			CastShadow = false,
+			CanCollide = false,
+		})
+		local coeur = bloc(m, {
+			Name = "Coeur",
+			Size = V(0.34 * s, 0.62 * s, 0.34 * s),
+			CFrame = ici(cf, 0.05 * s, 1.18 * s, 0.03 * s, 0, 20, 0),
+			Color = FEU,
+			Material = NEON,
+			CastShadow = false,
+			CanCollide = false,
+		})
+		if flamme then
+			pcall(function()
+				local l = Outils.lumiere(flamme, { Range = 14, Brightness = 1.1, Color = FLAMME })
+				l.Shadows = false
+				Outils.animer(flamme, "pulse", 1.4)
+			end)
+			particules(flamme, {
+				nom = "Etincelles",
+				couleur = FEU,
+				taille = 0.16,
+				debit = 3,
+				vieMin = 0.8,
+				vieMax = 1.5,
+				vitesseMin = 2,
+				vitesseMax = 3.5,
+				ouverture = 18,
+				acceleration = Vector3.new(0, 1, 0),
+			})
+		end
+		if coeur then
+			pcall(function()
+				Outils.animer(coeur, "pulse", 1.9)
+			end)
+		end
+	end
+
+	-- éclat d'ambre fossile (un moustique pris dedans) qui flotte au-dessus d'un petit socle d'ardoise
+	-- et scintille : la « trouvaille » du chantier (3 parts)
+	function fabriques.ambre(m, cf, s)
+		bloc(m, {
+			Name = "Socle",
+			Size = V(1.2 * s, 0.5 * s, 1.2 * s),
+			CFrame = ici(cf, 0, 0.25 * s, 0, 0, 15, 0),
+			Color = ROCHE_CLAIRE,
+			Material = M_ROCHE,
+		})
+		local gemme = Outils.modele(m, "Trouvaille")
+		local pierre = bloc(gemme, {
+			Name = "Ambre",
+			Size = V(0.75 * s, 0.95 * s, 0.6 * s),
+			CFrame = ici(cf, 0, 1.35 * s, 0, 12, 30, 18),
+			Color = AMBRE,
+			Material = M_VERRE,
+			Transparency = 0.2,
+			CastShadow = false,
+			CanCollide = false,
+		})
+		bloc(gemme, {
+			Name = "Moustique",
+			Size = V(0.14 * s, 0.1 * s, 0.3 * s),
+			CFrame = ici(cf, 0, 1.35 * s, 0, 12, 30, 18),
+			Color = CREUX,
+			Material = M_OS,
+			CastShadow = false,
+			CanCollide = false,
+		})
+		if pierre then
+			pcall(function()
+				local l = Outils.lumiere(pierre, { Range = 7, Brightness = 0.7, Color = AMBRE })
+				l.Shadows = false
+				Outils.animer(gemme, "flotte", 0.6)
+			end)
+			particules(pierre, { nom = "Scintillement", couleur = FEU, taille = 0.22, debit = 1.5, vitesseMin = 0.2, vitesseMax = 0.6, ouverture = 180, acceleration = Vector3.new(0, 0.3, 0) })
+		end
+	end
+
 	-- nom du modèle, coût en parts et demi-emprise au sol (a sur X local, b sur Z local) selon l'échelle
 	local PROPS = {
+		feu = { nom = "FeuDeCamp", cout = 10, a = 1.55, b = 1.55 },
+		ambre = { nom = "Ambre", cout = 3, a = 0.85, b = 0.85 },
 		os = { nom = "Os", cout = 7, a = 0.76, b = 1.96 },
 		crane = { nom = "Crane", cout = 13, a = 1.2, b = 2.5 },
 		exposition = { nom = "Exposition", cout = 15, a = 1.25, b = 1.95 },
@@ -533,63 +683,209 @@ function M.construire(ctx)
 		return a * math.abs(c * dx - sn * dz) + b * math.abs(sn * dx + c * dz)
 	end
 
-	-- ===== emprises =====
-	-- couloirs
-	local xCouloirs = {}
-	if Plan.decor and type(Plan.decor.couloirs) == "table" then
-		for _, c in ipairs(Plan.decor.couloirs) do
-			table.insert(xCouloirs, c.X)
-		end
+	-- ===== emprises (tout vient de Plan) =====
+	-- allées entre les Bases : une bande de bordure contre le mur de chaque Base, le milieu reste libre
+	local allees = Plan.allees
+	local A_DEMI, A_BANDE, A_ZMIN, A_ZMAX = 0, 0, 0, 0
+	if type(allees) == "table" and type(allees.x) == "table" and type(allees.largeur) == "number"
+		and type(allees.zMin) == "number" and type(allees.zMax) == "number" then
+		A_DEMI = allees.largeur / 2
+		A_BANDE = math.min(reglage("bandeAllee"), A_DEMI * 0.45)
+		A_ZMIN = allees.zMin + reglage("gardeEntree")
+		A_ZMAX = allees.zMax - reglage("gardeFond")
 	end
-	if #xCouloirs == 0 then
-		xCouloirs = { -56, 0, 56 }
-	end
-	local bordBases = 18
-	if Plan.base and type(Plan.base.bordInterieur) == "number" then
-		bordBases = Plan.base.bordInterieur
-	end
-	local GARDE = reglage("gardeCouloir")
-	local DEMI = reglage("demiCouloir")
-	local Z_DEBUT = math.max(reglage("zCouloirMin"), bordBases + reglage("gardeEntree"))
-	local Z_FIN = reglage("zCouloirMax")
+	local JEU_MUR = reglage("jeuMur")
 
-	local function dansCouloir(x, z, hx, hz)
-		for _, c in ipairs(xCouloirs) do
+	local function dansAllee(x, z, hx, hz)
+		if A_DEMI <= 0 then
+			return false
+		end
+		for _, c in ipairs(allees.x) do
 			local d = math.abs(x - c)
-			if d - hx >= GARDE and d + hx <= DEMI and math.abs(z) - hz >= Z_DEBUT and math.abs(z) + hz <= Z_FIN then
+			if d - hx >= A_DEMI - A_BANDE and d + hx <= A_DEMI - JEU_MUR and math.abs(z) - hz >= A_ZMIN and math.abs(z) + hz <= A_ZMAX then
 				return true
 			end
 		end
 		return false
 	end
 
-	-- anneau de la Place
-	local infoPlace = Plan.place or {}
-	local PC = infoPlace.centre or Vector3.new(0, 0, 100)
-	local bordAllee = 24
-	local sol = ctx.Equilibrage and ctx.Equilibrage.sol
-	if type(sol) == "table" and type(sol.rayonAnneau) == "number" and type(sol.largeurAnneau) == "number" then
-		bordAllee = sol.rayonAnneau + sol.largeurAnneau / 2
+	-- ===== chemins de sable de Sol (galets de bordure compris), recalculés depuis Plan =====
+	-- mêmes formes et mêmes réglages que Builders/Sol (Equilibrage.sol) : un prop de l'anneau ou des côtés
+	-- doit laisser au moins `margeSable` d'herbe entre lui et chacune d'elles.
+	local function reglageSol(cle, defaut)
+		local sol = ctx.Equilibrage and ctx.Equilibrage.sol
+		if type(sol) == "table" and type(sol[cle]) == "number" then
+			return sol[cle]
+		end
+		return defaut
 	end
-	local R_MIN = math.max(reglage("anneauMin"), bordAllee + reglage("margeAllee"))
-	local R_MAX = reglage("anneauMax")
+	local MARGE_SABLE = reglage("margeSable")
+	local sables = {}
+	local function sableRect(x0, x1, z0, z1)
+		table.insert(sables, { g = "rect", x0 = math.min(x0, x1), x1 = math.max(x0, x1), z0 = math.min(z0, z1), z1 = math.max(z0, z1) })
+	end
+	local function sableDisque(x, z, r)
+		table.insert(sables, { g = "disque", x = x, z = z, r = r })
+	end
+	local decor = type(Plan.decor) == "table" and Plan.decor or {}
+	local zP = (type(Plan.promenade) == "table" and type(Plan.promenade.zMax) == "number") and Plan.promenade.zMax or 27
+	-- promenade en « stade » le long du Tapis, terminée par une demi-lune (rayon zP) devant la Nurserie et la Grande Porte
+	local xBout = 0
+	for _, bout in ipairs({ Plan.nurserie, Plan.finTapis }) do
+		if type(bout) == "table" and typeof(bout.centre) == "Vector3" then
+			xBout = math.max(xBout, math.abs(bout.centre.X))
+		end
+	end
+	local margeJungle = reglageSol("margeJungle", 2)
+	if type(decor.jungleOuest) == "table" and typeof(decor.jungleOuest.max) == "Vector3" then
+		xBout = math.min(xBout, math.abs(decor.jungleOuest.max.X) - margeJungle - zP)
+	end
+	if type(decor.jungleEst) == "table" and typeof(decor.jungleEst.min) == "Vector3" then
+		xBout = math.min(xBout, math.abs(decor.jungleEst.min.X) - margeJungle - zP)
+	end
+	if xBout > 0 then
+		table.insert(sables, { g = "capsule", x0 = -xBout, x1 = xBout, z = 0, r = zP })
+	end
+	-- allées entre les Bases, chemins de ronde et contre-allées
+	local zRondeA, zRondeB, xContreB = nil, nil, nil
+	if type(Plan.base) == "table" and type(Plan.bases) == "table" then
+		local xBasesMax, zBasesFond = 0, zP + (Plan.base.profondeur or 0)
+		for _, b in ipairs(Plan.bases) do
+			if typeof(b.centre) == "Vector3" then
+				xBasesMax = math.max(xBasesMax, math.abs(b.centre.X) + (Plan.base.largeur or 0) / 2)
+				zBasesFond = math.max(zBasesFond, math.abs(b.centre.Z) + (Plan.base.profondeur or 0) / 2)
+			end
+		end
+		zRondeA = zBasesFond + reglageSol("ecartRonde", 3)
+		zRondeB = zRondeA + reglageSol("largeurRonde", 8)
+		local xContreA = xBasesMax + reglageSol("ecartContre", 2)
+		xContreB = xContreA + reglageSol("largeurContre", 10)
+		for _, s in ipairs({ -1, 1 }) do
+			sableRect(-xContreB, xContreB, s * zRondeA, s * zRondeB)
+			sableRect(s * xContreA, s * xContreB, s * (zP - 1), s * (zRondeA + 1))
+		end
+		if A_DEMI > 0 then
+			for _, ax in ipairs(allees.x) do
+				for _, s in ipairs({ -1, 1 }) do
+					sableRect(ax - A_DEMI, ax + A_DEMI, s * (allees.zMin - 1), s * (zRondeA + 1))
+				end
+			end
+		end
+	end
+
+	-- anneau de la Place : sur l'herbe, au-delà de l'anneau de sable (même largeur que Sol)
+	local PC = nil
+	local R_MIN, R_MAX = 0, 0
+	if type(Plan.place) == "table" and typeof(Plan.place.centre) == "Vector3" and type(Plan.place.rayon) == "number" then
+		PC = Plan.place.centre
+		local anneauSable = Plan.place.anneau
+		if type(anneauSable) ~= "number" then
+			anneauSable = reglageSol("anneauPlace", reglage("anneauSable"))
+		end
+		local rPlace = Plan.place.rayon + anneauSable
+		R_MIN = rPlace + reglage("anneauDebut")
+		R_MAX = rPlace + reglage("anneauFin")
+		-- l'anneau de sable, ses liens vers le Comptoir et l'Autel, le sentier et la plage de la rivière
+		sableDisque(PC.X, PC.Z, rPlace)
+		local dLien = reglageSol("demiLien", 6)
+		local mBat = reglageSol("margeBatiment", 3)
+		local comptoir = Plan.comptoir
+		if type(comptoir) == "table" and typeof(comptoir.centre) == "Vector3" and typeof(comptoir.taille) == "Vector3" then
+			local c, t = comptoir.centre, comptoir.taille
+			sableRect(c.X + t.X / 2 - 1, PC.X - rPlace + 3, c.Z - dLien, c.Z + dLien)
+			sableRect(c.X - t.X / 2 - mBat, c.X + t.X / 2 + mBat, c.Z - t.Z / 2 - mBat, c.Z + t.Z / 2 + mBat)
+		end
+		local autel = Plan.autel
+		if type(autel) == "table" and typeof(autel.centre) == "Vector3" and type(autel.rayon) == "number" then
+			sableRect(PC.X + rPlace - 3, autel.centre.X - autel.rayon + 1, autel.centre.Z - dLien, autel.centre.Z + dLien)
+			sableDisque(autel.centre.X, autel.centre.Z, autel.rayon + mBat)
+		end
+		local riviere = Plan.riviere
+		if type(riviere) == "table" and type(riviere.zMin) == "number" then
+			local zPlageA = riviere.zMin - reglageSol("plage", 6)
+			if type(decor.jungleOuest) == "table" and typeof(decor.jungleOuest.max) == "Vector3" then
+				zPlageA = math.min(zPlageA, decor.jungleOuest.max.Z)
+			end
+			local dR = reglageSol("demiRiviere", 5)
+			sableRect(PC.X - dR, PC.X + dR, PC.Z + rPlace - 3, zPlageA + 1)
+			local xMin = type(riviere.xMin) == "number" and riviere.xMin or -1e4
+			local xMax = type(riviere.xMax) == "number" and riviere.xMax or 1e4
+			sableRect(xMin, xMax, zPlageA, riviere.zMin + 2)
+		end
+		-- liaison allée x = centre -> anneau quand l'anneau ne touche pas le chemin de ronde
+		if zRondeB and PC.Z - rPlace > zRondeB then
+			sableRect(PC.X - dLien, PC.X + dLien, zRondeB - 1, PC.Z - rPlace + 2)
+		end
+	end
+
+	-- emprise au sol f = { x, z, a, b, ry } (rectangle tourné) ou { x, z, a, rond = true } (disque de rayon a) :
+	-- demi-étendue selon la direction (ux, uz)
+	local function etendue(f, ux, uz)
+		if f.rond then
+			return f.a
+		end
+		return demiEtendue(f.a, f.b, f.ry, ux, uz)
+	end
+	-- vrai si l'emprise f passe à moins de `marge` de la forme de sable s
+	local function touche(f, s, marge)
+		if s.g == "rect" then
+			local hx, hz = (s.x1 - s.x0) / 2 + marge, (s.z1 - s.z0) / 2 + marge
+			local dx, dz = f.x - (s.x0 + s.x1) / 2, f.z - (s.z0 + s.z1) / 2
+			-- axes séparateurs : X et Z du monde, puis X et Z locaux du prop
+			if math.abs(dx) >= hx + etendue(f, 1, 0) or math.abs(dz) >= hz + etendue(f, 0, 1) then
+				return false
+			end
+			if not f.rond then
+				local r = math.rad(f.ry)
+				local c, sn = math.cos(r), math.sin(r)
+				for _, ax in ipairs({ { c, -sn, f.a }, { sn, c, f.b } }) do
+					if math.abs(dx * ax[1] + dz * ax[2]) >= ax[3] + hx * math.abs(ax[1]) + hz * math.abs(ax[2]) then
+						return false
+					end
+				end
+			end
+			return true
+		end
+		-- disque, ou capsule le long de X (point le plus proche sur le segment x0..x1)
+		local qx = s.x
+		if s.g == "capsule" then
+			qx = math.max(s.x0, math.min(s.x1, f.x))
+		end
+		local dx, dz = f.x - qx, f.z - s.z
+		local d = math.sqrt(dx * dx + dz * dz)
+		if d < 0.01 then
+			return true
+		end
+		-- d - étendue minore la distance de l'emprise à l'axe de la forme
+		return d - etendue(f, dx / d, dz / d) < s.r + marge
+	end
+	local function horsDuSable(f)
+		for _, s in ipairs(sables) do
+			if touche(f, s, MARGE_SABLE) then
+				return false
+			end
+		end
+		return true
+	end
 
 	local function angleVers(p)
 		return math.deg(math.atan2(p.Z - PC.Z, p.X - PC.X)) % 360
 	end
 	-- directions à laisser libres : { angle, demi-angle }
 	local interdits = {}
-	local gardeLien = reglage("gardeLien")
-	if Plan.comptoir and Plan.comptoir.centre then
-		table.insert(interdits, { angleVers(Plan.comptoir.centre), gardeLien })
+	if PC then
+		local gardeLien = reglage("gardeLien")
+		if Plan.comptoir and typeof(Plan.comptoir.centre) == "Vector3" then
+			table.insert(interdits, { angleVers(Plan.comptoir.centre), gardeLien })
+		end
+		if Plan.autel and typeof(Plan.autel.centre) == "Vector3" then
+			table.insert(interdits, { angleVers(Plan.autel.centre), gardeLien })
+		end
+		table.insert(interdits, { angleVers(PC - Vector3.new(0, 0, 1)), reglage("gardeNord") }) -- vers le Tapis
+		table.insert(interdits, { angleVers(PC + Vector3.new(0, 0, 1)), reglage("gardeDinodex") }) -- borne et rivière au sud
 	end
-	if Plan.autel and Plan.autel.centre then
-		table.insert(interdits, { angleVers(Plan.autel.centre), gardeLien })
-	end
-	table.insert(interdits, { angleVers(Vector3.new(PC.X, 0, 0)), reglage("gardeNord") }) -- vers le Tapis
-	table.insert(interdits, { angleVers(Vector3.new(PC.X, 0, PC.Z + 1)), reglage("gardeDinodex") }) -- borne au sud
-	-- torches de la Place (Builders/Lumieres)
-	local pasTorche, decalageTorche = 45, 22.5
+	-- torches de la Place (Builders/Lumieres) : gardées seulement si un prop descend jusqu'à leur cercle
+	local pasTorche, decalageTorche, rayonTorche = 45, 22.5, reglage("rayonTorches")
 	local lum = ctx.Equilibrage and ctx.Equilibrage.lumieres
 	if type(lum) == "table" then
 		if type(lum.placePas) == "number" and lum.placePas > 0 then
@@ -598,10 +894,14 @@ function M.construire(ctx)
 		if type(lum.placeDecalage) == "number" then
 			decalageTorche = lum.placeDecalage
 		end
+		if type(lum.placeRayon) == "number" then
+			rayonTorche = lum.placeRayon
+		end
 	end
+	local torches = {}
 	local angleTorche = 0
 	while angleTorche < 360 - 0.01 do
-		table.insert(interdits, { (angleTorche + decalageTorche) % 360, reglage("gardeTorche") })
+		table.insert(torches, (angleTorche + decalageTorche) % 360)
 		angleTorche = angleTorche + pasTorche
 	end
 
@@ -610,6 +910,9 @@ function M.construire(ctx)
 	end
 
 	local function dansAnneau(x, z, ry, a, b)
+		if not PC then
+			return false
+		end
 		local dx, dz = x - PC.X, z - PC.Z
 		local d = math.sqrt(dx * dx + dz * dz)
 		if d < 1 then
@@ -628,23 +931,38 @@ function M.construire(ctx)
 				return false
 			end
 		end
-		return true
+		if d - radial < rayonTorche + 2 then
+			for _, t in ipairs(torches) do
+				if ecartAngle(theta, t) < reglage("gardeTorche") + demi then
+					return false
+				end
+			end
+		end
+		return horsDuSable({ x = x, z = z, a = a, b = b, ry = ry })
 	end
 
-	-- côtés de la Nurserie et de la Fin du tapis
+	-- côtés de la Nurserie et de la Grande Porte : bandes au nord et au sud de leurs disques
 	local cotes = {}
-	local nurserie = Plan.nurserie or { centre = Vector3.new(-128, 0, 0), rayon = 14 }
-	local finTapis = Plan.finTapis or { centre = Vector3.new(128, 0, 0), rayon = 14 }
-	table.insert(cotes, { centre = nurserie.centre, rayon = nurserie.rayon or 14 })
-	table.insert(cotes, { centre = finTapis.centre, rayon = finTapis.rayon or 14 })
-	local Z_COTE_MIN = reglage("zCoteMin")
-	local Z_COTE_MAX = reglage("zCoteMax")
+	local function ajouterCote(info)
+		if type(info) == "table" and typeof(info.centre) == "Vector3" and type(info.rayon) == "number" then
+			local zMin = info.rayon + reglage("ecartCote")
+			local cote = { centre = info.centre, rayon = info.rayon, zMin = zMin, zMax = zMin + reglage("profondeurCote") }
+			table.insert(cotes, cote)
+			return cote
+		end
+		return nil
+	end
+	local coteNurserie = ajouterCote(Plan.nurserie)
+	local coteFin = ajouterCote(Plan.finTapis)
 
-	local function dansCote(x, z, hx, hz)
+	-- distance (|dz|) de l'axe du Tapis où l'on centre les compositions : au-delà de la demi-lune de sable
+	local zAncre = zP + MARGE_SABLE + reglage("ancreCote")
+
+	local function dansCote(x, z, hx, hz, f)
 		for _, cote in ipairs(cotes) do
 			local dz = math.abs(z - cote.centre.Z)
-			if math.abs(x - cote.centre.X) + hx <= cote.rayon and dz - hz >= Z_COTE_MIN and dz + hz <= Z_COTE_MAX then
-				return true
+			if math.abs(x - cote.centre.X) + hx <= cote.rayon and dz - hz >= cote.zMin and dz + hz <= cote.zMax then
+				return horsDuSable(f)
 			end
 		end
 		return false
@@ -665,12 +983,12 @@ function M.construire(ctx)
 		end
 		local a, b = def.a * s, def.b * s
 		local permis
-		if zone.genre == "couloir" then
-			permis = dansCouloir(x, z, demiEtendue(a, b, ry, 1, 0), demiEtendue(a, b, ry, 0, 1))
+		if zone.genre == "allee" then
+			permis = dansAllee(x, z, demiEtendue(a, b, ry, 1, 0), demiEtendue(a, b, ry, 0, 1))
 		elseif zone.genre == "anneau" then
 			permis = dansAnneau(x, z, ry, a, b)
 		else
-			permis = dansCote(x, z, demiEtendue(a, b, ry, 1, 0), demiEtendue(a, b, ry, 0, 1))
+			permis = dansCote(x, z, demiEtendue(a, b, ry, 1, 0), demiEtendue(a, b, ry, 0, 1), { x = x, z = z, a = a, b = b, ry = ry })
 		end
 		if not permis then
 			return nil
@@ -690,61 +1008,98 @@ function M.construire(ctx)
 		return m
 	end
 
-	-- ===== 1. les couloirs entre les Bases =====
+	-- ===== 1. les allées entre les Bases =====
 	-- collision coupée : les courses-poursuites de vol ne s'accrochent jamais au décor.
-	-- Couloirs dégagés : par moitié de couloir, une seule composition collée au mur d'une Base,
-	-- soit un crâne tourné vers le Tapis, soit un os à demi enterré au pied d'un rocher moussu.
-	local zoneCouloir = { genre = "couloir", collision = false, dossier = Outils.dossier(dossier, "Couloirs") }
-	local DX = reglage("decalageProp")
-
-	for i, c in ipairs(xCouloirs) do
-		for _, sens in ipairs({ 1, -1 }) do
-			local cote = sens
-			local x = c + cote * DX
-			if (i + (sens + 1) / 2) % 2 == 0 then
-				-- le crâne regarde vers le Tapis (z = 0)
-				local ryCrane = 0
-				if sens == -1 then
-					ryCrane = 180
+	-- Par demi-allée (au nord et au sud du Tapis) : une petite composition contre le mur d'une Base, au premier
+	-- tiers, et une lanterne contre le mur d'en face, plus loin, qui penche vers l'allée. Le milieu reste libre.
+	if A_DEMI > 0 then
+		local zoneAllee = { genre = "allee", collision = false, dossier = Outils.dossier(dossier, "Allees") }
+		local longueur = allees.zMax - allees.zMin
+		local zPres = allees.zMin + longueur * reglage("fractionPres")
+		local zLoin = allees.zMin + longueur * reglage("fractionLoin")
+		local dProp = A_DEMI - reglage("retraitMur")
+		local dLanterne = A_DEMI - reglage("retraitLanterne")
+		local k = 0
+		for _, c in ipairs(allees.x) do
+			for _, sgn in ipairs({ -1, 1 }) do
+				k = k + 1
+				-- mur choisi en alternance d'une demi-allée à l'autre (jamais le même motif en miroir)
+				local cote = 1
+				if k % 2 == 0 then
+					cote = -1
 				end
-				poser(zoneCouloir, "crane", x, sens * 46, ryCrane, 0.8)
-			else
-				poser(zoneCouloir, "os", x, sens * 38, 0, 1.3)
-				poser(zoneCouloir, "rocher", x, sens * 41.7, 0, 0.8)
+				local x = c + cote * dProp
+				local vers = 90 * cote -- regard (-Z local) tourné vers le milieu de l'allée
+				local motif = k % 3
+				if motif == 1 then
+					-- crâne exposé sur son socle, un rocher moussu plus loin dans l'allée
+					poser(zoneAllee, "exposition", x, sgn * zPres, vers, 0.9)
+					poser(zoneAllee, "rocher", x, sgn * (zPres + 3.6), 0, 0.8)
+				elseif motif == 2 then
+					-- os à demi enterré au pied d'un rocher
+					poser(zoneAllee, "os", x, sgn * zPres, 0, 1.3)
+					poser(zoneAllee, "rocher", x, sgn * (zPres + 3.7), 0, 0.9)
+				else
+					-- tonneau et caisse d'expédition
+					poser(zoneAllee, "tonneau", x, sgn * (zPres - 1.1), 0, 0.9)
+					poser(zoneAllee, "caisse", x, sgn * (zPres + 1.4), rng:NextNumber(-20, 20), 0.85)
+				end
+				poser(zoneAllee, "lanterne", c - cote * dLanterne, sgn * zLoin, -vers, 1)
 			end
 		end
 	end
 
 	-- ===== 2. l'anneau de la Place =====
-	local zoneAnneau = { genre = "anneau", collision = true, dossier = Outils.dossier(dossier, "Place") }
-	local rPose = (R_MIN + R_MAX) / 2
-	-- { prop, angle (degrés, x = cos, z = sin), échelle } ; chaque prop est posé le long de l'anneau
-	local ANNEAU = {
-		{ "pile", 36.5, 1 },
-		{ "exposition", 45.5, 1 },
-		{ "os", 55.5, 1.1 },
-		{ "tonneau", 123, 1 },
-		{ "tonneau", 127.2, 1 },
-		{ "caisse", 133.5, 0.9 },
-		{ "rocher", 146, 0.8 },
-		{ "pelle", 214, 1 },
-	}
-	for _, e in ipairs(ANNEAU) do
-		local theta = e[2]
-		local t = math.rad(theta)
-		local x = PC.X + rPose * math.cos(t)
-		local z = PC.Z + rPose * math.sin(t)
-		-- axe Z local tangent à l'anneau
-		poser(zoneAnneau, e[1], x, z, 180 - theta, e[3])
+	-- quatre petites scènes dans les secteurs libres (entre les liens vers le Comptoir et l'Autel, l'allée du
+	-- nord et le sentier du sud), sur l'herbe juste au-delà de l'anneau de sable : le sable reste libre.
+	if PC then
+		local zoneAnneau = { genre = "anneau", collision = true, dossier = Outils.dossier(dossier, "Place") }
+		-- { prop, angle (degrés, x = cos, z = sin, 90 = sud), échelle, orientation }
+		-- orientation « tangent » : axe Z local le long de l'anneau ; « face » : regard vers le centre
+		local ANNEAU = {
+			-- sud-est : la vitrine du paléontologue
+			{ "caisse", 38, 1, "tangent" },
+			{ "exposition", 47, 1, "face" },
+			{ "ambre", 56, 1, "face" },
+			{ "os", 64, 1.1, "tangent" },
+			-- sud-ouest : la réserve de l'expédition
+			{ "tonneau", 114, 1, "tangent" },
+			{ "tonneau", 118.5, 0.85, "tangent" },
+			{ "caisse", 125, 0.9, "tangent" },
+			{ "lanterne", 134, 1, "face" },
+			-- nord-ouest : le coin des fouilles
+			{ "pelle", 205, 1, "tangent" },
+			{ "rocher", 214, 1.2, "tangent" },
+			-- nord-est : un os trouvé au pied d'une lanterne
+			{ "lanterne", 318, 1, "face" },
+			{ "os", 328, 1.1, "tangent" },
+		}
+		local marge = reglage("margeAnneau")
+		for _, e in ipairs(ANNEAU) do
+			local def = PROPS[e[1]]
+			if def then
+				local theta = e[2]
+				local t = math.rad(theta)
+				local ux, uz = math.cos(t), math.sin(t)
+				local ry = 180 - theta
+				if e[4] == "face" then
+					ry = 90 - theta
+				end
+				-- collé au bord extérieur de l'anneau, sans jamais repasser sous R_MIN (props profonds : l'exposition)
+				local radial = demiEtendue(def.a * e[3], def.b * e[3], ry, ux, uz)
+				local r = math.max(R_MAX - radial - marge, R_MIN + radial + 0.05)
+				poser(zoneAnneau, e[1], PC.X + r * ux, PC.Z + r * uz, ry, e[3])
+			end
+		end
 	end
 
-	-- ===== 3. les côtés de la Nurserie et de la Fin du tapis =====
-	local zMilieu = (Z_COTE_MIN + Z_COTE_MAX) / 2
-
-	-- chantier de fouille : squelette dans sa fosse sous ruban, lanterne, pelle et caisse autour
-	local function chantier(zone, cx, sgn, ryCorps)
+	-- ===== 3. les côtés de la Nurserie et de la Grande Porte =====
+	-- chantier de fouille : squelette dans sa fosse sous ruban, ambre, lanterne, pelle et caisse autour
+	local function chantier(zone, cote, sgn, ryCorps)
+		local cx = cote.centre.X
+		local zMilieu = zAncre
 		local function en(lx, lz)
-			return cx + lx, sgn * (zMilieu + lz)
+			return cx + lx, cote.centre.Z + sgn * (zMilieu + lz)
 		end
 		local x, z = en(0, 0)
 		local squelette = poser(zone, "squelette", x, z, ryCorps, 1)
@@ -765,19 +1120,27 @@ function M.construire(ctx)
 		poser(zone, "pelle", x, z, rng:NextNumber(0, 360), 1)
 		x, z = en(10.5, 4)
 		poser(zone, "caisse", x, z, rng:NextNumber(-25, 25), 1)
+		-- la trouvaille du jour : un éclat d'ambre qui flotte et scintille près du crâne
+		x, z = en(-9.8, -3.6)
+		poser(zone, "ambre", x, z, 0, 1)
 	end
 
-	-- campement : clairière de terre battue (Terrain), jeep, caisses empilées, tonneau, lanterne et gros rocher
-	local function campement(zone, cx, sgn)
+	-- campement : clairière de terre battue (Terrain), jeep, caisse, tonneau, feu de camp (qui éclaire
+	-- le campement) et gros rocher
+	local function campement(zone, cote, sgn)
+		local cx = cote.centre.X
+		local zMilieu = zAncre
 		local function en(lx, lz)
-			return cx + lx, sgn * (zMilieu + lz)
+			return cx + lx, cote.centre.Z + sgn * (zMilieu + lz)
 		end
 		-- clairière : deux disques de terre (Ground) au ras de l'herbe, une couche de voxels
 		if type(Outils.terrainCylindre) == "function" then
 			for _, d in ipairs({ { -2, 0, 6.5 }, { 5, 0.5, 5 } }) do
 				local x, z = en(d[1], d[2])
 				local rayon = d[3]
-				local dansZone = math.abs(x - cx) + rayon <= 14 and math.abs(z) - rayon >= Z_COTE_MIN and math.abs(z) + rayon <= Z_COTE_MAX
+				local dz = math.abs(z - cote.centre.Z)
+				local dansZone = math.abs(x - cx) + rayon <= cote.rayon and dz - rayon >= cote.zMin and dz + rayon <= cote.zMax
+					and horsDuSable({ x = x, z = z, a = rayon, rond = true })
 				if dansZone then
 					Outils.terrainCylindre(CFrame.new(x, 0.05 - 2.025, z), 4.05, rayon, Enum.Material.Ground)
 				end
@@ -785,22 +1148,27 @@ function M.construire(ctx)
 		end
 		local x, z = en(-6, 0)
 		poser(zone, "jeep", x, z, 90, 1.15)
-		x, z = en(-1.2, -3)
-		poser(zone, "lanterne", x, z, 0, 1)
 		x, z = en(1.8, -3.2)
-		poser(zone, "pile", x, z, rng:NextNumber(-20, 20), 1)
+		poser(zone, "caisse", x, z, rng:NextNumber(-20, 20), 1)
 		x, z = en(1.5, 3.3)
 		poser(zone, "tonneau", x, z, 0, 1)
 		x, z = en(9, 1.5)
 		poser(zone, "rocher", x, z, 0, 1.7)
+		x, z = en(4.6, -0.9)
+		poser(zone, "feu", x, z, 0, 1)
 	end
 
-	local zoneNurserie = { genre = "cote", collision = true, dossier = Outils.dossier(dossier, "Nurserie") }
-	local zoneFin = { genre = "cote", collision = true, dossier = Outils.dossier(dossier, "FinTapis") }
-	chantier(zoneNurserie, nurserie.centre.X, -1, 90)
-	campement(zoneNurserie, nurserie.centre.X, 1)
-	campement(zoneFin, finTapis.centre.X, -1)
-	chantier(zoneFin, finTapis.centre.X, 1, -90)
+	-- Nurserie : fouilles au nord, campement au sud ; Grande Porte : l'inverse (la carte reste équilibrée)
+	if coteNurserie then
+		local zoneNurserie = { genre = "cote", collision = true, dossier = Outils.dossier(dossier, "Nurserie") }
+		chantier(zoneNurserie, coteNurserie, -1, 90)
+		campement(zoneNurserie, coteNurserie, 1)
+	end
+	if coteFin then
+		local zoneFin = { genre = "cote", collision = true, dossier = Outils.dossier(dossier, "FinTapis") }
+		campement(zoneFin, coteFin, -1)
+		chantier(zoneFin, coteFin, 1, -90)
+	end
 
 	dossier:SetAttribute("Parts", compte)
 end

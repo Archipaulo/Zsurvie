@@ -33,6 +33,9 @@ function M.demarrer(ctx)
 	local X_RANGEE = DEMI_L - 9       -- mêmes rangées qu'au rez-de-chaussée
 	local Z_RANGEES = { 11, 4.8, -1.4, -7.6, -13.8, -20 }
 	local HAUT_SOCLE = 1.3
+	-- borne d'achat : coin avant droit, derrière le bouton de verrou (hors de l'axe de l'entrée)
+	local X_BORNE = DEMI_L - 2.8 -- contre le muret latéral, devant la 1re rangée de podiums
+	local Z_BORNE = (Plan.base.profondeur or 50) / 2 - 4
 
 	local BOIS = Charte.hex("A8733F")
 	local BOIS_SOMBRE = Charte.hex("6E4A2A")
@@ -193,9 +196,9 @@ function M.demarrer(ctx)
 		local dossier = Instance.new("Folder")
 		dossier.Name = "BorneEtage"
 		dossier.Parent = m
-		Outils.bloc(dossier, { Name = "SocleBorne", Anchored = true, Size = Vector3.new(2.4, 0.6, 2.4), CFrame = r * CFrame.new(0, H + 0.3, 18), Color = Charte.hex("383D48"), Material = Mat.Metal })
-		local fut = Outils.bloc(dossier, { Name = "Borne", Anchored = true, Size = Vector3.new(1.6, 3, 1.2), CFrame = r * CFrame.new(0, H + 2.1, 18), Color = Charte.hex("C3C9D3"), Material = Mat.Metal })
-		Outils.bloc(dossier, { Name = "Ecran", Anchored = true, Size = Vector3.new(1.3, 1.2, 0.2), CFrame = r * CFrame.new(0, H + 2.9, 18.6), Color = Charte.gemme, Material = Mat.Neon })
+		Outils.bloc(dossier, { Name = "SocleBorne", Anchored = true, Size = Vector3.new(2.4, 0.6, 2.4), CFrame = r * CFrame.new(X_BORNE, H + 0.3, Z_BORNE), Color = Charte.hex("383D48"), Material = Mat.Metal })
+		local fut = Outils.bloc(dossier, { Name = "Borne", Anchored = true, Size = Vector3.new(1.6, 3, 1.2), CFrame = r * CFrame.new(X_BORNE, H + 2.1, Z_BORNE), Color = Charte.hex("C3C9D3"), Material = Mat.Metal })
+		Outils.bloc(dossier, { Name = "Ecran", Anchored = true, Size = Vector3.new(1.3, 1.2, 0.2), CFrame = r * CFrame.new(X_BORNE, H + 2.9, Z_BORNE + 0.6), Color = Charte.gemme, Material = Mat.Neon })
 		local invite = Outils.invite(fut, { nom = "Etage", action = "Construire", objet = "Étage", duree = 0.4, distance = 10 })
 		local texte = nil
 		if Style and Style.etiquette then

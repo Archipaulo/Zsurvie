@@ -1,15 +1,18 @@
--- Constructeur Riviere (version 2, STYLE.md §4) : rivière d'ouest en est au sud de la Place.
--- Lit SINUEUX creusé dans le terrain : axe zc(x) = 138 + 3,5 sin(x/37) + 1,5 sin(x/13) (dans 131..145),
--- tracé par pas de 4 studs (cylindres Air pour creuser, Sand pour le fond, Water jusqu'à Y = -0,8 :
--- la surface est 0,8 stud sous l'herbe), berges en pente de sable (0 -> -1,5) avec un peu de boue,
--- rochers de terrain Slate/Rock, galets Slate arrondis, roseaux et nénuphars ; deux ponts de bois
--- en arc (planches WoodPlanks, rambardes et poteaux Wood, lanternes) ; une cascade en parts Glass
--- blanc-bleu qui sort des falaises de l'est, avec écume, embruns et gouttes (ParticleEmitter).
--- Emprise (CONTRAT §10) : bande z 131..145 sur x -166..166 (+ la roche de la cascade adossée aux falaises) ;
--- seules les berges de terrain débordent un peu dans les boucles, sans jamais sortir du couloir libre z 129..149.
+-- Constructeur Riviere (plan v2, STYLE.md §4) : rivière d'ouest en est au sud de la Place, sur la bande Plan.riviere.
+-- Elle naît d'une cascade à deux étages qui sort d'une gorge taillée dans la falaise est (Plan.falaises.est),
+-- coule vers l'ouest dans un lit SINUEUX creusé dans le terrain (Air, fond de Sand, Water jusqu'à 0,8 sous l'herbe)
+-- et se perd sous un amas de roches au pied de la falaise ouest. Berges en pente de sable, boue, rochers Slate/Rock,
+-- galets, roseaux, nénuphars. UN SEUL pont de bois en arc, dans l'axe de la Place (Plan.place.centre.X), qui mène au
+-- belvédère de la rive sud (terrasse de planches au pied de la falaise sud, feu de camp, banc et longue-vue tournés vers la
+-- cascade) : plus aucun pont ne bute contre la falaise. Au bout des autres allées (Plan.allees.x), de simples pontons de
+-- pêche partent de la rive NORD et s'arrêtent au milieu du courant (barque amarrée, canne à pêche) : un but, pas une impasse.
+-- Effets légers : reflets et flocons d'écume qui descendent le courant, ronds dans l'eau, lucioles, libellules qui
+-- tournent au-dessus de l'eau (Outils.animer), embruns, gouttes et arc-en-ciel (Beams) au pied de la cascade.
+-- Emprise (CONTRAT §10) : bande Plan.riviere (zMin..zMax sur xMin..xMax) + la cascade dans la falaise est.
+-- Aucune coordonnée en dur : tout vient de Plan.
 local M = {}
 
-local BUDGET = 250 -- parts au maximum pour ce constructeur (le terrain ne compte pas)
+local BUDGET = 320 -- parts au maximum pour ce constructeur (le terrain ne compte pas)
 
 function M.construire(ctx)
 	local Charte = ctx.Charte
@@ -31,50 +34,105 @@ function M.construire(ctx)
 		return defaut
 	end
 
-	-- ===== géométrie =====
-	local zCentre = 138
-	local largeur = 14
-	if Plan and type(Plan.riviere) == "table" then
-		if type(Plan.riviere.z) == "number" then
-			zCentre = Plan.riviere.z
-		end
-		if type(Plan.riviere.largeur) == "number" then
-			largeur = Plan.riviere.largeur
-		end
+	-- ===== géométrie (Plan v2) =====
+	local R = Plan.riviere
+	if type(R) ~= "table" then
+		warn("[Dino] Riviere : Plan.riviere absent")
+		return
 	end
-	-- on reste dans l'emprise du contrat quoi qu'il arrive
-	local Z_MIN = math.max(131, zCentre - largeur / 2)
-	local Z_MAX = math.min(145, zCentre + largeur / 2)
-	if Z_MAX - Z_MIN < 8 then
-		Z_MIN = 131
-		Z_MAX = 145
+	local largeurPlan = R.largeur or 14
+	local zPlan = R.z
+	if type(zPlan) ~= "number" then
+		zPlan = (R.zMin + R.zMax) / 2
 	end
-	zCentre = (Z_MIN + Z_MAX) / 2
+	local Z_MIN = R.zMin or (zPlan - largeurPlan / 2)
+	local Z_MAX = R.zMax or (zPlan + largeurPlan / 2)
+	local zCentre = (Z_MIN + Z_MAX) / 2
 	local LARGEUR = Z_MAX - Z_MIN
-	local X_MIN = -166
-	local X_MAX = 166
+	local X_MIN = R.xMin
+	local X_MAX = R.xMax
+	local monde = Plan.monde
+	if type(X_MIN) ~= "number" then
+		X_MIN = monde.min.X + 17
+	end
+	if type(X_MAX) ~= "number" then
+		X_MAX = monde.max.X - 17
+	end
 
-	local PROF = 4                -- profondeur de l'eau (dessus du sol à Y = 0)
-	local X_ROCHE = 164           -- face ouest de la roche de la cascade
-	local HAUT_CASCADE = math.min(20, math.max(10, reglage("hauteurCascade", 16)))
+	-- falaises : la cascade sort de la falaise est, la rivière se perd au pied de la falaise ouest
+	local F = Plan.falaises or {}
+	local XF = X_MAX + 2 -- pied de la falaise est
+	if F.est and type(F.est.xMin) == "number" then
+		XF = F.est.xMin
+	end
+	local PROF_FALAISE = 16 -- la gorge s'enfonce au plus de ... studs dans la falaise
+	if F.est and type(F.est.xMax) == "number" then
+		PROF_FALAISE = math.max(12, math.min(PROF_FALAISE, F.est.xMax - XF - 6))
+	end
+
+	-- couloir libre : entre la Jungle (au nord) et la falaise sud
+	local Z_LIBRE_MIN, Z_LIBRE_MAX = Z_MIN - 2, Z_MAX + 2
+	if Plan.decor then
+		for _, cle in ipairs({ "jungleOuest", "jungleEst" }) do
+			local j = Plan.decor[cle]
+			if j and j.max then
+				Z_LIBRE_MIN = math.max(Z_LIBRE_MIN, j.max.Z + 1)
+			end
+		end
+	end
+	if F.sud and type(F.sud.zMin) == "number" then
+		Z_LIBRE_MAX = math.min(Z_LIBRE_MAX, F.sud.zMin - 2)
+	end
+
+	local PROF = 4                                -- profondeur de l'eau (dessus du sol à Y = 0)
+	local X_ROCHE = X_MAX - 4                     -- face ouest du contrefort de la cascade
+	local HAUT_CASCADE = math.min(18, math.max(10, reglage("hauteurCascade", 14)))
+	local HAUT_ETAGE = 8                          -- l'étage haut de la cascade, au fond de la gorge
 	local LARGEUR_CHUTE = math.min(7, LARGEUR - 5)
+	local X_GORGE = XF + math.floor(PROF_FALAISE * 0.45) -- fond de la gorge basse (pied de la chute haute)
+	local X_GORGE_FIN = XF + PROF_FALAISE          -- fond de la gorge haute
 
-	local X_PONTS = { reglage("pontOuest", -92), reglage("pontEst", 92) }
-	local LARGEUR_PONT = 6
+	-- un seul pont, dans l'axe de la Place (il mène au belvédère de la rive sud) ; au bout des autres allées,
+	-- des pontons de pêche côté nord (la rive sud n'a que quelques studs avant la falaise : pas de traversée sans but)
+	local ponts = {}
+	local pontons = {}
+	local xAllees = {}
+	if Plan.allees and type(Plan.allees.x) == "table" then
+		xAllees = Plan.allees.x
+	end
+	local xPlace = nil
+	if Plan.place and Plan.place.centre then
+		xPlace = Plan.place.centre.X
+	elseif #xAllees > 0 then
+		-- sans Place : l'allée la plus proche du centre
+		xPlace = xAllees[1]
+		for _, xa in ipairs(xAllees) do
+			if math.abs(xa) < math.abs(xPlace) then
+				xPlace = xa
+			end
+		end
+	end
+	if xPlace then
+		table.insert(ponts, { x = xPlace, largeur = 9 })
+	end
+	for _, xa in ipairs(xAllees) do
+		if not xPlace or math.abs(xa - xPlace) > 12 then
+			table.insert(pontons, { x = xa, largeur = 4 })
+		end
+	end
 	local ARC_PONT = 1.8
 
-	local rng = Outils.aleatoire(reglage("graine", 1138))
+	local rng = Outils.aleatoire(reglage("graine", 1157))
 
 	-- ===== tracé sinueux =====
 	local PAS = 4                 -- pas du tracé sur x (grille du terrain)
 	local Y_EAU = -0.8            -- surface de l'eau : 0,8 stud sous les berges (herbe à Y = 0)
 	local LARGE_BERGE = 3.6       -- largeur de la pente de sable d'une berge
 	local HAUT_BERGE = 1.5        -- la berge descend de 0 à -1,5
-	-- couloir libre entre la Jungle (z <= 128) et le bord sud du monde (z = 150)
-	local Z_LIBRE_MIN, Z_LIBRE_MAX = 129, 149
-	-- axe du lit ; il rejoint le milieu de la bande devant la cascade (bassin centré)
+	local K = LARGEUR / 14        -- amplitude des boucles proportionnelle à la bande
+	-- axe du lit ; il rejoint le milieu de la bande devant la cascade (bassin centré) et sous les ponts
 	local function zc(x)
-		local z = zCentre + 3.5 * math.sin(x / 37) + 1.5 * math.sin(x / 13)
+		local z = zCentre + 3.5 * K * math.sin(x / 37) + 1.5 * K * math.sin(x / 13)
 		local w = math.clamp((x - (X_ROCHE - 36)) / 24, 0, 1)
 		z = z + (zCentre - z) * w
 		return math.clamp(z, Z_MIN + 2, Z_MAX - 2)
@@ -120,6 +178,10 @@ function M.construire(ctx)
 	local FEUILLE = hex("5CC23F")
 	local FEUILLE_OMBRE = Charte.ombre(FEUILLE)
 	local FLEURS = { hex("FF7EB9"), hex("FFFFFF"), hex("FFD84D") }
+	local LIBELLULES = { hex("2FA8FF"), hex("35D07F"), hex("B45CFF"), hex("FF5C8A") }
+	local AILE = hex("DDF6FF")
+	local LUCIOLE = hex("E8FF7A")
+	local ARC = { hex("FF4D4D"), hex("FF9F2E"), hex("FFE14D"), hex("5CE65C"), hex("4DA6FF"), hex("A05CFF") }
 
 	-- ===== création sous budget =====
 	local compte = 0
@@ -177,12 +239,21 @@ function M.construire(ctx)
 			Outils.terrainBloc(cf, Vector3.new(2 * rayon, hauteur, 2 * rayon), materiau)
 		end
 	end
+	-- bloc de terrain donné par ses bornes
+	local function tBornes(x0, x1, y0, y1, z0, z1, materiau)
+		if x1 <= x0 or y1 <= y0 or z1 <= z0 then
+			return
+		end
+		tBloc(CFrame.new((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), Vector3.new(x1 - x0, y1 - y0, z1 - z0), materiau)
+	end
 
 	-- zones à ne pas encombrer (ponts, cascade) pour les petits objets
 	local function surPont(x, marge)
-		for _, xp in ipairs(X_PONTS) do
-			if math.abs(x - xp) <= LARGEUR_PONT / 2 + marge then
-				return true
+		for _, liste in ipairs({ ponts, pontons }) do
+			for _, p in ipairs(liste) do
+				if math.abs(x - p.x) <= p.largeur / 2 + marge then
+					return true
+				end
 			end
 		end
 		return false
@@ -208,9 +279,45 @@ function M.construire(ctx)
 		table.insert(occupes, { x, z, rayon })
 	end
 
+	-- émetteur de particules : chaque réglage dans son pcall (un réglage inconnu n'annule pas les autres)
+	local function emetteur(parent, nom, props)
+		if not parent then
+			return nil
+		end
+		local ok, p = pcall(function()
+			local e = Instance.new("ParticleEmitter")
+			e.Name = nom
+			e.Texture = "rbxasset://textures/particles/smoke_main.dds"
+			return e
+		end)
+		if not ok or not p then
+			return nil
+		end
+		for cle, valeur in pairs(props) do
+			pcall(function()
+				p[cle] = valeur
+			end)
+		end
+		pcall(function()
+			p.Parent = parent
+		end)
+		return p
+	end
+	local function fondu(a, b)
+		return NumberSequence.new({ NumberSequenceKeypoint.new(0, a), NumberSequenceKeypoint.new(1, b) })
+	end
+	local function apparaitFond(a, pic, b)
+		return NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.2, pic),
+			NumberSequenceKeypoint.new(1, b),
+		})
+	end
+
 	local dBerges = Outils.dossier(dossier, "Berges")
 	local dVegetation = Outils.dossier(dossier, "Vegetation")
 	local dPonts = Outils.dossier(dossier, "Ponts")
+	local dEffets = Outils.dossier(dossier, "Effets")
 
 	-- ===== 1. l'eau et le lit (terrain) =====
 	local function construireEau()
@@ -237,7 +344,7 @@ function M.construire(ctx)
 		-- le lit, pas à pas le long de l'axe sinueux : on creuse (Air) de -0,8 à +1, on pose le fond
 		-- de sable, puis l'eau de -PROF à -0,8 (surface sous le niveau des berges)
 		local hCreux = 1 - Y_EAU
-		local x = X_MIN + PAS
+		local x = X_MIN
 		while x <= X_ROCHE - PAS do
 			local z, r, h = lit(x)
 			tCylindre(CFrame.new(x, (Y_EAU + 1) / 2, z), hCreux, h, Mat.Air)
@@ -283,14 +390,15 @@ function M.construire(ctx)
 
 	-- ===== 3. rochers en terrain (Slate et Rock), jamais sur les ponts =====
 	local function construireRochers()
-		-- la source à l'ouest : un amas de roches d'où sort la rivière
-		local zs, _, hs = lit(X_MIN + PAS)
-		tBoule(Vector3.new(X_MIN + 1, 0.5, zs - hs + 1.5), 3.2, Mat.Rock)
-		tBoule(Vector3.new(X_MIN + 1, 0.8, zs + hs - 1.5), 3.4, Mat.Slate)
-		tBoule(Vector3.new(X_MIN + 0.5, 2, zs), 3, Mat.Rock)
-		tBoule(Vector3.new(X_MIN + 3, -1.2, zs + 2), 2, Mat.Slate)
-		occuper(X_MIN, zs, 6)
-		local n = math.max(0, math.floor(reglage("rochers", 22)))
+		-- la perte à l'ouest : la rivière disparaît sous un amas de roches au pied de la falaise
+		local zs, rs, hs = lit(X_MIN)
+		tBoule(Vector3.new(X_MIN - 1, 0.5, zs - hs + 1.5), 3.4, Mat.Rock)
+		tBoule(Vector3.new(X_MIN - 1, 0.8, zs + hs - 1.5), 3.6, Mat.Slate)
+		tBoule(Vector3.new(X_MIN - 2, 2.4, zs), 3.4, Mat.Rock)
+		tBoule(Vector3.new(X_MIN + 1.5, -1.4, zs + rs * 0.5), 2, Mat.Slate)
+		tBoule(Vector3.new(X_MIN + 2.5, -1.8, zs - rs * 0.5), 1.6, Mat.Rock)
+		occuper(X_MIN, zs, 7)
+		local n = math.max(0, math.floor(reglage("rochers", 26)))
 		local essais = 0
 		local poses = 0
 		while poses < n and essais < n * 8 do
@@ -327,16 +435,16 @@ function M.construire(ctx)
 			end
 		end
 		-- culées de pierre aux quatre coins de chaque pont (hors du tablier)
-		for _, xp in ipairs(X_PONTS) do
-			local zp, _, hp = lit(xp)
+		for _, p in ipairs(ponts) do
+			local zp, _, hp = lit(p.x)
 			for _, sx in ipairs({ -1, 1 }) do
-				tBoule(Vector3.new(xp + sx * (LARGEUR_PONT / 2 + 1.6), -0.9, zp - hp + 0.8), 1.7, Mat.Slate)
-				tBoule(Vector3.new(xp + sx * (LARGEUR_PONT / 2 + 1.6), -0.9, zp + hp - 0.8), 1.7, Mat.Slate)
+				tBoule(Vector3.new(p.x + sx * (p.largeur / 2 + 1.6), -0.9, zp - hp + 0.8), 1.7, Mat.Slate)
+				tBoule(Vector3.new(p.x + sx * (p.largeur / 2 + 1.6), -0.9, zp + hp - 0.8), 1.7, Mat.Slate)
 			end
 		end
 	end
 
-	-- ===== 4. ponts de bois en arc (d'une berge à l'autre, là où passe la boucle) =====
+	-- ===== 4. ponts de bois en arc (d'une berge à l'autre) =====
 	-- hauteur du dessus du tablier à la fraction t (0..1) de la traversée
 	local function hauteurTablier(t)
 		return ARC_PONT * math.sin(math.pi * t)
@@ -358,7 +466,10 @@ function M.construire(ctx)
 		})
 	end
 
-	local function construirePont(index, xp)
+	local function construirePont(index, p)
+		local xp = p.x
+		local LARGEUR_PONT = p.largeur
+		local large = LARGEUR_PONT > 7
 		local m = Outils.modele(dPonts, "Pont" .. index)
 		local demi = LARGEUR_PONT / 2
 		-- le tablier part de l'herbe d'une rive et arrive sur l'herbe de l'autre
@@ -413,8 +524,11 @@ function M.construire(ctx)
 					Material = Mat.Wood,
 				})
 				hauts[i] = Vector3.new(xq, dessus, z)
-				-- lanterne sur un poteau d'entrée sur deux (en diagonale), sinon un chapeau
+				-- lanterne sur un poteau d'entrée sur deux (en diagonale) ; aux quatre coins sur le grand pont
 				local extremite = (i == 1 and sx == -1) or (i == #ts and sx == 1)
+				if large and (i == 1 or i == #ts) then
+					extremite = true
+				end
 				if extremite then
 					bloc(m, {
 						Name = "Toit",
@@ -469,55 +583,608 @@ function M.construire(ctx)
 	end
 
 	local function construirePonts()
-		for index, xp in ipairs(X_PONTS) do
-			if xp - LARGEUR_PONT / 2 > X_MIN + 6 and xp + LARGEUR_PONT / 2 < X_ROCHE - 12 then
-				construirePont(index, xp)
-				occuper(xp, zc(xp), LARGEUR_PONT / 2 + 1)
+		for index, p in ipairs(ponts) do
+			if p.x - p.largeur / 2 > X_MIN + 6 and p.x + p.largeur / 2 < X_ROCHE - 12 then
+				construirePont(index, p)
+				occuper(p.x, zc(p.x), p.largeur / 2 + 1)
+				p.construit = true
 			end
 		end
 	end
 
-	-- ===== 5. cascade =====
-	local function emetteur(parent, nom, props)
-		pcall(function()
-			local p = Instance.new("ParticleEmitter")
-			p.Name = nom
-			p.Texture = "rbxasset://textures/particles/smoke_main.dds"
-			for cle, valeur in pairs(props) do
-				p[cle] = valeur
-			end
-			p.Parent = parent
-		end)
+	-- poteau de rambarde coiffé d'une lanterne (toit, verre Neon, lumière douce qui pulse)
+	local function poteauLanterne(parent, x, z, bas, haut)
+		bloc(parent, {
+			Name = "Poteau",
+			Size = Vector3.new(0.5, haut - bas, 0.5),
+			CFrame = CFrame.new(x, (haut + bas) / 2, z),
+			Color = POUTRE,
+			Material = Mat.Wood,
+		})
+		bloc(parent, {
+			Name = "Toit",
+			Size = Vector3.new(0.9, 0.25, 0.9),
+			CFrame = CFrame.new(x, haut + 0.95, z),
+			Color = POUTRE_OMBRE,
+			Material = Mat.Wood,
+		})
+		local feu = bloc(parent, decor({
+			Name = "Lanterne",
+			Size = Vector3.new(0.55, 0.7, 0.55),
+			CFrame = CFrame.new(x, haut + 0.45, z),
+			Color = LANTERNE,
+			Material = Mat.Neon,
+		}))
+		if feu then
+			pcall(function()
+				Outils.lumiere(feu, { Range = 14, Brightness = 1.2, Color = LANTERNE })
+			end)
+			Outils.animer(feu, "pulse", 0.6)
+		end
 	end
 
+	-- ===== 4 bis. le belvédère de la rive sud : la destination du pont de la Place =====
+	-- terrasse de planches entre l'arrivée du pont et le pied de la falaise sud, ouverte au nord sur le pont ;
+	-- à l'ouest un feu de camp et ses rondins, à l'est un banc et une longue-vue tournés vers la cascade,
+	-- au fond, contre la falaise, le panneau « BELVÉDÈRE » entre deux jardinières. Le passage central reste libre.
+	local function construireBelvedere()
+		local p = ponts[1]
+		if not p or not p.construit then
+			return
+		end
+		local xp = p.x
+		local zp, _, hp = lit(xp)
+		local zFalaise = Z_MAX + 6
+		if F.sud and type(F.sud.zMin) == "number" then
+			zFalaise = F.sud.zMin
+		end
+		local z0 = zp + hp + 0.5          -- au bout du tablier du pont (herbe de la rive sud)
+		local z1 = zFalaise - 0.4         -- pied de la falaise
+		local prof = z1 - z0
+		if prof < 3 then
+			warn("[Dino] Riviere : rive sud trop étroite pour le belvédère (" .. tostring(prof) .. " studs)")
+			return
+		end
+		local DEMI = math.max(p.largeur / 2 + 5.5, 10)
+		local OUVERTURE = p.largeur / 2 + 0.8   -- l'ouverture de la rambarde nord, face au pont
+		local Y = 0.25                          -- dessus du platelage
+		local zMil = (z0 + z1) / 2
+		local m = Outils.modele(dossier, "Belvedere")
+		-- rien de ce constructeur (rochers, roseaux, galets) ne vient sous la terrasse
+		local xo = xp - DEMI
+		while xo <= xp + DEMI do
+			occuper(xo, z0 + 1, 2.5)
+			xo = xo + 3
+		end
+
+		-- platelage : planches sur toute la largeur, deux teintes, et une poutre de rive sur trois côtés
+		local n = math.max(3, math.floor(prof / 0.95 + 0.5))
+		local d = prof / n
+		for k = 1, n do
+			local couleur = BOIS
+			if k % 2 == 0 then
+				couleur = BOIS_CLAIR
+			end
+			bloc(m, {
+				Name = "Planche",
+				Size = Vector3.new(2 * DEMI + rng:NextNumber(-0.3, 0.3), 0.5, d - 0.06),
+				CFrame = CFrame.new(xp + rng:NextNumber(-0.1, 0.1), Y - 0.25, z0 + (k - 0.5) * d),
+				Color = couleur,
+				Material = Mat.WoodPlanks,
+				CanTouch = false,
+			})
+		end
+		bloc(m, {
+			Name = "Rive",
+			Size = Vector3.new(2 * DEMI + 0.5, 0.7, 0.5),
+			CFrame = CFrame.new(xp, Y - 0.3, z0 - 0.2),
+			Color = POUTRE_OMBRE,
+			Material = Mat.Wood,
+		})
+		for _, sx in ipairs({ -1, 1 }) do
+			bloc(m, {
+				Name = "Rive",
+				Size = Vector3.new(0.5, 0.7, prof + 0.4),
+				CFrame = CFrame.new(xp + sx * (DEMI + 0.05), Y - 0.3, zMil),
+				Color = POUTRE_OMBRE,
+				Material = Mat.Wood,
+			})
+		end
+
+		-- rambardes : côté rivière (de part et d'autre de l'arrivée du pont) et aux deux bouts ; pas côté falaise
+		local H_RAMBARDE = 2.3
+		local bas = Y - 0.6
+		local basN = -1.8   -- côté rivière, les poteaux descendent dans la berge : ils servent de pilotis au bord de la terrasse
+		local haut = Y + H_RAMBARDE + 0.25
+		local zN, zS = z0 + 0.3, z1 - 0.3
+		for _, sx in ipairs({ -1, 1 }) do
+			local xCoin = xp + sx * (DEMI - 0.25)
+			local xOuv = xp + sx * OUVERTURE
+			-- poteau d'angle avec lanterne, poteau d'ouverture, poteau du fond
+			poteauLanterne(m, xCoin, zN, basN, haut + 0.35)
+			bloc(m, {
+				Name = "Poteau",
+				Size = Vector3.new(0.5, haut + 0.35 - basN, 0.5),
+				CFrame = CFrame.new(xOuv, (haut + 0.35 + basN) / 2, zN),
+				Color = POUTRE,
+				Material = Mat.Wood,
+			})
+			bloc(m, {
+				Name = "Chapeau",
+				Size = Vector3.new(0.7, 0.2, 0.7),
+				CFrame = CFrame.new(xOuv, haut + 0.45, zN),
+				Color = POUTRE_OMBRE,
+				Material = Mat.Wood,
+			})
+			bloc(m, {
+				Name = "Poteau",
+				Size = Vector3.new(0.5, haut - bas, 0.5),
+				CFrame = CFrame.new(xCoin, (haut + bas) / 2, zS),
+				Color = POUTRE,
+				Material = Mat.Wood,
+			})
+			local segments = {
+				{ Vector3.new(xCoin, Y, zN), Vector3.new(xOuv, Y, zN) },
+				{ Vector3.new(xCoin, Y, zN), Vector3.new(xCoin, Y, zS) },
+			}
+			for _, sg in ipairs(segments) do
+				poutre(m, "Rambarde", sg[1] + Vector3.new(0, H_RAMBARDE, 0), sg[2] + Vector3.new(0, H_RAMBARDE, 0), 0.34, 0.3, POUTRE, Mat.Wood)
+				poutre(m, "Lisse", sg[1] + Vector3.new(0, 1.1, 0), sg[2] + Vector3.new(0, 1.1, 0), 0.22, 0.2, POUTRE_OMBRE, Mat.Wood)
+			end
+		end
+
+		-- ouest : feu de camp sur une sole de pierre, cercle de galets, bûches en tipi, braises ; deux rondins pour s'asseoir
+		local xFeu = xp - (OUVERTURE + DEMI) / 2 + 0.4
+		local zFeu = zMil - 0.2
+		cylindre(m, {
+			Name = "Sole",
+			Size = Vector3.new(0.2, 2.6, 2.6),
+			CFrame = CFrame.new(xFeu, Y + 0.1, zFeu) * CFrame.Angles(0, 0, math.rad(90)),
+			Color = GALETS[3],
+			Material = Mat.Slate,
+			CanTouch = false,
+		})
+		for i = 1, 7 do
+			local a = (i / 7) * 2 * math.pi
+			local dg = rng:NextNumber(0.5, 0.65)
+			boule(m, decor({
+				Name = "Pierre",
+				Size = Vector3.new(dg, dg * 0.8, dg),
+				CFrame = CFrame.new(xFeu + 1.1 * math.cos(a), Y + 0.2 + dg * 0.3, zFeu + 1.1 * math.sin(a)),
+				Color = GALETS[rng:NextInteger(1, #GALETS)],
+				Material = Mat.Slate,
+			}))
+		end
+		for i = 1, 3 do
+			local a = (i / 3) * 2 * math.pi + 0.4
+			cylindre(m, decor({
+				Name = "Buche",
+				Size = Vector3.new(1.3, 0.3, 0.3),
+				CFrame = CFrame.new(xFeu + 0.3 * math.cos(a), Y + 0.65, zFeu + 0.3 * math.sin(a))
+					* CFrame.Angles(0, -a, 0) * CFrame.Angles(0, 0, math.rad(55)),
+				Color = POUTRE_OMBRE,
+				Material = Mat.Wood,
+			}))
+		end
+		local flamme = bloc(m, decor({
+			Name = "Flamme",
+			Size = Vector3.new(0.5, 0.6, 0.5),
+			CFrame = CFrame.new(xFeu, Y + 0.6, zFeu),
+			Color = hex("FF8A2B"),
+			Material = Mat.Neon,
+			Transparency = 0.3,
+		}))
+		if flamme then
+			pcall(function()
+				local feu = Instance.new("Fire")
+				feu.Color = hex("FF7A1A")
+				feu.SecondaryColor = hex("FFD84D")
+				feu.Size = 2.6
+				feu.Heat = 6
+				feu.Parent = flamme
+			end)
+			pcall(function()
+				Outils.lumiere(flamme, { Range = 16, Brightness = 1.6, Color = hex("FFA04D") })
+			end)
+			Outils.animer(flamme, "pulse", 1.4)
+			-- braises qui montent et s'éteignent
+			emetteur(flamme, "Braises", {
+				Color = ColorSequence.new(hex("FFD84D"), hex("FF5A1F")),
+				LightEmission = 1,
+				Size = fondu(0.18, 0),
+				Transparency = fondu(0, 1),
+				Lifetime = NumberRange.new(1.2, 2.2),
+				Rate = 6,
+				Speed = NumberRange.new(2, 4),
+				SpreadAngle = Vector2.new(20, 20),
+				Acceleration = Vector3.new(0, 1.5, 0),
+			})
+		end
+		-- rondins : un le long du bout ouest, un contre la falaise
+		local rondins = {
+			{ CFrame.new(xp - DEMI + 0.9, Y + 0.45, zFeu) * CFrame.Angles(0, math.rad(90), 0), math.min(3.2, prof - 1.4) },
+			{ CFrame.new(xFeu - 0.2, Y + 0.45, z1 - 0.9), 2.4 },
+		}
+		for _, rd in ipairs(rondins) do
+			cylindre(m, {
+				Name = "Rondin",
+				Size = Vector3.new(rd[2], 0.9, 0.9),
+				CFrame = rd[1],
+				Color = POUTRE,
+				Material = Mat.Wood,
+			})
+		end
+
+		-- est : banc face à la cascade (assise le long de z, dossier à l'ouest) et longue-vue pointée sur la chute
+		local xBanc = xp + (OUVERTURE + DEMI) / 2 - 0.6
+		local LB = math.min(3.4, prof - 1.4)
+		bloc(m, {
+			Name = "Assise",
+			Size = Vector3.new(1.3, 0.25, LB),
+			CFrame = CFrame.new(xBanc, Y + 1.1, zMil + 0.2),
+			Color = BOIS_CLAIR,
+			Material = Mat.WoodPlanks,
+		})
+		bloc(m, {
+			Name = "Dossier",
+			Size = Vector3.new(0.25, 1.1, LB),
+			CFrame = CFrame.new(xBanc - 0.6, Y + 1.85, zMil + 0.2) * CFrame.Angles(0, 0, math.rad(-10)),
+			Color = BOIS,
+			Material = Mat.WoodPlanks,
+		})
+		for _, sz in ipairs({ -1, 1 }) do
+			bloc(m, {
+				Name = "Pied",
+				Size = Vector3.new(1.1, 1, 0.3),
+				CFrame = CFrame.new(xBanc, Y + 0.5, zMil + 0.2 + sz * (LB / 2 - 0.4)),
+				Color = POUTRE_OMBRE,
+				Material = Mat.Wood,
+			})
+		end
+		local pied = Vector3.new(xp + DEMI - 1.3, Y, zN + 1.1)
+		local oeil = pied + Vector3.new(0, 2.6, 0)
+		local cible = Vector3.new(X_ROCHE, HAUT_CASCADE * 0.6, zCentre)
+		for i = 1, 3 do
+			local a = (i / 3) * 2 * math.pi
+			local sol = pied + Vector3.new(0.6 * math.cos(a), 0, 0.6 * math.sin(a))
+			poutre(m, "Trepied", sol, oeil - Vector3.new(0, 0.2, 0), 0.12, 0.12, POUTRE_OMBRE, Mat.Metal)
+		end
+		local vise = CFrame.lookAt(oeil, cible)
+		cylindre(m, {
+			Name = "LongueVue",
+			Size = Vector3.new(1.8, 0.45, 0.45),
+			CFrame = vise * CFrame.new(0, 0, -0.3) * CFrame.Angles(0, math.rad(90), 0),
+			Color = hex("C9A227"),
+			Material = Mat.Metal,
+		})
+		cylindre(m, {
+			Name = "Objectif",
+			Size = Vector3.new(0.3, 0.6, 0.6),
+			CFrame = vise * CFrame.new(0, 0, -1.2) * CFrame.Angles(0, math.rad(90), 0),
+			Color = hex("8C6A12"),
+			Material = Mat.Metal,
+		})
+		cylindre(m, {
+			Name = "Oculaire",
+			Size = Vector3.new(0.35, 0.3, 0.3),
+			CFrame = vise * CFrame.new(0, 0, 0.75) * CFrame.Angles(0, math.rad(90), 0),
+			Color = POUTRE_OMBRE,
+			Material = Mat.Metal,
+		})
+
+		-- fond, contre la falaise : panneau « BELVÉDÈRE » (face au pont) entre deux jardinières fleuries
+		local zPanneau = z1 - 0.45
+		for _, sx in ipairs({ -1, 1 }) do
+			bloc(m, {
+				Name = "PoteauPanneau",
+				Size = Vector3.new(0.4, 3.4, 0.4),
+				CFrame = CFrame.new(xp + sx * 2.4, Y + 1.7, zPanneau),
+				Color = POUTRE,
+				Material = Mat.Wood,
+			})
+		end
+		local planche = bloc(m, {
+			Name = "Panneau",
+			Size = Vector3.new(5.6, 1.5, 0.3),
+			CFrame = CFrame.new(xp, Y + 2.7, zPanneau - 0.3),
+			Color = BOIS,
+			Material = Mat.WoodPlanks,
+		})
+		if planche then
+			pcall(function()
+				local etiquette = Outils.texte(planche, "Front", "BELVÉDÈRE", { couleur = ECUME })
+				if ctx.Style and ctx.Style.contour then
+					ctx.Style.contour(etiquette, 3)
+				end
+			end)
+		end
+		for _, sx in ipairs({ -1, 1 }) do
+			local xj = xp + sx * (OUVERTURE - 0.2)
+			local zj = z1 - 0.9
+			bloc(m, {
+				Name = "Jardiniere",
+				Size = Vector3.new(1.4, 0.8, 1.1),
+				CFrame = CFrame.new(xj, Y + 0.4, zj),
+				Color = POUTRE,
+				Material = Mat.WoodPlanks,
+			})
+			boule(m, decor({
+				Name = "Feuillage",
+				Size = Vector3.new(1.5, 1.1, 1.2),
+				CFrame = CFrame.new(xj, Y + 1.1, zj),
+				Color = FEUILLE,
+				Material = Mat.LeafyGrass,
+			}))
+			boule(m, decor({
+				Name = "Fleurs",
+				Size = Vector3.new(0.6, 0.6, 0.6),
+				CFrame = CFrame.new(xj + 0.3 * sx, Y + 1.55, zj - 0.2),
+				Color = FLEURS[rng:NextInteger(1, #FLEURS)],
+				Material = Mat.SmoothPlastic,
+			}))
+		end
+	end
+
+	-- ===== 4 ter. pontons de pêche au bout des autres allées (rive nord, jusqu'au milieu du courant) =====
+	local function construirePonton(index, p)
+		local xp = p.x
+		local zp, r, h = lit(xp)
+		local z0 = zp - h - 1.5    -- sur l'herbe de la rive nord
+		local z1 = zp - 0.4        -- s'arrête au milieu du courant : pas de traversée
+		local L = z1 - z0
+		local demi = p.largeur / 2
+		local Y = 0.35             -- dessus du platelage
+		local m = Outils.modele(dPonts, "Ponton" .. index)
+		-- planches en travers, légèrement irrégulières
+		local n = math.max(3, math.floor(L / 0.9 + 0.5))
+		local d = L / n
+		for k = 1, n do
+			local couleur = BOIS
+			if k % 2 == 0 then
+				couleur = BOIS_CLAIR
+			end
+			bloc(m, {
+				Name = "Planche",
+				Size = Vector3.new(p.largeur + rng:NextNumber(-0.2, 0.2), 0.4, d - 0.08),
+				CFrame = CFrame.new(xp + rng:NextNumber(-0.08, 0.08), Y - 0.2, z0 + (k - 0.5) * d)
+					* CFrame.Angles(0, math.rad(rng:NextNumber(-1.5, 1.5)), 0),
+				Color = couleur,
+				Material = Mat.WoodPlanks,
+				CanTouch = false,
+			})
+		end
+		-- longerons et pilotis ; les deux pilotis du bout dépassent (bittes d'amarrage), l'un porte la lanterne
+		for _, sx in ipairs({ -1, 1 }) do
+			bloc(m, {
+				Name = "Longeron",
+				Size = Vector3.new(0.4, 0.4, L),
+				CFrame = CFrame.new(xp + sx * (demi - 0.4), Y - 0.6, (z0 + z1) / 2),
+				Color = POUTRE_OMBRE,
+				Material = Mat.Wood,
+			})
+			local fond = -PROF - 0.5
+			local zMilieu = z0 + L * 0.55
+			bloc(m, {
+				Name = "Pilotis",
+				Size = Vector3.new(0.6, Y - 0.4 - fond, 0.6),
+				CFrame = CFrame.new(xp + sx * (demi - 0.3), (Y - 0.4 + fond) / 2, zMilieu),
+				Color = POUTRE_OMBRE,
+				Material = Mat.Wood,
+				CanTouch = false,
+			})
+			local lanterne = (sx > 0) == (xp > 0)
+			if lanterne then
+				poteauLanterne(m, xp + sx * (demi - 0.3), z1 - 0.3, fond, Y + 2.8)
+			else
+				bloc(m, {
+					Name = "Bitte",
+					Size = Vector3.new(0.7, Y + 0.8 - fond, 0.7),
+					CFrame = CFrame.new(xp + sx * (demi - 0.3), (Y + 0.8 + fond) / 2, z1 - 0.3),
+					Color = POUTRE_OMBRE,
+					Material = Mat.Wood,
+				})
+			end
+		end
+		-- canne à pêche calée dans un seau, fil et bouchon qui dansent sur l'eau
+		local cote = 1
+		if xp > 0 then
+			cote = -1
+		end
+		local seau = Vector3.new(xp + cote * (demi - 0.7), Y, z1 - 1.4)
+		cylindre(m, decor({
+			Name = "Seau",
+			Size = Vector3.new(0.8, 0.7, 0.7),
+			CFrame = CFrame.new(seau + Vector3.new(0, 0.4, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+			Color = hex("6E8FA6"),
+			Material = Mat.Metal,
+		}))
+		local bout = Vector3.new(xp + cote * 0.3, Y + 3.1, z1 + 2.2)
+		poutre(m, "Canne", seau + Vector3.new(0, 0.6, 0), bout, 0.12, 0.12, POUTRE, Mat.Wood)
+		local surface = Vector3.new(bout.X, Y_EAU + 0.1, bout.Z)
+		poutre(m, "Fil", bout, surface, 0.04, 0.04, ECUME, Mat.SmoothPlastic)
+		local bouchon = boule(m, decor({
+			Name = "Bouchon",
+			Size = Vector3.new(0.35, 0.35, 0.35),
+			CFrame = CFrame.new(surface),
+			Color = hex("FF4D4D"),
+			Material = Mat.SmoothPlastic,
+		}))
+		if bouchon then
+			Outils.animer(bouchon, "flotte", 1.3)
+		end
+		-- barque amarrée le long du ponton, qui se balance doucement
+		if reste() > 12 then
+			local bx = xp - cote * (demi + 1.4)
+			local bz = zp - 1
+			local LB, lB = 4.4, 1.8
+			local barque = Outils.modele(m, "Barque")
+			local fondB = Y_EAU - 0.35
+			bloc(barque, {
+				Name = "Coque",
+				Size = Vector3.new(lB - 0.4, 0.3, LB - 0.6),
+				CFrame = CFrame.new(bx, fondB, bz),
+				Color = POUTRE,
+				Material = Mat.WoodPlanks,
+			})
+			for _, sx in ipairs({ -1, 1 }) do
+				bloc(barque, {
+					Name = "Bordage",
+					Size = Vector3.new(0.25, 0.8, LB),
+					CFrame = CFrame.new(bx + sx * (lB / 2 - 0.12), fondB + 0.3, bz) * CFrame.Angles(0, 0, math.rad(-12 * sx)),
+					Color = BOIS,
+					Material = Mat.WoodPlanks,
+				})
+			end
+			for _, sz in ipairs({ -1, 1 }) do
+				bloc(barque, {
+					Name = "Tableau",
+					Size = Vector3.new(lB - 0.3, 0.7, 0.25),
+					CFrame = CFrame.new(bx, fondB + 0.3, bz + sz * (LB / 2 - 0.12)),
+					Color = BOIS_CLAIR,
+					Material = Mat.WoodPlanks,
+				})
+			end
+			bloc(barque, {
+				Name = "Banc",
+				Size = Vector3.new(lB - 0.4, 0.15, 0.6),
+				CFrame = CFrame.new(bx, fondB + 0.5, bz + 0.3),
+				Color = BOIS_CLAIR,
+				Material = Mat.WoodPlanks,
+			})
+			bloc(barque, {
+				Name = "Rame",
+				Size = Vector3.new(0.18, 0.1, 3.2),
+				CFrame = CFrame.new(bx + 0.2, fondB + 0.7, bz - 0.4) * CFrame.Angles(0, math.rad(12), math.rad(8)),
+				Color = POUTRE_OMBRE,
+				Material = Mat.Wood,
+			})
+			for _, inst in ipairs(barque:GetDescendants()) do
+				if inst:IsA("BasePart") then
+					inst.CanCollide = false
+					inst.CanTouch = false
+				end
+			end
+			Outils.animer(barque, "flotte", 0.4)
+			occuper(bx, bz, 2.6)
+		end
+		occuper(xp, (z0 + z1) / 2, demi + 1.5)
+	end
+
+	local function construirePontons()
+		for index, p in ipairs(pontons) do
+			if p.x - p.largeur / 2 > X_MIN + 10 and p.x + p.largeur / 2 < X_ROCHE - 14 then
+				construirePonton(index, p)
+			end
+		end
+	end
+
+	-- ===== 5. cascade à deux étages, sortie d'une gorge taillée dans la falaise est =====
 	local function construireCascade()
 		local m = Outils.modele(dossier, "Cascade")
 		local H = HAUT_CASCADE
 		local W = LARGEUR_CHUTE
-		-- la roche adossée aux falaises (terrain) : un contrefort, des blocs arrondis de chaque côté
-		tBloc(CFrame.new(X_ROCHE + 4, H / 2 - 1, zCentre), Vector3.new(8, H + 2, LARGEUR + 2), Mat.Rock)
-		tBloc(CFrame.new(X_ROCHE + 4.5, H - 0.25, zCentre), Vector3.new(7, 1.5, LARGEUR + 2), Mat.Grass)
+		local H2 = H + HAUT_ETAGE
+		-- le contrefort de roche en avant de la falaise, dessus d'herbe sur les épaules
+		tBornes(X_ROCHE, X_GORGE_FIN + 2, -1, H, zCentre - LARGEUR / 2 - 1, zCentre + LARGEUR / 2 + 1, Mat.Rock)
+		tBornes(X_ROCHE + 0.5, XF + 4, H - 0.8, H, zCentre - LARGEUR / 2 - 1, zCentre + LARGEUR / 2 + 1, Mat.Grass)
+		-- l'étage haut : un gradin de roche au fond de la gorge
+		tBornes(X_GORGE, X_GORGE_FIN + 2, H - 1, H2, zCentre - W / 2 - 3, zCentre + W / 2 + 3, Mat.Rock)
+		-- la gorge : on ouvre la falaise au-dessus du lit de chaque étage (parois de roche de part et d'autre)
+		tBornes(X_ROCHE + 2.4, X_GORGE, H, H + 45, zCentre - W / 2 - 1, zCentre + W / 2 + 1, Mat.Air)
+		tBornes(X_GORGE, X_GORGE_FIN, H2, H2 + 45, zCentre - W / 2, zCentre + W / 2, Mat.Air)
+		-- fond d'ardoise des deux lits
+		tBornes(X_ROCHE + 2.4, X_GORGE, H - 0.8, H, zCentre - W / 2 - 1, zCentre + W / 2 + 1, Mat.Slate)
+		tBornes(X_GORGE, X_GORGE_FIN, H2 - 0.8, H2, zCentre - W / 2, zCentre + W / 2, Mat.Slate)
+		-- la source : l'eau sort de sous un amas de roches au fond de la gorge haute
+		tBoule(Vector3.new(X_GORGE_FIN + 1, H2 + 1.2, zCentre - 1.8), 2.4, Mat.Slate)
+		tBoule(Vector3.new(X_GORGE_FIN + 1.5, H2 + 1.4, zCentre + 2), 2.5, Mat.Rock)
+		tBoule(Vector3.new(X_GORGE_FIN + 2.5, H2 + 3.8, zCentre), 3, Mat.Rock)
+		-- blocs arrondis sur les bords : la gorge n'est pas taillée au couteau
 		for _, sz in ipairs({ -1, 1 }) do
 			local zb = zCentre + sz * (W / 2 + 2.4)
 			tBoule(Vector3.new(X_ROCHE + 0.2, 1.5, zb), 3, Mat.Slate)
 			tBoule(Vector3.new(X_ROCHE + 0.6, 6, zb + sz * 0.6), 2.8, Mat.Rock)
 			tBoule(Vector3.new(X_ROCHE + 0.9, H - 4, zb), 2.6, Mat.Slate)
-			tBoule(Vector3.new(X_ROCHE + 1.5, H - 0.5, zb + sz * 0.8), 2.2, Mat.Rock)
+			tBoule(Vector3.new(X_ROCHE + 1.5, H + 0.5, zb + sz * 0.8), 2.2, Mat.Rock)
+			tBoule(Vector3.new((X_ROCHE + X_GORGE) / 2 + 2, H + 1.2, zCentre + sz * (W / 2 + 2)), 1.9, Mat.Slate)
+			tBoule(Vector3.new(X_GORGE + 0.5, H2 + 0.8, zCentre + sz * (W / 2 + 1.4)), 1.8, Mat.Rock)
 			-- rochers au pied, à moitié dans le bassin
 			tBoule(Vector3.new(X_ROCHE - 5.5, -0.9, zCentre + sz * (W / 2 + 0.6)), 1.8, Mat.Slate)
 		end
 
-		-- le ruisseau sur le dessus, puis le rebord de pierre d'où tombe l'eau
-		local xLevre = X_ROCHE - 0.9
+		-- l'étage haut : ruisseau qui sort du fond de la gorge et petite chute sur le gradin
+		local wHaut = math.max(3, W - 2.5)
 		bloc(m, decor({
-			Name = "Ruisseau",
-			Size = Vector3.new(7, 0.3, W - 0.6),
-			CFrame = CFrame.new(X_ROCHE + 3, H + 0.55, zCentre),
+			Name = "RuisseauHaut",
+			Size = Vector3.new(X_GORGE_FIN - X_GORGE, 0.3, wHaut),
+			CFrame = CFrame.new((X_GORGE + X_GORGE_FIN) / 2, H2 + 0.15, zCentre),
 			Color = EAU,
 			Material = Mat.Glass,
 			Transparency = 0.25,
 			CastShadow = false,
 		}))
+		local levreHaute = cylindre(m, {
+			Name = "LevreHaute",
+			Size = Vector3.new(wHaut + 1.4, 0.9, 0.9),
+			CFrame = CFrame.new(X_GORGE - 0.2, H2 - 0.1, zCentre) * CFrame.Angles(0, math.rad(90), 0),
+			Color = ROCHE_LEVRE,
+			Material = Mat.Slate,
+		})
+		local chuteHaute = bloc(m, decor({
+			Name = "ChuteHaute",
+			Size = Vector3.new(0.6, HAUT_ETAGE, wHaut),
+			CFrame = CFrame.new(X_GORGE - 0.95, H + HAUT_ETAGE / 2, zCentre),
+			Color = CHUTE,
+			Material = Mat.Glass,
+			Transparency = 0.16,
+			CastShadow = false,
+		}))
+		if chuteHaute then
+			Outils.animer(chuteHaute, "pulse", 1.8)
+		end
+		-- le lit bas : ruisseau du pied de la chute haute jusqu'au rebord
+		local ruisseau = bloc(m, decor({
+			Name = "Ruisseau",
+			Size = Vector3.new(X_GORGE - X_ROCHE - 0.6, 0.3, W - 0.6),
+			CFrame = CFrame.new((X_ROCHE + 0.6 + X_GORGE) / 2, H + 0.15, zCentre),
+			Color = EAU,
+			Material = Mat.Glass,
+			Transparency = 0.25,
+			CastShadow = false,
+		}))
+		if ruisseau then
+			-- bouillons au pied de la chute haute
+			emetteur(ruisseau, "Bouillons", {
+				Color = ColorSequence.new(ECUME),
+				LightEmission = 0.3,
+				Size = fondu(0.8, 2.2),
+				Transparency = fondu(0.3, 1),
+				Lifetime = NumberRange.new(0.6, 1.2),
+				Rate = 8,
+				Speed = NumberRange.new(1.5, 3),
+				SpreadAngle = Vector2.new(35, 35),
+				Acceleration = Vector3.new(0, -6, 0),
+				EmissionDirection = Enum.NormalId.Top,
+			})
+		end
+		if levreHaute then
+			emetteur(levreHaute, "Gouttes", {
+				Texture = "rbxasset://textures/particles/sparkles_main.dds",
+				Color = ColorSequence.new(EAU_CLAIRE),
+				LightEmission = 0.4,
+				Size = NumberSequence.new(0.22),
+				Transparency = fondu(0.2, 1),
+				Lifetime = NumberRange.new(0.6, 1),
+				Rate = 6,
+				Speed = NumberRange.new(1, 2.5),
+				SpreadAngle = Vector2.new(20, 40),
+				Acceleration = Vector3.new(0, -30, 0),
+				EmissionDirection = Enum.NormalId.Left,
+			})
+		end
+
+		-- le rebord de pierre d'où tombe la grande chute
+		local xLevre = X_ROCHE - 0.9
 		bloc(m, {
 			Name = "Levre",
 			Size = Vector3.new(2.4, 1, W + 1.6),
@@ -610,7 +1277,7 @@ function M.construire(ctx)
 				CastShadow = false,
 			}))
 			if bouillon then
-				Outils.animer(bouillon, "pulse", rng:NextNumber(1.5, 3))
+				Outils.animer(bouillon, "flotte", rng:NextNumber(1.5, 3))
 			end
 		end
 
@@ -619,10 +1286,10 @@ function M.construire(ctx)
 			emetteur(ecume, "Ecume", {
 				Color = ColorSequence.new(ECUME),
 				LightEmission = 0.3,
-				Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2), NumberSequenceKeypoint.new(1, 3.2) }),
-				Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 1) }),
+				Size = fondu(1.2, 3.2),
+				Transparency = fondu(0.25, 1),
 				Lifetime = NumberRange.new(0.8, 1.6),
-				Rate = 36,
+				Rate = 30,
 				Speed = NumberRange.new(4, 8),
 				SpreadAngle = Vector2.new(40, 60),
 				Acceleration = Vector3.new(0, -9, 0),
@@ -631,12 +1298,13 @@ function M.construire(ctx)
 			emetteur(ecume, "Embruns", {
 				Color = ColorSequence.new(EAU_CLAIRE),
 				LightEmission = 0.2,
-				Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2.5), NumberSequenceKeypoint.new(1, 6) }),
-				Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 1) }),
-				Lifetime = NumberRange.new(1.5, 2.8),
-				Rate = 10,
+				Size = fondu(2.5, 7),
+				Transparency = apparaitFond(1, 0.6, 1),
+				Lifetime = NumberRange.new(1.8, 3),
+				Rate = 9,
 				Speed = NumberRange.new(1.5, 3),
 				SpreadAngle = Vector2.new(70, 70),
+				Acceleration = Vector3.new(-0.6, 0.4, 0),
 				EmissionDirection = Enum.NormalId.Right,
 			})
 			pcall(function()
@@ -649,21 +1317,214 @@ function M.construire(ctx)
 				Color = ColorSequence.new(EAU_CLAIRE),
 				LightEmission = 0.4,
 				Size = NumberSequence.new(0.25),
-				Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) }),
+				Transparency = fondu(0.2, 1),
 				Lifetime = NumberRange.new(1, 1.6),
-				Rate = 14,
+				Rate = 12,
 				Speed = NumberRange.new(1, 3),
 				SpreadAngle = Vector2.new(20, 40),
 				Acceleration = Vector3.new(0, -30, 0),
 				EmissionDirection = Enum.NormalId.Left,
 			})
 		end
+
+		-- arc-en-ciel dans les embruns : six Beams courbés, accrochés à une part invisible (aucune part de plus à l'écran)
+		local ancre = bloc(dEffets, decor({
+			Name = "ArcEnCiel",
+			Size = Vector3.new(0.2, 0.2, 0.2),
+			CFrame = CFrame.new(xPied - 2.5, Y_EAU + 0.6, zCentre),
+			Transparency = 1,
+			CastShadow = false,
+		}))
+		if ancre then
+			pcall(function()
+				local demiArc = W / 2 + 3
+				for i, couleur in ipairs(ARC) do
+					local e = (i - 1) * 0.42
+					-- l'axe X des attaches pointe vers le haut : les courbes du Beam montent
+					local a0 = Instance.new("Attachment")
+					a0.Name = "ArcA" .. i
+					a0.CFrame = CFrame.new(0, 0, -demiArc - e) * CFrame.Angles(0, 0, math.rad(90))
+					a0.Parent = ancre
+					local a1 = Instance.new("Attachment")
+					a1.Name = "ArcB" .. i
+					a1.CFrame = CFrame.new(0, 0, demiArc + e) * CFrame.Angles(0, 0, math.rad(90))
+					a1.Parent = ancre
+					local b = Instance.new("Beam")
+					b.Name = "Bande" .. i
+					b.Attachment0 = a0
+					b.Attachment1 = a1
+					b.Color = ColorSequence.new(couleur)
+					b.Transparency = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 1),
+						NumberSequenceKeypoint.new(0.25, 0.72),
+						NumberSequenceKeypoint.new(0.75, 0.72),
+						NumberSequenceKeypoint.new(1, 1),
+					})
+					b.LightEmission = 0.6
+					b.FaceCamera = true
+					b.Segments = 24
+					b.Width0 = 0.45
+					b.Width1 = 0.45
+					b.CurveSize0 = 9 + e * 1.3
+					b.CurveSize1 = -(9 + e * 1.3)
+					b.Parent = ancre
+				end
+			end)
+		end
 		occuper(xPied, zCentre, 7)
 	end
 
-	-- ===== 6. nénuphars =====
+	-- ===== 6. le courant : reflets, flocons d'écume qui descendent vers l'ouest, ronds dans l'eau, lucioles =====
+	local function construireCourant()
+		local LONG = 44
+		local x0 = X_MIN + 6
+		local x1 = X_ROCHE - 8
+		local n = math.max(1, math.floor((x1 - x0) / LONG + 0.5))
+		local pas = (x1 - x0) / n
+		for i = 1, n do
+			if reste() <= 40 then
+				return
+			end
+			local xa = x0 + (i - 1) * pas
+			local xb = xa + pas
+			local za, zb = zc(xa), zc(xb)
+			local _, rMilieu = lit((xa + xb) / 2)
+			local a = Vector3.new(xa, Y_EAU + 0.15, za)
+			local b = Vector3.new(xb, Y_EAU + 0.15, zb)
+			-- part invisible couchée sur l'eau, le long du courant (Z local = sens du tracé)
+			local nappe = bloc(dEffets, decor({
+				Name = "Courant" .. i,
+				Size = Vector3.new(math.max(1.5, rMilieu * 1.3), 0.2, (b - a).Magnitude),
+				CFrame = CFrame.lookAt((a + b) / 2, a),
+				Transparency = 1,
+				CastShadow = false,
+			}))
+			if nappe then
+				emetteur(nappe, "Reflets", {
+					Texture = "rbxasset://textures/particles/sparkles_main.dds",
+					Color = ColorSequence.new(EAU_CLAIRE),
+					LightEmission = 1,
+					Size = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 0),
+						NumberSequenceKeypoint.new(0.5, 0.45),
+						NumberSequenceKeypoint.new(1, 0),
+					}),
+					Lifetime = NumberRange.new(0.6, 1.2),
+					Rate = 4,
+					Speed = NumberRange.new(0),
+				})
+				-- l'eau coule vers l'ouest (de la cascade vers la perte) : -Z local de la nappe
+				emetteur(nappe, "Flocons", {
+					Color = ColorSequence.new(ECUME),
+					LightEmission = 0.1,
+					Size = fondu(0.35, 0.6),
+					Transparency = apparaitFond(1, 0.35, 1),
+					Lifetime = NumberRange.new(4, 6),
+					Rate = 1.6,
+					Speed = NumberRange.new(2, 3.2),
+					SpreadAngle = Vector2.new(4, 4),
+					EmissionDirection = Enum.NormalId.Front,
+				})
+				-- ronds dans l'eau (poissons, gouttes) : taches à plat qui s'élargissent, de temps en temps
+				emetteur(nappe, "Ronds", {
+					Color = ColorSequence.new(EAU_CLAIRE),
+					LightEmission = 0.15,
+					Size = fondu(0.3, 3),
+					Transparency = fondu(0.45, 1),
+					Lifetime = NumberRange.new(1.2, 1.8),
+					Rate = 0.35,
+					Speed = NumberRange.new(0.01),
+					EmissionDirection = Enum.NormalId.Top,
+					Orientation = Enum.ParticleOrientation.VelocityPerpendicular,
+				})
+				-- lucioles au-dessus de l'eau, une nappe sur deux
+				if i % 2 == 1 then
+					emetteur(nappe, "Lucioles", {
+						Texture = "rbxasset://textures/particles/sparkles_main.dds",
+						Color = ColorSequence.new(LUCIOLE),
+						LightEmission = 1,
+						Size = NumberSequence.new({
+							NumberSequenceKeypoint.new(0, 0),
+							NumberSequenceKeypoint.new(0.2, 0.35),
+							NumberSequenceKeypoint.new(0.8, 0.35),
+							NumberSequenceKeypoint.new(1, 0),
+						}),
+						Lifetime = NumberRange.new(4, 7),
+						Rate = 0.8,
+						Speed = NumberRange.new(0.4, 1),
+						SpreadAngle = Vector2.new(60, 60),
+						Acceleration = Vector3.new(0, 0.12, 0),
+						EmissionDirection = Enum.NormalId.Top,
+					})
+				end
+			end
+		end
+	end
+
+	-- ===== 7. libellules qui tournent au-dessus de l'eau (le modèle tourne autour de son axe invisible) =====
+	local function construireLibellules()
+		local n = math.max(0, math.floor(reglage("libellules", 5)))
+		local essais = 0
+		local poses = 0
+		while poses < n and essais < n * 10 and reste() > 50 do
+			essais = essais + 1
+			local x = rng:NextNumber(X_MIN + 15, X_ROCHE - 20)
+			local z = zc(x)
+			if not surPont(x, 6) then
+				local rayon = rng:NextNumber(2.2, 3.8)
+				local y = Y_EAU + rng:NextNumber(1.4, 2.6)
+				local groupe = Outils.modele(dVegetation, "Libellule")
+				local axe = bloc(groupe, decor({
+					Name = "Axe",
+					Size = Vector3.new(0.2, 0.2, 0.2),
+					CFrame = CFrame.new(x, y, z),
+					Transparency = 1,
+					CastShadow = false,
+				}))
+				if axe then
+					groupe.PrimaryPart = axe
+					local couleur = LIBELLULES[rng:NextInteger(1, #LIBELLULES)]
+					local cfCorps = CFrame.new(x + rayon, y, z)
+					bloc(groupe, decor({
+						Name = "Corps",
+						Size = Vector3.new(0.22, 0.22, 1.5),
+						CFrame = cfCorps,
+						Color = couleur,
+						Material = Mat.SmoothPlastic,
+					}))
+					boule(groupe, decor({
+						Name = "Tete",
+						Size = Vector3.new(0.38, 0.38, 0.38),
+						CFrame = cfCorps * CFrame.new(0, 0.02, -0.8),
+						Color = Charte.ombre(couleur),
+						Material = Mat.SmoothPlastic,
+					}))
+					local aile = bloc(groupe, decor({
+						Name = "Ailes",
+						Size = Vector3.new(1.9, 0.05, 0.36),
+						CFrame = cfCorps * CFrame.new(0, 0.12, -0.3),
+						Color = AILE,
+						Material = Mat.Glass,
+						Transparency = 0.35,
+						CastShadow = false,
+					}))
+					if aile then
+						Outils.animer(aile, "pulse", rng:NextNumber(9, 13))
+					end
+					-- sens et vitesse de ronde propres à chaque libellule
+					Outils.animer(groupe, "tourne", rng:NextNumber(0.9, 1.6))
+					occuper(x, z, 1)
+					poses = poses + 1
+				else
+					groupe:Destroy()
+				end
+			end
+		end
+	end
+
+	-- ===== 8. nénuphars =====
 	local function construireNenuphars()
-		local n = math.max(0, math.floor(reglage("nenuphars", 11)))
+		local n = math.max(0, math.floor(reglage("nenuphars", 13)))
 		local essais = 0
 		local poses = 0
 		while poses < n and essais < n * 10 and reste() > 70 do
@@ -701,7 +1562,12 @@ function M.construire(ctx)
 							Material = Mat.LeafyGrass,
 						}))
 					end
-					Outils.animer(groupe, "flotte", rng:NextNumber(0.5, 0.9))
+					-- une feuille sur deux dérive doucement sur elle-même, les autres dansent sur les vaguelettes
+					if rng:NextNumber() < 0.5 then
+						Outils.animer(groupe, "tourne", rng:NextNumber(0.05, 0.12))
+					else
+						Outils.animer(groupe, "flotte", rng:NextNumber(0.5, 0.9))
+					end
 					occuper(x, z, d / 2 + 0.3)
 					poses = poses + 1
 				else
@@ -711,9 +1577,9 @@ function M.construire(ctx)
 		end
 	end
 
-	-- ===== 7. roseaux au bord de l'eau (touffes de tiges et massettes) =====
+	-- ===== 9. roseaux au bord de l'eau (touffes de tiges et massettes) =====
 	local function construireRoseaux()
-		local n = math.max(0, math.floor(reglage("roseaux", 8)))
+		local n = math.max(0, math.floor(reglage("roseaux", 10)))
 		local essais = 0
 		local poses = 0
 		while poses < n and essais < n * 10 and reste() > 60 do
@@ -763,7 +1629,7 @@ function M.construire(ctx)
 		end
 	end
 
-	-- ===== 8. galets Slate arrondis sur les berges, en petits groupes =====
+	-- ===== 10. galets Slate arrondis sur les berges, en petits groupes =====
 	local function semerGalets(nombre)
 		local poses = 0
 		local essais = 0
@@ -807,7 +1673,11 @@ function M.construire(ctx)
 		{ "berges", construireBerges },
 		{ "cascade", construireCascade },
 		{ "ponts", construirePonts },
+		{ "belvedere", construireBelvedere },
+		{ "pontons", construirePontons },
 		{ "rochers", construireRochers },
+		{ "courant", construireCourant },
+		{ "libellules", construireLibellules },
 		{ "nenuphars", construireNenuphars },
 		{ "roseaux", construireRoseaux },
 		{ "galets", function() semerGalets(math.max(0, reste())) end },
