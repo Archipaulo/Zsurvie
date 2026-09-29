@@ -7,7 +7,7 @@
 -- collines (terrain seulement, aucune part) ferme l'horizon. Aucune coordonnée en dur : tout vient de Plan.
 local M = {}
 
-local BUDGET = 350 -- parts au maximum pour ce constructeur (le terrain ne compte pas)
+local BUDGET = 430 -- parts au maximum pour ce constructeur (le terrain ne compte pas) ; ~80 pour la vitrine sud
 
 function M.construire(ctx)
 	local Charte = ctx.Charte
@@ -57,6 +57,11 @@ function M.construire(ctx)
 	local FEUILLE_CLAIRE = hex("72C653")
 	local MOUSSE = hex("86C24B")
 	local FLAMME = hex("FFA53A")
+	local FEUILLE_FONCEE = Charte.ombre(FEUILLE)
+	local TRONC = Charte.lumiere(POUTRE)
+	local EAU = hex("1FD3DE")           -- même turquoise que la rivière
+	local CHUTE = hex("8FEAF2")
+	local ECUME = hex("F2FDFF")
 
 	Outils.couleurTerrain(Mat.Rock, ROCHE_T)
 	Outils.couleurTerrain(Mat.Slate, ARDOISE_T)
@@ -715,7 +720,7 @@ function M.construire(ctx)
 			blocT(bande, s.a, s.l + RECOUVRE, arete, arete, arete + 4, yBas, y, angle, o.materiau)
 			-- le reste du gradin, droit (aucune fente entre tranches), puis l'herbe en retrait de l'arête
 			blocT(bande, s.a, s.l + 0.1, 0, arete + 3, fond, yBas, y, 0, o.materiau)
-			blocT(bande, s.a, s.l + 0.1, 0, arete + 1, fond, y - HERBE_T, y + 0.1, 0, herbe)
+			blocT(bande, s.a, s.l + 0.1, 0, arete + (o.retrait or 1), fond, y - HERBE_T, y + 0.1, 0, herbe)
 			res[i] = { a0 = s.a0, a1 = s.a1, d = arete, pied = pied, y = y, yBas = yBas, yPied = yPied, angle = angle }
 		end
 
@@ -761,6 +766,91 @@ function M.construire(ctx)
 	local decorsParBande = {}
 	local FACADE = 26 -- profondeur de la façade en gradins (au-delà : dessus de la crête puis redescente)
 
+	-- ===== falaise sud (toile de fond de la Place) : pied reculé, talus et coussins d'herbe, avancées, lianes,
+	-- cascade secondaire face à la Place et arbres en surplomb de part et d'autre =====
+	local LARGEUR_CHUTE = 6
+	local GORGE = nil      -- { a = abscisse de la chute (face au centre de la Place), demi = demi-largeur réservée }
+	local extrasSud = {}   -- lianes de la falaise sud, posées avant le décor partagé (budget garanti)
+	local function dansGorge(bande, a, marge)
+		return GORGE ~= nil and bande.sud == true and math.abs(a - GORGE.a) < GORGE.demi + (marge or 0)
+	end
+	local function herbeAuHasard(p)
+		if rng:NextNumber() < p then
+			return Mat.LeafyGrass
+		end
+		return Mat.Grass
+	end
+
+	local function embellirSud(bande, tr, T1, T2, T3, a0, a1)
+		local R = bande.recul or 0
+		-- talus d'herbe au pied : la roche sort d'un pré en pente douce, jamais d'une arête nue sur le gazon
+		for i, s in ipairs(tr) do
+			local mc = T1[i]
+			penteT(bande, s.a, s.l + RECOUVRE, 0, math.max(0.5, mc.pied - 3.5), mc.pied + 1.5, -1, 1.8, 0, Mat.Grass)
+		end
+		-- lèvre d'herbe continue qui déborde de chaque corniche (terrasses herbeuses vues de la Place),
+		-- tournée comme la pente de sa tranche (pas de boules d'herbe : leurs flancs raides montrent la terre)
+		for i, s in ipairs(tr) do
+			for _, T in ipairs({ T1, T2, T3 }) do
+				local mc = T[i]
+				if not dansGorge(bande, s.a, s.l) then
+					blocT(bande, s.a, s.l + RECOUVRE, mc.d, mc.d - 0.9, mc.d + 1, mc.y - 1.3, mc.y + 0.15, mc.angle, herbeAuHasard(0.3))
+				end
+			end
+		end
+		-- une avancée par segment : éperon de roche coiffé d'herbe qui s'avance au-dessus de la terrasse basse
+		local aB = rng:NextNumber(a0 + 6, a1 - 6)
+		if not dansGorge(bande, aB, 8) then
+			local m1, m2 = morceauEn(T1, aB), morceauEn(T2, aB)
+			local larg = rng:NextNumber(6, 9)
+			local d0 = math.max(0.5, R - 1.5)
+			local hB = math.min(m2.y - 2.5, m1.y + rng:NextNumber(0.5, 2))
+			local dF = m2.pied + 1
+			local ang = rng:NextNumber(-0.2, 0.2)
+			local pente = math.max(3, hB * 0.45) -- front incliné : un éperon, pas un pilier
+			if hB > 4 and dF - d0 > pente + 2 then
+				local herbe = herbeAuHasard(0.4)
+				local dA = d0 + pente
+				penteT(bande, aB, larg, dA, d0, dA, -1, hB, ang, Mat.Rock)
+				blocT(bande, aB, larg, dA, dA - 0.2, dF, -1, hB, ang, Mat.Rock)
+				blocT(bande, aB, larg - 0.4, dA, dA + 0.2, dF, hB - HERBE_T, hB + 0.1, ang, herbe)
+				blocT(bande, aB, larg + 0.6, dA, dA - 0.9, dA + 1, hB - 1.3, hB + 0.15, ang, herbe)
+			end
+		end
+		-- trois lianes par segment (faces du milieu et du bas), feuillage au bout de deux d'entre elles
+		for k = 1, 3 do
+			local a = rng:NextNumber(a0 + 2, a1 - 2)
+			if not dansGorge(bande, a, 1) then
+				local mc, bas = morceauEn(T2, a), morceauEn(T1, a).y
+				if k == 3 then
+					mc, bas = morceauEn(T1, a), 0.5
+				end
+				local chute = math.max(2, (mc.y - bas) * rng:NextNumber(0.55, 0.9))
+				local posL = point(bande, a, surface(mc, mc.y - chute / 2) - 0.3, mc.y - chute / 2)
+				local posF = point(bande, a, surface(mc, mc.y - chute) - 0.5, mc.y - chute)
+				local feuilles = k ~= 2
+				table.insert(extrasSud, function(parent)
+					decor(part(Outils.bloc, parent, {
+						Name = "Liane",
+						Size = Vector3.new(0.3, chute, 0.3),
+						CFrame = CFrame.new(posL),
+						Color = LIANE,
+						Material = Mat.LeafyGrass,
+					}))
+					if feuilles then
+						decor(part(Outils.boule, parent, {
+							Name = "Feuilles",
+							Size = Vector3.new(1.4, 1.1, 1.4),
+							CFrame = CFrame.new(posF),
+							Color = FEUILLE_CLAIRE,
+							Material = Mat.LeafyGrass,
+						}))
+					end
+				end)
+			end
+		end
+	end
+
 	local function construireSegment(m, bande, a0, a1, numero, h, hG, hD)
 		local AR = bande.arriere
 		local B = bande.bruits
@@ -799,19 +889,35 @@ function M.construire(ctx)
 			end
 		end
 
-		-- terrasse basse (roche), terrasse du milieu (strates d'ardoise), sommet (roche) : avancées qui ondulent
+		-- terrasse basse (roche), terrasse du milieu (strates d'ardoise), sommet (roche) : avancées qui ondulent.
+		-- R : recul du pied (falaise sud, loin de la rivière) ; les gradins se resserrent d'autant (k)
+		local R = bande.recul or 0
+		local k = 1
+		local retrait = nil
+		if R > 0 then
+			k = (AR - R) / AR
+			retrait = 0.4 -- herbe jusqu'au ras de l'arête : de vraies terrasses vertes vues de la Place
+		end
 		local T1 = terrasse(bande, tr, nil, {
-			hauteur = H1, dBase = 1.5, dMin = 0.3, dMax = 3,
-			bruitD = B[1], materiau = Mat.Rock,
+			hauteur = H1, dBase = R + 1.5, dMin = R + 0.3, dMax = R + 3,
+			bruitD = B[1], materiau = Mat.Rock, retrait = retrait,
 		})
 		local T2 = terrasse(bande, tr, T1, {
-			hauteur = H2, dBase = FACADE * 0.33, dMax = AR - 9,
-			bruitD = B[2], materiau = Mat.Slate,
+			hauteur = H2, dBase = R + FACADE * 0.33 * k, dMax = R + (AR - 9) * k,
+			bruitD = B[2], materiau = Mat.Slate, retrait = retrait,
 		})
 		local T3 = terrasse(bande, tr, T2, {
-			hauteur = H3, dBase = FACADE * 0.58, dMax = AR - 4,
-			bruitD = B[3], materiau = Mat.Rock, dos = true,
+			hauteur = H3, dBase = R + FACADE * 0.58 * k, dMax = R + (AR - 4) * k,
+			bruitD = B[3], materiau = Mat.Rock, dos = true, retrait = retrait,
 		})
+		for i = 1, #tr do
+			table.insert(bande.tous1, T1[i])
+			table.insert(bande.tous2, T2[i])
+			table.insert(bande.tous3, T3[i])
+		end
+		if bande.sud then
+			embellirSud(bande, tr, T1, T2, T3, a0, a1)
+		end
 		local h1 = H1(milieu)
 
 		-- éboulis au pied (tranche par tranche) et sur la terrasse du milieu, sauf contre le volcan
@@ -852,13 +958,19 @@ function M.construire(ctx)
 			local Y = (mc.yPied + mc.y) / 2
 			local dS = surface(mc, Y)
 			local r = math.min(rng:NextNumber(5, 8), dS + 0.5, PLAFOND - Y)
+			local enfonce = 0.5
+			if bande.sud then
+				-- falaise sud, vue de face depuis la Place : rondeurs plus petites et bien enfoncées
+				r = math.min(r, 5)
+				enfonce = 0.8
+			end
 			if r >= 3 then
 				local materiau = Mat.Rock
 				if k == 2 then
 					materiau = Mat.Slate
 				end
-				local p = point(bande, aB, dS + r * 0.5, Y)
-				if libre(p, r) then
+				local p = point(bande, aB, dS + r * enfonce, Y)
+				if libre(p, r) and not dansGorge(bande, aB, r + 1) then
 					Outils.terrainBoule(p, r, materiau)
 				end
 			end
@@ -867,7 +979,7 @@ function M.construire(ctx)
 		-- dessus de crête large : de petites croupes d'herbe allongées (2 ou 3 boules qui se chevauchent) cassent le plat
 		for i = 1, #tr, 3 do
 			local mc = T3[i]
-			if AR - mc.d > 10 then
+			if AR - mc.d > 10 and not dansGorge(bande, tr[i].a, 12) then
 				local r = rng:NextNumber(4.5, 6.5)
 				local dP = rng:NextNumber(mc.d + r + 1, AR - 1)
 				local herbe = Mat.Grass
@@ -906,7 +1018,7 @@ function M.construire(ctx)
 				local yC = mK.y + H * 0.15
 				local demiHaut = (H * math.cos(incl) + P * math.abs(math.sin(incl))) / 2
 				local centre = point(bande, aK, math.min(AR - 1, mK.d + rng:NextNumber(2, 4)), yC)
-				if yC + demiHaut <= PLAFOND + 0.5 and libre(centre, 6) then
+				if yC + demiHaut <= PLAFOND + 0.5 and libre(centre, 6) and not dansGorge(bande, aK, 8) then
 					local materiau = Mat.Rock
 					if k == 2 then
 						materiau = Mat.Slate
@@ -919,8 +1031,24 @@ function M.construire(ctx)
 		-- décor (ajouté après toutes les falaises : la structure passe d'abord)
 		local liste = decorsParBande[bande.nom]
 		local s = m
+		-- (jamais dans la gorge de la cascade sud : on retire au plus quelques fois, puis on se range sur son bord)
 		local function auHasard(marge)
-			return rng:NextNumber(a0 + marge, a1 - marge)
+			local a = rng:NextNumber(a0 + marge, a1 - marge)
+			for _ = 1, 4 do
+				if not dansGorge(bande, a, 3) then
+					return a
+				end
+				a = rng:NextNumber(a0 + marge, a1 - marge)
+			end
+			if dansGorge(bande, a, 3) then
+				local bord = GORGE.demi + 3.5
+				if a < GORGE.a then
+					a = GORGE.a - bord
+				else
+					a = GORGE.a + bord
+				end
+			end
+			return a
 		end
 
 		-- mousse qui déborde de la terrasse basse
@@ -1122,16 +1250,35 @@ function M.construire(ctx)
 	end
 	if F.sud then
 		local x0, x1 = etendueX(F.sud)
+		-- le pied recule pour laisser un pré entre la rive (Plan.riviere.zMax) et la roche : ECART_RIVE studs au moins
+		local ECART_RIVE = 11
+		local recul = 0
+		local riv = Plan.riviere
+		if riv and type(riv.zMax) == "number" then
+			recul = math.max(0, math.min(6, riv.zMax + ECART_RIVE - F.sud.zMin))
+		end
 		table.insert(BANDES, { nom = "FalaiseSud", axe = "x", avant = F.sud.zMin, sens = 1, profondeur = F.sud.zMax - F.sud.zMin,
-			a0 = x0, a1 = x1, hMin = HAUTEUR_MIN, hMax = math.max(HAUTEUR_MIN, HAUTEUR_MAX - 6) })
+			a0 = x0, a1 = x1, hMin = HAUTEUR_MIN + 2, hMax = math.max(HAUTEUR_MIN + 2, HAUTEUR_MAX - 4),
+			sud = true, recul = recul })
+		-- la cascade secondaire tombe face au centre de la Place (loin des coins)
+		if Plan.place and Plan.place.centre then
+			GORGE = {
+				a = math.max(x0 + 30, math.min(x1 - 30, Plan.place.centre.X)),
+				demi = (LARGEUR_CHUTE + 1) / 2 + 1.5,
+			}
+		end
 	end
 	for _, bande in ipairs(BANDES) do
 		bande.arriere = math.max(14, bande.profondeur - 8)
+		if bande.sud then
+			bande.arriere = math.max(14, bande.profondeur - 6) -- façade plus profonde : le pied reculé garde ses 3 gradins
+		end
 	end
 
 	local function construireBande(bande)
 		local m = Outils.modele(dossier, bande.nom)
 		decorsParBande[bande.nom] = decorsParBande[bande.nom] or {}
+		bande.tous1, bande.tous2, bande.tous3 = {}, {}, {}
 		-- bruits continus sur toute la bande : avancées (amplitude 3, périodes 23 et 9) puis hauteurs
 		bande.bruits = {
 			nouveauBruit(3, 23, 9), nouveauBruit(3, 23, 9), nouveauBruit(3, 23, 9),
@@ -1161,6 +1308,10 @@ function M.construire(ctx)
 			local riv = Plan.riviere
 			if riv and bande.nom == "FalaiseEst" and riv.zMin and a1 > riv.zMin - 4 and a0 < riv.zMax + 4 then
 				h = math.max(h, 27)
+			end
+			-- falaise sud : crête haute derrière la cascade secondaire (une vraie chute vue de la Place)
+			if GORGE and bande.sud and a1 > GORGE.a - 14 and a0 < GORGE.a + 14 then
+				h = math.max(h, 26)
 			end
 			-- derrière le Volcan : un mur de roche haut (30 studs et plus) qui ferme l'horizon
 			if horsVolcan(bande, a0, a1, 0.5) > 0 then
@@ -1369,6 +1520,233 @@ function M.construire(ctx)
 		end
 	end
 
+	-- ===== 5. vitrine de la falaise sud : cascade secondaire face à la Place, arbres en surplomb, lianes =====
+	local function bandeSud()
+		for _, b in ipairs(BANDES) do
+			if b.sud and b.tous2 and #b.tous2 > 0 then
+				return b
+			end
+		end
+		return nil
+	end
+	-- profondeur de la face (pente avant de la bonne terrasse) en a, à la hauteur y
+	local function faceEn(bande, a, y)
+		local listes = { bande.tous1, bande.tous2, bande.tous3 }
+		for _, T in ipairs(listes) do
+			local mc = morceauEn(T, a)
+			if y <= mc.y then
+				return surface(mc, y)
+			end
+		end
+		return morceauEn(bande.tous3, a).d
+	end
+	-- axe le long de la bande (sert à orienter les cylindres et à écarter les feuillages)
+	local function leLong(bande)
+		return point(bande, 1, 0, 0) - point(bande, 0, 0, 0)
+	end
+
+	local function construireCascadeSud()
+		local bande = bandeSud()
+		if not bande or not GORGE then
+			return
+		end
+		local W = LARGEUR_CHUTE
+		local aC = GORGE.a
+		local R = bande.recul or 0
+		local dFond, yLit = 0, PLAFOND
+		for _, mc in ipairs(bande.tous2) do
+			if mc.a1 > aC - W and mc.a0 < aC + W then
+				dFond = math.max(dFond, mc.d + 1.5)
+			end
+		end
+		for _, mc in ipairs(bande.tous3) do
+			if mc.a1 > aC - W and mc.a0 < aC + W then
+				yLit = math.min(yLit, mc.y - 1.5)
+			end
+		end
+		dFond = math.min(dFond, bande.arriere - 7)
+		if yLit < 8 or dFond < R + 4 then
+			return
+		end
+		local m = Outils.modele(dossier, "CascadeSud")
+		local dBassin = math.max(0.5, R - 3)
+
+		-- la gorge : une fente ouverte dans les trois gradins, paroi de roche au fond, cadre d'ardoise autour du lit
+		blocT(bande, aC, W + 1, 0, 0, dFond, 0, PLAFOND + 4, 0, Mat.Air)
+		blocT(bande, aC, W + 4, 0, dFond, dFond + 6, -1, yLit, 0, Mat.Rock)
+		blocT(bande, aC, W + 4, 0, dFond, dFond + 6, yLit, yLit + 2.5, 0, Mat.Slate)
+		-- le lit en haut : entaille dans la crête, fond d'ardoise, la source sort d'un amas de roches
+		blocT(bande, aC, W - 1, 0, dFond - 0.5, dFond + 5.5, yLit, PLAFOND + 4, 0, Mat.Air)
+		blocT(bande, aC, W - 1, 0, dFond - 0.5, dFond + 5.5, yLit - 0.8, yLit, 0, Mat.Slate)
+		Outils.terrainBoule(point(bande, aC - 1.8, dFond + 6.2, yLit + 1), 2.4, Mat.Slate)
+		Outils.terrainBoule(point(bande, aC + 2, dFond + 6.4, yLit + 1.2), 2.5, Mat.Rock)
+		Outils.terrainBoule(point(bande, aC, dFond + 7.2, yLit + 3), 2.8, Mat.Rock)
+		-- bassin au pied (dans l'emprise, loin de la rivière) : sable au fond, eau affleurante
+		blocT(bande, aC, W + 1, 0, dBassin, dFond, -3, -2, 0, Mat.Sand)
+		blocT(bande, aC, W + 1, 0, dBassin, dFond, -2, -0.5, 0, Mat.Water)
+		blocT(bande, aC, W + 1, 0, dBassin, dFond, -0.5, 0.2, 0, Mat.Air)
+		-- blocs arrondis sur les bords de la fente (elle n'est pas taillée au couteau) et au bord du bassin
+		for _, sa in ipairs({ -1, 1 }) do
+			local aBord = aC + sa * ((W + 1) / 2 + 0.5)
+			for _, f in ipairs({ 0.12, 0.55 }) do
+				local y = yLit * f
+				local dF = faceEn(bande, aBord, y)
+				local d = math.min(dFond - 2.5, dF + rng:NextNumber(0.5, 2))
+				if d > 1 then
+					local materiau = Mat.Rock
+					if f > 0.5 then
+						materiau = Mat.Slate
+					end
+					Outils.terrainBoule(point(bande, aBord + sa * 0.4, d, y), rng:NextNumber(1.7, 2.4), materiau)
+				end
+			end
+			Outils.terrainBoule(point(bande, aC + sa * (W / 2 + 0.3), dBassin + 0.8, -0.4), 1.5, Mat.Slate)
+			-- une touffe d'herbe sur chaque épaule, au sommet de la fente
+			Outils.terrainBoule(point(bande, aC + sa * (W / 2 + 2.2), dFond + 0.8, yLit + 2.2), 1.8, Mat.LeafyGrass)
+		end
+
+		-- l'eau (parts) : ruisseau du lit, lèvre de pierre, rideau de la chute, écume du bassin
+		local tourne = CFrame.new()
+		if bande.axe == "z" then
+			tourne = CFrame.Angles(0, math.rad(90), 0)
+		end
+		local wEau = W - 1.5
+		decor(part(Outils.bloc, m, {
+			Name = "Ruisseau",
+			Size = tailleBande(bande, wEau, 0.3, 6),
+			CFrame = CFrame.new(point(bande, aC, dFond + 2.5, yLit + 0.15)),
+			Color = EAU,
+			Material = Mat.Glass,
+			Transparency = 0.25,
+			CastShadow = false,
+		}))
+		local levre = part(Outils.cylindre, m, {
+			Name = "Levre",
+			Size = Vector3.new(W + 0.2, 1, 1),
+			CFrame = CFrame.new(point(bande, aC, dFond - 0.1, yLit - 0.1)) * tourne,
+			Color = PIERRE,
+			Material = Mat.Slate,
+		})
+		local chute = decor(part(Outils.bloc, m, {
+			Name = "Chute",
+			Size = tailleBande(bande, wEau, yLit + 0.3, 0.6),
+			CFrame = CFrame.new(point(bande, aC, dFond - 0.75, (yLit - 0.3) / 2)),
+			Color = CHUTE,
+			Material = Mat.Glass,
+			Transparency = 0.16,
+			CastShadow = false,
+		}))
+		if chute then
+			Outils.animer(chute, "pulse", 1.8)
+		end
+		local ecume = decor(part(Outils.cylindre, m, {
+			Name = "Ecume",
+			Size = Vector3.new(0.3, 4.6, 4.6),
+			CFrame = CFrame.new(point(bande, aC, dFond - 2.2, -0.45)) * CFrame.Angles(0, 0, math.rad(90)),
+			Color = ECUME,
+			Material = Mat.Glass,
+			Transparency = 0.35,
+			CastShadow = false,
+		}))
+		particules(ecume, {
+			nom = "Embruns", rate = 6, vie = { 0.8, 1.4 }, vitesse = { 1.5, 3 },
+			angle = Vector2.new(35, 35), couleur = ECUME, couleur2 = EAU, taille = 0.9, lueur = 0.3,
+			acceleration = Vector3.new(0, -2, 0),
+		})
+		particules(levre, {
+			nom = "Gouttes", rate = 5, vie = { 0.6, 1 }, vitesse = { 1, 2.5 },
+			angle = Vector2.new(20, 40), couleur = EAU, couleur2 = ECUME, taille = 0.25, lueur = 0.4,
+			acceleration = Vector3.new(0, -30, 0),
+		})
+	end
+
+	-- arbre penché au bord de la terrasse du milieu : tronc coudé vers le monde, couronne en trois boules, lianes
+	local function arbreSurplomb(m, bande, a)
+		local mc = morceauEn(bande.tous2, a)
+		local sol1 = morceauEn(bande.tous1, a).y
+		local monde = versMonde(bande)
+		local long = leLong(bande)
+		local base = point(bande, a, mc.d + 1.3, mc.y - 0.3)
+		local incl = math.rad(rng:NextNumber(18, 28))
+		local L1 = rng:NextNumber(6, 8)
+		local coude = base + Vector3.new(0, L1 * math.cos(incl), 0) + monde * (L1 * math.sin(incl))
+		local incl2 = math.rad(rng:NextNumber(45, 60))
+		local L2 = rng:NextNumber(2.5, 3.5)
+		local cime = coude + Vector3.new(0, L2 * math.cos(incl2), 0) + monde * (L2 * math.sin(incl2))
+		local rC = rng:NextNumber(3.2, 4.2)
+		if cime.Y + rC * 0.9 > PLAFOND then
+			return
+		end
+		Outils.terrainBoule(base, 1.4, Mat.Grass) -- motte au pied du tronc
+		for i, seg in ipairs({ { base, coude, 1.3 }, { coude, cime, 1 } }) do
+			local p0, p1 = seg[1], seg[2]
+			part(Outils.bloc, m, {
+				Name = "Tronc" .. i,
+				Size = Vector3.new(seg[3], seg[3], (p1 - p0).Magnitude + 0.5),
+				CFrame = CFrame.lookAt((p0 + p1) / 2, p1),
+				Color = TRONC,
+				Material = Mat.Wood,
+			})
+		end
+		local centre = cime + Vector3.new(0, rC * 0.3, 0)
+		decor(part(Outils.boule, m, {
+			Name = "Couronne",
+			Size = Vector3.new(rC * 2, rC * 1.3, rC * 2),
+			CFrame = CFrame.new(centre),
+			Color = FEUILLE,
+			Material = Mat.LeafyGrass,
+		}))
+		for j, s in ipairs({ -1, 1 }) do
+			local c = FEUILLE_CLAIRE
+			if j == 2 then
+				c = FEUILLE_FONCEE
+			end
+			decor(part(Outils.boule, m, {
+				Name = "Couronne",
+				Size = Vector3.new(rC * 1.4, rC * 1, rC * 1.4),
+				CFrame = CFrame.new(centre + long * (s * rC * 0.85) + monde * (rC * 0.2) - Vector3.new(0, rC * 0.25, 0)),
+				Color = c,
+				Material = Mat.LeafyGrass,
+			}))
+		end
+		-- lianes qui pendent de la couronne, jamais plus bas que la terrasse du dessous
+		for _, s in ipairs({ -1, 1 }) do
+			local haut = centre.Y - rC * 0.5
+			local chute = math.min(rng:NextNumber(4, 7), haut - sol1 - 0.5)
+			if chute > 1.5 then
+				local p = centre + long * (s * rC * 0.5) + monde * (rC * 0.35)
+				decor(part(Outils.bloc, m, {
+					Name = "Liane",
+					Size = Vector3.new(0.3, chute, 0.3),
+					CFrame = CFrame.new(p.X, haut - chute / 2, p.Z),
+					Color = LIANE,
+					Material = Mat.LeafyGrass,
+				}))
+			end
+		end
+	end
+
+	local function construireVitrineSud()
+		local bande = bandeSud()
+		if not bande then
+			return
+		end
+		local m = Outils.modele(dossier, "VitrineSud")
+		-- arbres en surplomb de part et d'autre de la cascade (face à la Place, à moins de 30 studs de son axe)
+		if GORGE then
+			for _, s in ipairs({ -1, 1 }) do
+				arbreSurplomb(m, bande, GORGE.a + s * rng:NextNumber(10, 13))
+				arbreSurplomb(m, bande, GORGE.a + s * rng:NextNumber(21, 27))
+			end
+		end
+		for _, f in ipairs(extrasSud) do
+			if compteur >= BUDGET then
+				break
+			end
+			f(m)
+		end
+	end
+
 	-- ===== ordre : l'essentiel d'abord (plateforme, sentier), puis falaises, puis décor =====
 	local etapes = {
 		{ "plateforme", construirePlateforme },
@@ -1380,6 +1758,8 @@ function M.construire(ctx)
 			construireBande(bande)
 		end })
 	end
+	table.insert(etapes, { "cascadeSud", construireCascadeSud })
+	table.insert(etapes, { "vitrineSud", construireVitrineSud })
 	table.insert(etapes, { "arrierePays", construireArrierePays })
 	table.insert(etapes, { "decor", function()
 		-- une pièce de décor par bande à tour de rôle : le budget se répartit sur toutes les falaises

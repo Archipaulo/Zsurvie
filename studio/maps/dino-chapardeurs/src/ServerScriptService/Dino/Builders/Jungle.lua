@@ -9,7 +9,10 @@
 -- Densité : les grands végétaux remplissent d'abord la périphérie (côté falaises), la lisière tournée vers le
 -- centre de jeu est soignée (bande d'herbe rase au bord mordu, bordure régulière de plantes basses et fleurs).
 -- Sentiers : les allées entre les Bases se prolongent en sentes jusqu'à une clairière (ou jusqu'au pied du
--- Volcan), et un sentier mène au pied du sentier des Falaises (coffre caché).
+-- Volcan), et UN sentier de terre (pas japonais sur la pelouse) prolonge le chemin de ronde des Bases jusqu'au
+-- pied du sentier d'escalade des Falaises (coffre caché).
+-- Bosquets (Plan.decor.bosquets) : sur les grandes pelouses, chaque îlot reçoit un petit bois (grand arbre au
+-- centre, palmier, arbres moyens, buissons à fleurs, fougère, rochers moussus), sans toucher chemins ni Bases.
 -- Animations (client, Interface/AnimationsDecor) : quelques couronnes de palmiers, feuilles de bananiers et
 -- cimes d'arbres « flottent » doucement, les pois des champignons luisants « pulsent ».
 local M = {}
@@ -52,6 +55,8 @@ local DEFAUTS = {
 	pasLucioles = 34,     -- espacement des nuées de lucioles le long de la lisière
 	animes = 36,          -- feuillages animés au plus (client)
 	pasPavage = 4,        -- pavage du sol de jungle autour du Volcan et du Cratère
+	budgetBosquets = 370, -- parts en plus pour les bosquets des pelouses et les pas japonais du sentier du coffre
+	pasJaponais = 4.5,    -- écart entre deux pas japonais sur le sentier du coffre
 }
 
 local function reglage(ctx, cle)
@@ -383,65 +388,198 @@ function M.construire(ctx)
 		end
 	end
 
-	-- 2) un sentier mène de la lisière au pied du sentier des Falaises (coffre caché) : le pied est à environ
-	--    une marche de 6,5 studs par tranche de 3 studs de hauteur de la plateforme (voir Builders/Falaises)
-	if Plan.coffre then
-		local c = Plan.coffre
-		local sensZ = 1
-		if c.Z > 0 then
-			sensZ = -1
+	-- chemins de sable et bâtiments posés par Builders/Sol, recalculés depuis Plan avec les mêmes règles (réglages
+	-- Equilibrage.sol, sinon les mêmes valeurs par défaut) : les bosquets et le sentier du coffre n'y touchent jamais
+	-- (bloc à part : la fonction construire approche la limite de 200 variables locales)
+	local surSol = nil
+	local sentierCoffre = {} -- points du sentier du coffre (pour les pas japonais)
+	do
+	local function reglageSol(cle, defaut)
+		local s = ctx.Equilibrage and ctx.Equilibrage.sol
+		if type(s) == "table" and type(s[cle]) == "number" then
+			return s[cle]
 		end
-		local nbMarches = math.max(1, math.ceil(c.Y / 3) - 1)
-		local zPied = c.Z + sensZ * (10.25 + (nbMarches - 1) * 6.5 + 4)
-		-- zone de jungle la plus proche du pied, côté falaise
-		local zoneCoffre, dMin = nil, 1e9
-		for _, q in ipairs(zones) do
-			if zPied > q.z0 and zPied < q.z1 then
-				local d = math.max(q.x0 - c.X, c.X - q.x1, 0)
-				if d < dMin then
-					zoneCoffre, dMin = q, d
+		return defaut
+	end
+	local solZones = {}
+	local function zRect(x0, x1, z0, z1)
+		table.insert(solZones, { g = "rect", x0 = math.min(x0, x1), x1 = math.max(x0, x1), z0 = math.min(z0, z1), z1 = math.max(z0, z1) })
+	end
+	local function zDisque(x, z, r)
+		table.insert(solZones, { g = "disque", x = x, z = z, r = r })
+	end
+	local function zRuban(ax, az, bx, bz, l)
+		table.insert(solZones, { g = "ruban", ax = ax, az = az, bx = bx, bz = bz, demi = l })
+	end
+	local basePlan = Plan.base or { largeur = 44, profondeur = 50 }
+	local promenade = Plan.promenade or { zMax = 27 }
+	local demiBX, demiBZ = basePlan.largeur / 2, basePlan.profondeur / 2
+	local xBasesMax, zBasesFond = 0, promenade.zMax + basePlan.profondeur
+	for _, b in ipairs(Plan.bases or {}) do
+		xBasesMax = math.max(xBasesMax, math.abs(b.centre.X) + demiBX)
+		zBasesFond = math.max(zBasesFond, math.abs(b.centre.Z) + demiBZ)
+		zRect(b.centre.X - demiBX - 1, b.centre.X + demiBX + 1, b.centre.Z - demiBZ - 1, b.centre.Z + demiBZ + 1)
+	end
+	local zRondeA = zBasesFond + reglageSol("ecartRonde", 3)
+	local zRondeB = zRondeA + reglageSol("largeurRonde", 8)
+	local xContreA = xBasesMax + reglageSol("ecartContre", 2)
+	local xContreB = xContreA + reglageSol("largeurContre", 10)
+	local dSentierSol = reglageSol("demiSentier", 3.5)
+	do
+		local zP = promenade.zMax
+		local zSableB = reglageSol("promenadeSableMax", 23)
+		local xBout = xContreB + zP
+		if Plan.nurserie then xBout = math.abs(Plan.nurserie.centre.X) end
+		if Plan.finTapis then xBout = math.max(xBout, math.abs(Plan.finTapis.centre.X)) end
+		local margeJ = reglageSol("margeJungle", 2)
+		if Plan.decor.jungleOuest then xBout = math.min(xBout, math.abs(Plan.decor.jungleOuest.max.X) - margeJ - zP) end
+		if Plan.decor.jungleEst then xBout = math.min(xBout, math.abs(Plan.decor.jungleEst.min.X) - margeJ - zP) end
+		zRect(-xBout, xBout, -zP, zP)
+		zDisque(-xBout, 0, zSableB)
+		zDisque(xBout, 0, zSableB)
+		for _, n in ipairs({ Plan.nurserie, Plan.finTapis }) do
+			if n and n.centre then zDisque(n.centre.X, n.centre.Z, n.rayon or 15) end
+		end
+		for _, s in ipairs({ -1, 1 }) do
+			zRect(-xContreB, xContreB, s * zRondeA, s * zRondeB)
+			zRect(s * xContreA, s * xContreB, -zRondeB, zRondeB)
+			if type(Plan.allees) == "table" and type(Plan.allees.x) == "table" then
+				local l = math.min((Plan.allees.largeur or 22) / 2, reglageSol("demiAllee", 6))
+				for _, ax in ipairs(Plan.allees.x) do
+					zRect(ax - l, ax + l, s * zSableB, s * zRondeB)
 				end
 			end
 		end
-		if zoneCoffre and dMin < 20 then
-			local q = zoneCoffre
-			local xBord = q.x1 + 2
-			if c.X < q.x0 then
-				xBord = q.x0 - 2
+		local zPlageA = nil
+		if Plan.riviere then
+			zPlageA = Plan.riviere.zMin - reglageSol("plage", 6)
+			if Plan.decor.jungleOuest then zPlageA = math.min(zPlageA, Plan.decor.jungleOuest.max.Z) end
+			local xJeuMin = (Plan.falaises and Plan.falaises.ouest and Plan.falaises.ouest.xMax) or Plan.monde.min.X
+			local xJeuMax = (Plan.falaises and Plan.falaises.est and Plan.falaises.est.xMin) or Plan.monde.max.X
+			zRect(xJeuMin, xJeuMax, zPlageA, Plan.riviere.zMax + 2)
+			for _, s in ipairs({ -1, 1 }) do
+				local ax, az = s * (xContreA + xContreB) / 2, (zRondeA + zRondeB) / 2
+				local bx = s * math.min(xContreB + (zPlageA - az) * 0.35, xJeuMax - 30)
+				zRuban(ax, az, bx, zPlageA + 1, dSentierSol)
 			end
-			local arrivee = V3(xBord, 0, zPied)
-			-- entrée : le point de lisière (de cette zone) le plus proche du pied
-			local entree, dEntree, coteEntree = nil, 1e9, nil
-			for _, ct in ipairs(cotes) do
-				local dansZone = false
-				if ct.axe == "X" then
-					dansZone = ct.v >= q.x0 - 0.5 and ct.v <= q.x1 + 0.5
-				else
-					dansZone = ct.v >= q.z0 - 0.5 and ct.v <= q.z1 + 0.5
-				end
-				if dansZone and ct.a1 - ct.a0 > 4 * demi then
-					local cible = arrivee.Z
-					if ct.axe == "Z" then
-						cible = arrivee.X
-					end
-					local a = math.max(ct.a0 + demi + 3, math.min(cible, ct.a1 - demi - 3))
-					local pt = pointCote(ct, a, -1.5)
-					local d = (pt - arrivee).Magnitude
-					if d < dEntree then
-						entree, dEntree, coteEntree = pt, d, ct
-					end
-				end
+		end
+		if Plan.decor.jungleNord and type(Plan.allees) == "table" and type(Plan.allees.x) == "table" then
+			for _, ax in ipairs(Plan.allees.x) do
+				zRuban(ax, -zRondeB, ax, Plan.decor.jungleNord.max.Z - 2, dSentierSol)
 			end
-			if entree then
-				local milieu = V3((q.x0 + q.x1) / 2 + hasard(-2, 2), 0, (entree.Z + arrivee.Z) / 2)
-				if coteEntree.axe == "Z" then
-					milieu = V3((entree.X + arrivee.X) / 2, 0, (q.z0 + q.z1) / 2)
-				end
-				ajouterChemin(entree, milieu, demi)
-				ajouterChemin(milieu, arrivee, demi)
+		end
+		local place = Plan.place
+		if place then
+			local rPlace = place.rayon + reglageSol("anneauPlace", 6)
+			local dLien = reglageSol("demiLien", 6)
+			local mBat = reglageSol("margeBatiment", 3)
+			zDisque(place.centre.X, place.centre.Z, rPlace)
+			zRect(place.centre.X - dLien, place.centre.X + dLien, zRondeB - 1, place.centre.Z)
+			if Plan.comptoir then
+				local co = Plan.comptoir
+				zRect(co.centre.X - co.taille.X / 2 - mBat, place.centre.X, co.centre.Z - co.taille.Z / 2 - mBat, co.centre.Z + co.taille.Z / 2 + mBat)
 			end
+			if Plan.autel then
+				zRect(place.centre.X, Plan.autel.centre.X, Plan.autel.centre.Z - dLien, Plan.autel.centre.Z + dLien)
+				zDisque(Plan.autel.centre.X, Plan.autel.centre.Z, Plan.autel.rayon + mBat)
+			end
+			if zPlageA then
+				local dR = reglageSol("demiRiviere", 5)
+				zRect(place.centre.X - dR, place.centre.X + dR, place.centre.Z, zPlageA + 1)
+			end
+		end
+		if Plan.cratere then
+			local rC = Plan.cratere.rayon + reglageSol("anneauCratere", 6)
+			zDisque(Plan.cratere.centre.X, Plan.cratere.centre.Z, rC)
+			local dLien = reglageSol("demiLien", 6)
+			zRect(Plan.cratere.centre.X - dLien, Plan.cratere.centre.X + dLien, Plan.cratere.centre.Z, -zRondeB)
+			if Plan.volcan then
+				zRuban(Plan.cratere.centre.X, Plan.cratere.centre.Z, Plan.volcan.centre.X, Plan.volcan.centre.Z, dSentierSol)
+			end
+		end
+		if Plan.volcan then
+			zDisque(Plan.volcan.centre.X, Plan.volcan.centre.Z, Plan.volcan.rayon + 6)
 		end
 	end
+	-- le cercle (x, z, r) touche-t-il un chemin, une Base ou un bâtiment du Sol ?
+	surSol = function(x, z, r)
+		for _, q in ipairs(solZones) do
+			if q.g == "rect" then
+				if cercleRect(x, z, r, q) then
+					return true
+				end
+			elseif q.g == "disque" then
+				local dx, dz = x - q.x, z - q.z
+				if dx * dx + dz * dz < (q.r + r) * (q.r + r) then
+					return true
+				end
+			elseif distanceSegment(x, z, { ax = q.ax, az = q.az, bx = q.bx, bz = q.bz }) < q.demi + r then
+				return true
+			end
+		end
+		return false
+	end
+
+	-- 2) UN seul sentier de terre mène du bout du chemin de ronde (côté du coffre) au pied du sentier d'escalade des
+	--    Falaises : il prolonge le chemin de ronde, ondule en S sur la pelouse, entre dans la jungle et finit tout
+	--    droit dans l'anse de la falaise, au pied de la première marche. Le pied est recalculé comme dans
+	--    Builders/Falaises (plateforme de 12, marches de 4,5, montée et écart d'Equilibrage.falaises).
+	if Plan.coffre and Plan.bases and #Plan.bases > 0 then
+		local c = Plan.coffre
+		local SX, SENS, SZ = 1, 1, -1
+		if c.X < 0 then SX = -1 end
+		if c.Z > 0 then SENS, SZ = -1, 1 end
+		local F = {}
+		if ctx.Equilibrage and type(ctx.Equilibrage.falaises) == "table" then
+			F = ctx.Equilibrage.falaises
+		end
+		local montee, ecart = 3, 2
+		if type(F.montee) == "number" then montee = F.montee end
+		if type(F.ecart) == "number" then ecart = F.ecart end
+		montee = math.min(4, math.max(1, montee))
+		ecart = math.min(6, math.max(1, ecart))
+		local DEMI_PF, COTE = 6, 4.5
+		local nb = math.ceil(c.Y / montee) - 1
+		local xPied, zPied = c.X, c.Z + SENS * (DEMI_PF + 4)
+		if nb >= 1 then
+			local rang = nb - 1 -- la marche la plus basse
+			local zM = c.Z + SENS * (DEMI_PF + ecart + COTE / 2 + rang * (COTE + ecart))
+			xPied = c.X + SX * 0.5
+			if rang % 2 == 1 then
+				xPied = c.X + SX * 3
+			end
+			zPied = zM + SENS * (COTE / 2 + 2)
+		end
+		-- face de la falaise du côté du coffre (l'anse s'ouvre là)
+		local xFace = xPied - SX * 12
+		local bande = Plan.falaises and ((SX > 0 and Plan.falaises.est) or (SX < 0 and Plan.falaises.ouest))
+		if bande then
+			xFace = bande.xMin
+			if SX < 0 then xFace = bande.xMax end
+		end
+		local P0 = V3(SX * (xContreB + demi * 0.75), 0, SZ * (zRondeA + zRondeB) / 2)
+		local A = V3(xFace - SX * 12, 0, zPied)
+		local B = V3(xPied - SX * 1, 0, zPied)
+		local L = (A - P0).Magnitude
+		local P1 = P0 + V3(SX * L * 0.35, 0, 0)
+		local P2 = A - V3(SX * L * 0.35, 0, 0)
+		local n = 12
+		local precedent = P0
+		table.insert(sentierCoffre, P0)
+		for k = 1, n do
+			local u = k / n
+			local v = 1 - u
+			local p = P0 * (v * v * v) + P1 * (3 * v * v * u) + P2 * (3 * v * u * u) + A * (u * u * u)
+			ajouterChemin(precedent, p, demi)
+			chemins[#chemins].libre = true
+			table.insert(sentierCoffre, p)
+			precedent = p
+		end
+		ajouterChemin(A, B, demi)
+		chemins[#chemins].libre = true
+		table.insert(sentierCoffre, B)
+	end
+	end -- fin du bloc chemins du Sol / sentier du coffre
 
 	-- occupation du sol (pieds des plantes) et des cimes (couronnes, canopées)
 	local occupes = {}
@@ -749,13 +887,24 @@ function M.construire(ctx)
 				tamponner(x, z, s.demi + 1.2, Mat.Grass, 0.03)
 			end
 		end
+		-- le sentier du coffre traverse aussi la pelouse et entre dans l'anse de la falaise : sa terre est posée
+		-- partout (hors Volcan et Cratère), avec une largeur plus régulière
+		local function tamponnerLibre(x, z, rayon)
+			if loinDesDisques(x, z, rayon) then
+				Outils.terrainCylindre(CFrame.new(x, 0.04 - 2, z), 4, rayon, Mat.Ground)
+			end
+		end
 		for _, s in ipairs(chemins) do
 			local long = math.sqrt((s.bx - s.ax) ^ 2 + (s.bz - s.az) ^ 2)
 			local n = math.max(1, math.floor(long / 2.5))
 			for k = 0, n do
 				local u = k / n
 				local x, z = s.ax + (s.bx - s.ax) * u, s.az + (s.bz - s.az) * u
-				tamponner(x, z, s.demi * hasard(0.72, 0.9), Mat.Ground, 0.04)
+				if s.libre then
+					tamponnerLibre(x, z, s.demi * hasard(0.8, 0.88))
+				else
+					tamponner(x, z, s.demi * hasard(0.72, 0.9), Mat.Ground, 0.04)
+				end
 			end
 		end
 		for _, c in ipairs(clairieres) do
@@ -1326,8 +1475,9 @@ function M.construire(ctx)
 	-- ===== 7. fougères =====
 	local COUT_FOUGERE = 6
 	-- px, pz : position imposée (bordure de lisière, déjà vérifiée) ; sinon tirée au hasard
-	local function fougere(numero, px, pz, parent, longMax)
-		if reste() < COUT_FOUGERE then
+	local function fougere(numero, px, pz, parent, longMax, nbFrondes)
+		local nbF = nbFrondes or COUT_FOUGERE -- une part par fronde
+		if reste() < nbF then
 			return false
 		end
 		local long = hasard(4.2, longMax or 6)
@@ -1342,8 +1492,8 @@ function M.construire(ctx)
 		local m = Outils.modele(parent or dFougeres, "Fougere" .. numero)
 		local decalage = hasard(0, DEUX_PI)
 		local base = V3(x, hauteurSol(x, z) + 0.15, z)
-		for k = 1, 6 do
-			local yaw = decalage + (k - 1) * (DEUX_PI / 6) + hasard(-0.18, 0.18)
+		for k = 1, nbF do
+			local yaw = decalage + (k - 1) * (DEUX_PI / nbF) + hasard(-0.18, 0.18)
 			local pitch = math.rad(hasard(30, 55))
 			local l = long * hasard(0.8, 1.05)
 			local couleur = FOUGERE
@@ -1383,7 +1533,7 @@ function M.construire(ctx)
 	-- ===== 8. buissons à fleurs tropicales =====
 	local COUT_BUISSON = 9
 	-- px, pz : position imposée (bordure de lisière) ; echelle < 1 pour un buisson plus bas
-	local function buisson(numero, px, pz, parent, echelle)
+	local function buisson(numero, px, pz, parent, echelle, nbFleurs)
 		if reste() < COUT_BUISSON then
 			return false
 		end
@@ -1418,7 +1568,7 @@ function M.construire(ctx)
 			table.insert(boules, { centre = centre, s = s })
 		end
 		local couleurFleur = choisir(FLEURS)
-		for k = 1, 3 do
+		for k = 1, (nbFleurs or 3) do
 			local b = boules[rng:NextInteger(1, #boules)]
 			local a = hasard(0, DEUX_PI)
 			local el = hasard(0.3, 1.1)
@@ -1678,8 +1828,358 @@ function M.construire(ctx)
 	for i = 1, reglage(ctx, "touffes") do
 		touffe(i)
 	end
+	local partsJungle = nbParts
+	do -- bloc à part (limite de 200 variables locales)
+
+	-- ===== 13. hors de la jungle : budget à part pour le sentier du coffre et les bosquets des pelouses =====
+	BUDGET = nbParts + reglage(ctx, "budgetBosquets")
+
+	-- pas japonais d'ardoise sur la partie du sentier du coffre qui traverse la pelouse (comme les sentiers du Sol)
+	local PIERRES = { hex("C4BAB4"), hex("B5ACAA"), hex("A79E9C") }
+	if #sentierCoffre > 1 then
+		local dSentier = Outils.dossier(dossier, "SentierCoffre")
+		local PAS_J = reglage(ctx, "pasJaponais")
+		local function horsPelouse(x, z)
+			for _, q in ipairs(zones) do
+				if x > q.x0 - 1.5 and x < q.x1 + 1.5 and z > q.z0 - 1.5 and z < q.z1 + 1.5 then
+					return true
+				end
+			end
+			for _, f in pairs(Plan.falaises or {}) do
+				if type(f) == "table" and f.xMin and x > f.xMin - 1.5 and x < f.xMax + 1.5 and z > f.zMin - 1.5 and z < f.zMax + 1.5 then
+					return true
+				end
+			end
+			return surSol(x, z, 1.5)
+		end
+		local cumul, prochain, nbPas = 0, PAS_J * 0.8, 0
+		for k = 2, #sentierCoffre do
+			local a, b = sentierCoffre[k - 1], sentierCoffre[k]
+			local seg = (b - a).Magnitude
+			if seg > 0.01 then
+				local dir = (b - a).Unit
+				while prochain <= cumul + seg do
+					local p = a:Lerp(b, (prochain - cumul) / seg) + V3(-dir.Z, 0, dir.X) * hasard(-0.6, 0.6)
+					if not horsPelouse(p.X, p.Z) then
+						nbPas = nbPas + 1
+						local d = hasard(2.2, 2.7)
+						cylindre(dSentier, {
+							Name = "Pas" .. nbPas,
+							Size = V3(0.22, d, d),
+							CFrame = CFrame.new(p.X, 0.1, p.Z) * CFrame.Angles(0, 0, math.rad(90)),
+							Color = choisir(PIERRES),
+							Material = Mat.Slate,
+							CanCollide = false,
+						})
+					end
+					prochain = prochain + PAS_J * hasard(0.9, 1.1)
+				end
+				cumul = cumul + seg
+			end
+		end
+	end
+
+	-- ===== 14. bosquets : un petit bois soigné dans chaque îlot de Plan.decor.bosquets (centre c, rayon r) =====
+	-- dense au centre (un grand arbre sur sa butte, parfois un palmier penché vers l'extérieur, des arbres moyens
+	-- tout autour), qui s'ouvre sur les bords (buissons à fleurs, fougère, rochers moussus, touffes fleuries, tapis
+	-- d'herbe touffue festonné) ; rien ne touche un chemin du Sol, une Base ni le sentier du coffre.
+	local ilots = Plan.decor.bosquets
+	if type(ilots) == "table" and #ilots > 0 then
+		local dBosquets = Outils.dossier(dossier, "Bosquets")
+
+		-- arbre de bosquet : tronc (1 ou 2 segments) et houppier de boules en trois teintes (nSeg + nbLobes + 2 parts)
+		local function arbreIlot(parent, nom, x, z, y0, H, rC, nSeg, nbLobes, lean, psi)
+			local m = Outils.modele(parent, nom)
+			local pts = pointsTronc(V3(x, y0 - 0.6, z), H + 0.6, nSeg, lean, psi)
+			local T = pts[#pts]
+			local dT = 1.1 + H * 0.1
+			for i = 1, nSeg do
+				local couleur = ECORCE
+				if i % 2 == 0 then
+					couleur = ECORCE_CLAIRE
+				end
+				cylEntre(m, pts[i], pts[i + 1], dT - (i - 1) * 0.35, 0.5, { Name = "Tronc" .. i, Color = couleur, Material = Mat.Wood })
+			end
+			local base = choisir(FEUILLAGES)
+			local centre = T + V3(0, rC * 0.3, 0)
+			local dC = rC * 1.45
+			boule(m, { Name = "Canopee", Size = V3(dC, dC, dC), CFrame = CFrame.new(centre), Color = base, Material = Mat.Grass, CanCollide = false })
+			local decL = hasard(0, DEUX_PI)
+			for k = 1, nbLobes do
+				local a = decL + (k - 1) * (DEUX_PI / nbLobes) + hasard(-0.35, 0.35)
+				local s = rC * hasard(0.8, 0.95)
+				local r = rC - s / 2
+				local couleur = ombre(base)
+				if k % 2 == 0 then
+					couleur = base:Lerp(ombre(base), 0.5)
+				end
+				boule(m, { Name = "Lobe" .. k, Size = V3(s, s, s), CFrame = CFrame.new(centre + V3(math.cos(a) * r, -rC * hasard(0.15, 0.35), math.sin(a) * r)), Color = couleur, Material = Mat.LeafyGrass, CanCollide = false })
+			end
+			local dS = rC * 0.9
+			return boule(m, { Name = "Sommet", Size = V3(dS, dS, dS), CFrame = CFrame.new(centre + V3(hasard(-0.4, 0.4), rC * 0.5, hasard(-0.4, 0.4))), Color = lumiere(base), Material = Mat.Grass, CanCollide = false })
+		end
+
+		-- palmier de bosquet (24 parts) : tronc courbé en 3 segments, cœur, 3 palmes basses sombres qui retombent et
+		-- 2 palmes hautes plus claires, chacune en 2 segments pliés en V
+		local COUT_PALMIER_ILOT = 24
+		local function palmierIlot(parent, nom, x, z, hauteur, lean, psi, longPalme)
+			local m = Outils.modele(parent, nom)
+			local pts = pointsTronc(V3(x, -0.6, z), hauteur, 3, lean, psi)
+			local sommet = pts[#pts]
+			local d0 = hasard(1.5, 1.8)
+			for i = 1, 3 do
+				local couleur = TRONC
+				if i % 2 == 0 then
+					couleur = TRONC_CLAIR
+				end
+				cylEntre(m, pts[i], pts[i + 1], d0 - (i - 1) * 0.2, 0.45, { Name = "Tronc" .. i, Color = couleur, Material = Mat.Wood })
+			end
+			boule(m, { Name = "Coeur", Size = V3(2, 2, 2), CFrame = CFrame.new(sommet + V3(0, 0.3, 0)), Color = COEUR, Material = Mat.LeafyGrass, CanCollide = false })
+			local palmes = Outils.modele(m, "Palmes")
+			local pli = math.rad(16)
+			local dec = hasard(0, DEUX_PI)
+			-- { nombre, décalage, inclinaison mini/maxi, longueur relative, couleur, matière }
+			local couronnesIlot = {
+				{ 3, 0, -24, -10, 1, PALME_SOMBRE, Mat.LeafyGrass },
+				{ 2, 1.05, 2, 14, 0.8, PALME, Mat.Grass },
+			}
+			for _, c in ipairs(couronnesIlot) do
+				for k = 1, c[1] do
+					local yaw = dec + c[2] + (k - 1) * (DEUX_PI / c[1]) + hasard(-0.15, 0.15)
+					local F = CFrame.new(sommet + V3(0, 0.3, 0)) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(math.rad(hasard(c[3], c[4])), 0, 0) * CFrame.new(0, 0, -0.3)
+					local long = longPalme * c[5] * hasard(0.92, 1.05)
+					for s = 1, 2 do
+						local L = long * 0.55
+						local w = 1.4
+						local teinte = c[6]
+						if s == 2 then
+							L = long * 0.45
+							w = 0.9
+							teinte = teinte:Lerp(lumiere(teinte), 0.3)
+						end
+						demiFeuille(palmes, F * CFrame.Angles(0, 0, -pli), L, w, 0.2, 1, { Name = "Palme" .. k .. "S" .. s .. "D", Color = ombre(teinte):Lerp(teinte, 0.55), Material = c[7], CanCollide = false })
+						demiFeuille(palmes, F * CFrame.Angles(0, 0, pli), L, w, 0.2, -1, { Name = "Palme" .. k .. "S" .. s .. "G", Color = teinte, Material = c[7], CanCollide = false })
+						F = F * CFrame.new(0, 0, -L * 0.93) * CFrame.Angles(-math.rad(22), 0, 0)
+					end
+				end
+			end
+			animer(palmes, "flotte", hasard(0.55, 0.85))
+		end
+
+		for i, b in ipairs(ilots) do
+			if b.c and type(b.r) == "number" and b.r > 3 then
+				local R = b.r
+				local cx, cz = b.c.X, b.c.Z
+				-- chaque îlot suivant garde de quoi planter son grand arbre, deux arbres moyens et un buisson
+				local reserve = (#ilots - i) * 22
+				local function dispo(cout)
+					return reste() - reserve >= cout
+				end
+				local m = Outils.modele(dBosquets, "Bosquet" .. i)
+				local cimesB = {}
+				local function cimeOk(x, z, r)
+					for _, c in ipairs(cimesB) do
+						local dx, dz = x - c.x, z - c.z
+						local mini = (r + c.r) * 0.55
+						if dx * dx + dz * dz < mini * mini then
+							return false
+						end
+					end
+					return true
+				end
+				-- pied (rayon rPied) entièrement dans l'îlot, hors des chemins et des autres pieds
+				local function pied(x, z, rPied)
+					local dx, dz = x - cx, z - cz
+					return math.sqrt(dx * dx + dz * dz) + rPied <= R and not surSol(x, z, rPied + 1) and not surChemin(x, z, rPied + 1) and libre(x, z, rPied) and loinDesDisques(x, z, rPied)
+				end
+				-- houppier (rayon rC) : peut déborder un peu de l'îlot, jamais au-dessus d'un chemin
+				local function houppier(top, rC)
+					local dx, dz = top.X - cx, top.Z - cz
+					return math.sqrt(dx * dx + dz * dz) + rC * 0.55 <= R + 1.5 and not surSol(top.X, top.Z, rC) and not surChemin(top.X, top.Z, rC)
+				end
+				-- point tiré dans la couronne [dMin, dMax] × R, près de l'angle aPref s'il est donné
+				local function placer(dMin, dMax, aPref, essai)
+					for t = 1, 50 do
+						local a = hasard(0, DEUX_PI)
+						if aPref and t <= 30 then
+							a = aPref + hasard(-0.6, 0.6)
+						end
+						local d = R * math.sqrt(hasard(dMin * dMin, dMax * dMax))
+						local x, z = cx + math.cos(a) * d, cz + math.sin(a) * d
+						if essai(x, z, a) then
+							return x, z
+						end
+					end
+					return nil, nil
+				end
+
+				-- sol : tapis d'herbe touffue festonné (terrain, 0 part)
+				if terrainOk then
+					local function tapis(x, z, r)
+						if not surSol(x, z, r + 0.5) and not surChemin(x, z, r + 0.5) then
+							Outils.terrainCylindre(CFrame.new(x, 0.02 - 2, z), 4, r, Mat.LeafyGrass)
+						end
+					end
+					tapis(cx, cz, R * 0.62)
+					local a0 = hasard(0, DEUX_PI)
+					for k = 1, 5 do
+						local a = a0 + k * DEUX_PI / 5 + hasard(-0.3, 0.3)
+						local d = R * hasard(0.45, 0.6)
+						tapis(cx + math.cos(a) * d, cz + math.sin(a) * d, R * hasard(0.25, 0.34))
+					end
+				end
+
+				-- arbres : le grand au centre (sur sa butte), puis le palmier, puis les moyens répartis tout autour
+				local nbArbres = 3
+				if R >= 11 then
+					nbArbres = 4
+				end
+				if R >= 13 then
+					nbArbres = 5
+				end
+				local nbPlantes = 0
+				local function planterArbre(dMin, dMax, aPref, H, rC, nSeg, nbLobes, butte)
+					if reste() < nSeg + nbLobes + 2 or (not butte and not dispo(nSeg + nbLobes + 2)) then
+						return false
+					end
+					local lean = hasard(3, 9)
+					local psi = 0
+					local rPied = 1.6
+					if butte then
+						rPied = 2.6
+					end
+					local x, z = placer(dMin, dMax, aPref, function(px, pz, a)
+						if not pied(px, pz, rPied) then
+							return false
+						end
+						psi = a + hasard(-0.5, 0.5) -- penche plutôt vers l'extérieur du bosquet
+						local essai = pointsTronc(V3(px, -0.6, pz), H + 0.6, nSeg, lean, psi)
+						local top = essai[#essai]
+						return houppier(top, rC) and cimeOk(top.X, top.Z, rC)
+					end)
+					if not x then
+						return false
+					end
+					occuper(x, z, rPied)
+					local y0 = 0
+					if butte and terrainOk then
+						Outils.terrainBoule(V3(x, -2.8, z), 3.8, Mat.LeafyGrass)
+						table.insert(buttes, { x = x, y = -2.8, z = z, r = 3.8 })
+						y0 = 0.6
+					end
+					nbPlantes = nbPlantes + 1
+					local sommet = arbreIlot(m, "Arbre" .. nbPlantes, x, z, y0, H, rC, nSeg, nbLobes, lean, psi)
+					local top = pointsTronc(V3(x, -0.6, z), H + 0.6, nSeg, lean, psi)
+					top = top[#top]
+					table.insert(cimesB, { x = top.X, z = top.Z, r = rC })
+					if butte and sommet then
+						animer(sommet, "flotte", hasard(0.45, 0.7))
+					end
+					return true
+				end
+				local aBase = hasard(0, DEUX_PI)
+				local plantes = 0
+				if planterArbre(0, 0.22, nil, hasard(11.5, 14), hasard(5.4, 6.2), 2, 2, true) or planterArbre(0, 0.4, nil, hasard(10, 12), hasard(4.8, 5.4), 2, 2, false) then
+					plantes = plantes + 1
+				end
+				if R >= 12 and dispo(COUT_PALMIER_ILOT + 12) then
+					local hauteur = hasard(13, 17)
+					local lean = hasard(14, 24)
+					local longPalme = hasard(6.5, 8)
+					local psi = 0
+					local x, z = placer(0.3, 0.55, aBase, function(px, pz, a)
+						if not pied(px, pz, 1.6) then
+							return false
+						end
+						psi = a + hasard(-0.3, 0.3)
+						local essai = pointsTronc(V3(px, -0.6, pz), hauteur, 3, lean, psi)
+						local top = essai[#essai]
+						return houppier(top, longPalme * 0.8) and cimeOk(top.X, top.Z, longPalme * 0.5)
+					end)
+					if x then
+						occuper(x, z, 1.6)
+						nbPlantes = nbPlantes + 1
+						palmierIlot(m, "Palmier" .. nbPlantes, x, z, hauteur, lean, psi, longPalme)
+						plantes = plantes + 1
+					end
+				end
+				local nbMoyens = nbArbres - plantes
+				for k = 1, nbMoyens do
+					local aPref = aBase + math.pi + (k - 0.5) * (DEUX_PI / math.max(1, nbMoyens)) * 0.8
+					if not planterArbre(0.35, 0.68, aPref, hasard(7, 10), hasard(3.6, 4.6), 1, 1, false) then
+						planterArbre(0.25, 0.75, nil, hasard(6.5, 8.5), hasard(3.2, 4), 1, 1, false)
+					end
+				end
+
+				-- strate basse, plus clairsemée vers les bords
+				local nbBuissons = 1
+				if R >= 13 then
+					nbBuissons = 2
+				end
+				for k = 1, nbBuissons do
+					local x, z = nil, nil
+					if k == 1 or dispo(9) then
+						x, z = placer(0.5, 0.85, nil, function(px, pz)
+							return pied(px, pz, 2.8)
+						end)
+					end
+					if x then
+						nbPlantes = nbPlantes + 1
+						buisson(nbPlantes, x, z, m, 0.8, 2)
+					end
+				end
+				if R >= 12 and dispo(5) then
+					local x, z = placer(0.4, 0.8, nil, function(px, pz)
+						return pied(px, pz, 3.6)
+					end)
+					if x then
+						nbPlantes = nbPlantes + 1
+						fougere(nbPlantes, x, z, m, 4.8, 5)
+					end
+				end
+				if R < 11 and dispo(6) then
+					local x, z = placer(0.75, 0.95, nil, function(px, pz)
+						return pied(px, pz, 1.2)
+					end)
+					if x then
+						nbPlantes = nbPlantes + 1
+						touffe(nbPlantes, x, z, m, 0.8)
+					end
+				end
+				-- rochers moussus en terrain (Rock / Slate coiffés de mousse)
+				if terrainOk then
+					local nbRochers = 1
+					if R >= 12 then
+						nbRochers = 2
+					end
+					for _ = 1, nbRochers do
+						local r = hasard(1.3, 2)
+						local x, z = placer(0.45, 0.92, nil, function(px, pz)
+							return pied(px, pz, r * 1.5)
+						end)
+						if x then
+							occuper(x, z, r * 1.2)
+							local principal, second = Mat.Rock, Mat.Slate
+							if rng:NextNumber() < 0.4 then
+								principal, second = Mat.Slate, Mat.Rock
+							end
+							local centre = V3(x, hauteurSol(x, z) + r * 0.1, z)
+							Outils.terrainBoule(centre, r, principal)
+							local a = hasard(0, DEUX_PI)
+							local r2 = r * hasard(0.5, 0.65)
+							Outils.terrainBoule(V3(x + math.cos(a) * r * 0.8, centre.Y - r * 0.25, z + math.sin(a) * r * 0.8), r2, second)
+							Outils.terrainBoule(centre + V3(hasard(-0.3, 0.3), r * 0.5, hasard(-0.3, 0.3)), r * 0.62, Mat.LeafyGrass)
+						end
+					end
+				end
+			end
+		end
+	end
+
+	end -- fin du bloc sentier du coffre / bosquets
 
 	dossier:SetAttribute("Parts", nbParts)
+	dossier:SetAttribute("PartsBosquets", nbParts - partsJungle)
 end
 
 return M

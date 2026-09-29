@@ -4,12 +4,13 @@
 -- au nord, une fontaine animée : bassin de pierre sculptée à l'eau de verre bleu éclairée par en dessous,
 -- statue de dino en bronze qui crache un grand jet, couronne de jets en arc (Beam) qui retombent en gerbes
 -- au pied du piédestal, et un petit ballet serveur (jets pairs / impairs, puis grande gerbe) ;
--- au bord sud, la borne Dinodex (coque Metal, écran Neon, invite « Index ») ; bancs en lattes de bois,
--- bacs à fleurs et lampadaires. Titres flottants géants (« 🦖 DINO CHAPARDEURS », « 📖 DINODEX »).
+-- au bord sud, la borne Dinodex (coque Metal, écran Neon, invite « Index ») ; sur le bord de l'anneau,
+-- bancs en lattes de bois, jardinières et lampadaires (le centre autour de l'apparition reste dégagé).
+-- Titres flottants géants (« 🦖 DINO CHAPARDEURS », « 📖 DINODEX »).
 -- Emprise (CONTRAT §10) : disque de rayon Plan.place.rayon (22) autour de Plan.place.centre ; toutes les
--- distances sont des fractions de ce rayon (aucune coordonnée en dur). Le secteur ouest-nord-ouest reste
--- libre pour le tableau d'honneur (Systemes/Classement), les axes est et ouest pour les allées vers l'Autel
--- et le Comptoir, l'axe nord pour l'allée du Tapis, l'axe sud pour le sentier de la rivière.
+-- distances sont des fractions de ce rayon (aucune coordonnée en dur). Le tableau d'honneur est hors de la
+-- Place (Systemes/Classement, Plan.classement) ; les axes est et ouest restent libres pour les allées vers
+-- l'Autel et le Comptoir, l'axe nord pour l'allée du Tapis, l'axe sud pour le sentier de la rivière.
 local M = {}
 
 local BUDGET = 290 -- parts au maximum pour ce constructeur
@@ -27,10 +28,17 @@ local DEFAUTS = {
 	cycleBallet = 2.6,       -- secondes entre deux figures du ballet des jets
 	distanceBorne = 0.83,    -- × rayon : de la borne Dinodex au centre (vers le sud)
 	distanceInvite = 10,     -- portée de l'invite « Index »
-	rayonBancs = 0.72,       -- × rayon
-	rayonFleurs = 0.87,      -- × rayon
+	rayonBancs = 0.895,      -- × rayon : bancs sur le bord de l'anneau, dossier juste devant la plinthe
+	rayonFleurs = 0.9,       -- × rayon : jardinières sur le bord de l'anneau (rebord à ~1 de la plinthe)
 	rayonLampes = 0.92,      -- × rayon
 }
+
+-- Angles de pose sur le bord de l'anneau (degrés : 0 = est, 90 = sud, 270 = nord), symétriques par rapport
+-- à l'axe nord-sud. Secteurs laissés libres : ±17° autour de l'est et de l'ouest (liens vers l'Autel et le
+-- Comptoir), 245°..295° (fontaine et allée du Tapis), 69°..111° (borne Dinodex, ses deux bacs et le sentier
+-- de la rivière). Lampadaires à 45°, 135°, 235°, 305° ; bancs et jardinières de part et d'autre.
+local ANGLES_BANCS = { 32, 148, 220, 320 }
+local ANGLES_FLEURS = { 57, 123, 204, 336 }
 
 local function lireReglages(ctx)
 	local source = nil
@@ -929,10 +937,11 @@ function M.construire(ctx)
 				bloc(m, { Name = "Montant", Size = Vector3.new(0.22, 1.7, 0.22), CFrame = dos * CFrame.new(sx, 2.05, 0.15), Color = TEINTES.metal, Material = MAT.Metal })
 			end
 		end
-		-- seulement au sud-est (45°) et au sud-ouest (135°), tournés vers le centre : l'axe nord
-		-- (allée du Tapis) reste dégagé de part et d'autre de la margelle de la fontaine
-		banc(autour(D.bancs, 45), CENTRE)
-		banc(autour(D.bancs, 135), CENTRE)
+		-- sur le bord de l'anneau, dos à la plinthe et tournés vers le centre : le cœur de la Place
+		-- (estrade de l'apparition, rose des vents) reste entièrement dégagé
+		for _, a in ipairs(ANGLES_BANCS) do
+			banc(autour(D.bancs, a), CENTRE)
+		end
 	end)
 
 	-- ===== 6. bacs à fleurs : terre cuite, rebord d'ardoise, buisson fleuri =====
@@ -965,8 +974,8 @@ function M.construire(ctx)
 				})
 			end
 		end
-		-- 55° et 125° : entre les bancs et les lampadaires du sud ; 340° : côté Autel, hors des panneaux-flèches
-		for _, a in ipairs({ 55, 125, 340 }) do
+		-- sur le bord de l'anneau, de l'autre côté des lampadaires par rapport aux bancs
+		for _, a in ipairs(ANGLES_FLEURS) do
 			local p = autour(D.fleurs, a)
 			bac(p.X, p.Z, a)
 		end

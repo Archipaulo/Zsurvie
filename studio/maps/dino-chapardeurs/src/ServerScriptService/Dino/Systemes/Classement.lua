@@ -1,6 +1,8 @@
--- Système Classement : leaderstats des joueurs, meilleur revenu du serveur et tableau d'honneur sur la Place.
+-- Système Classement : leaderstats des joueurs, meilleur revenu du serveur et tableau d'honneur.
 -- Tableau d'honneur (version 2) : panneau en bois sombre à cadre de métal doré, écran lumineux éclairé
--- par deux lampes, fronton sculpté avec plaque gravée et trophée d'or, posé sur deux pieds de pierre.
+-- par deux lampes, fronton sculpté avec plaque gravée et trophée d'or, perché au-dessus des têtes sur deux
+-- poteaux rapprochés. Hors de la Place, à Plan.classement.centre, tourné vers Plan.classement.regard ;
+-- ses pieds restent hors des chemins de sable (décalage minimal si besoin, attribut « Decalage »).
 local Players = game:GetService("Players")
 
 local M = {}
@@ -13,13 +15,21 @@ local NB_LIGNES = 5          -- top 5 par revenu/s
 local LARGEUR = 12           -- largeur de l'écran
 local HAUTEUR = 8            -- hauteur de l'écran
 local EPAISSEUR = 0.2        -- épaisseur de l'écran
-local HAUT_BAS = 2.4         -- hauteur du bas de l'écran au-dessus du sol
+local HAUT_BAS = 7.4         -- hauteur du bas de l'écran au-dessus du sol : le panneau passe au-dessus des têtes
 local CADRE = 0.45           -- largeur des baguettes du cadre doré
-local ECART_POTEAU = 7.5     -- distance du centre à l'axe de chaque poteau
+local ECART_POTEAU = 7.5     -- demi-largeur du dos du panneau
+local ECART_PIED = 2.4       -- distance du centre à l'axe de chaque poteau (pieds rapprochés sous le panneau)
+local Z_POTEAU = 1.1         -- les poteaux passent derrière le dos (repère local : -Z = face avant)
 local PIXELS = 50            -- pixels par stud du SurfaceGui
--- place du tableau sur la Place (même repère que Builders/Place : 0° = est, 90° = sud, 270° = nord)
-local ANGLE_TABLEAU = 215    -- nord-ouest : hors de l'axe ouest vers le Comptoir (lien Sol z 112 à 124), le dos plein ne descend pas sous z ≈ 106,7
-local RECUL_TABLEAU = 1.0    -- × Plan.place.rayon : pied du tableau sur le bord de la Place, dos tourné vers l'extérieur
+-- emprise au sol des pieds (repère local du tableau) : seule partie qui touche le sol
+local EMPRISE_X = ECART_PIED + 1.35
+local EMPRISE_Z0 = -0.2
+local EMPRISE_Z1 = 2.2
+local MARGE_CHEMIN = 1.5     -- herbe laissée entre les pieds et un chemin de sable (galets de bordure compris)
+local RECHERCHE_MAX = 12     -- si Plan.classement.centre déborde sur un chemin : décalage maximal essayé (studs)
+-- repli si Plan.classement manque (même repère que Builders/Place : 0° = est, 90° = sud, 270° = nord)
+local ANGLE_REPLI = 215
+local RECUL_REPLI = 1.7      -- × Plan.place.rayon
 
 local function nombre(v)
 	local n = tonumber(v)
@@ -148,8 +158,9 @@ local function construireStructure(ctx, modele, local_)
 	local yCentre = HAUT_BAS + HAUTEUR / 2
 	local hautDos = HAUTEUR + 1.6
 	local yDosHaut = yCentre + hautDos / 2
+	local yDosBas = yCentre - hautDos / 2
 	local ySocle = 2.0                              -- dessus des pieds de pierre
-	local yPoteauHaut = yDosHaut + 1.0
+	local yPoteauHaut = yDosHaut - 0.3              -- les poteaux s'arrêtent derrière le haut du dos
 
 	local solides = {}
 	local function solide(inst)
@@ -163,29 +174,31 @@ local function construireStructure(ctx, modele, local_)
 		return inst
 	end
 
-	-- pieds en pierre et poteaux en bois sombre cerclés d'or
+	-- socle commun en pierre (seule emprise au sol : EMPRISE_X × EMPRISE_Z0..Z1), deux pieds et deux poteaux
+	-- en bois sombre cerclés d'or, rapprochés sous le panneau qui passe au-dessus des têtes
+	local zSocle = (EMPRISE_Z0 + EMPRISE_Z1) / 2
+	solide(O.bloc(modele, {
+		Name = "Plinthe",
+		Size = Vector3.new(2 * EMPRISE_X, 0.35, EMPRISE_Z1 - EMPRISE_Z0),
+		CFrame = local_(0, 0.175, zSocle),
+		Color = pierreSombre,
+		Material = Enum.Material.Slate,
+	}))
 	for _, cote in ipairs({ -1, 1 }) do
-		local x = cote * ECART_POTEAU
+		local x = cote * ECART_PIED
 		local suffixe = "G"
 		if cote > 0 then suffixe = "D" end
-		solide(O.bloc(modele, {
-			Name = "Plinthe" .. suffixe,
-			Size = Vector3.new(2.7, 0.35, 2.7),
-			CFrame = local_(x, 0.175, 0.3),
-			Color = pierreSombre,
-			Material = Enum.Material.Slate,
-		}))
 		solide(O.blocArrondi(modele, {
 			Name = "Pied" .. suffixe,
-			Size = Vector3.new(2.2, 1.35, 2.2),
-			CFrame = local_(x, 0.35 + 0.675, 0.3),
+			Size = Vector3.new(2.1, 1.35, 2.1),
+			CFrame = local_(x, 0.35 + 0.675, Z_POTEAU),
 			Color = C.pierre,
 			Material = Enum.Material.Cobblestone,
 		}, 0.45))
 		solide(O.bloc(modele, {
 			Name = "Chapiteau" .. suffixe,
-			Size = Vector3.new(2.45, 0.3, 2.45),
-			CFrame = local_(x, ySocle - 0.15, 0.3),
+			Size = Vector3.new(2.35, 0.3, 2.35),
+			CFrame = local_(x, ySocle - 0.15, Z_POTEAU),
 			Color = pierreClaire,
 			Material = Enum.Material.Slate,
 		}))
@@ -193,35 +206,41 @@ local function construireStructure(ctx, modele, local_)
 		local hautPoteau = yPoteauHaut - ySocle
 		solide(O.bloc(modele, {
 			Name = "Poteau" .. suffixe,
-			Size = Vector3.new(1.1, hautPoteau, 1.1),
-			CFrame = local_(x, ySocle + hautPoteau / 2, 0.3),
+			Size = Vector3.new(1, hautPoteau, 1),
+			CFrame = local_(x, ySocle + hautPoteau / 2, Z_POTEAU),
 			Color = boisSombre,
 			Material = Enum.Material.Wood,
 		}))
-		for _, yBague in ipairs({ ySocle + 0.35, yDosHaut - 0.2 }) do
+		for _, yBague in ipairs({ ySocle + 0.35, yDosBas - 0.4 }) do
 			O.bloc(modele, {
 				Name = "Bague",
-				Size = Vector3.new(1.26, 0.24, 1.26),
-				CFrame = local_(x, yBague, 0.3),
+				Size = Vector3.new(1.16, 0.24, 1.16),
+				CFrame = local_(x, yBague, Z_POTEAU),
 				Color = C.dore,
 				Material = Enum.Material.Metal,
 			})
 		end
+
+		-- jambe de force dorée : du poteau au coin bas du dos (au-dessus des têtes, sans collision)
+		local depart = local_(x, yDosBas - 2.2, Z_POTEAU - 0.1).Position
+		local arrivee = local_(cote * (ECART_POTEAU - 0.6), yDosBas + 0.5, 0.75).Position
+		local longueur = (arrivee - depart).Magnitude
 		O.bloc(modele, {
-			Name = "Coiffe",
-			Size = Vector3.new(1.35, 0.3, 1.35),
-			CFrame = local_(x, yPoteauHaut + 0.15, 0.3),
+			Name = "JambeDeForce",
+			Size = Vector3.new(0.34, 0.34, longueur),
+			CFrame = CFrame.lookAt((depart + arrivee) / 2, arrivee),
 			Color = orSombre,
 			Material = Enum.Material.Metal,
 		})
-		O.boule(modele, {
-			Name = "Pommeau",
-			Size = Vector3.new(0.95, 0.95, 0.95),
-			CFrame = local_(x, yPoteauHaut + 0.3 + 0.42, 0.3),
-			Color = orClair,
-			Material = Enum.Material.Metal,
-		})
 	end
+	-- traverse basse entre les poteaux, sous le panneau
+	O.bloc(modele, {
+		Name = "TraverseBasse",
+		Size = Vector3.new(2 * ECART_PIED, 0.5, 0.5),
+		CFrame = local_(0, yDosBas - 0.4, Z_POTEAU),
+		Color = boisNoir,
+		Material = Enum.Material.Wood,
+	})
 
 	-- dos du panneau en planches sombres, encastré dans les poteaux, avec traverses au revers
 	solide(O.bloc(modele, {
@@ -582,6 +601,182 @@ local function construireEcran(ctx, ecran)
 	return lignes
 end
 
+-- ===== tableau d'honneur : la place au sol =====
+local function reglageDe(ctx, section, cle, defaut)
+	local E = ctx.Equilibrage
+	local t = E and E[section]
+	if type(t) == "table" and type(t[cle]) == "number" then
+		return t[cle]
+	end
+	return defaut
+end
+
+-- zones à laisser libres, toutes déduites de Plan (mêmes réglages que Builders/Sol et Builders/Fossiles) :
+-- chemins de sable, Bases, anneau de props de la Place, Comptoir, Autel, Tapis, bosquets, rivière.
+-- { rect = true, x0, x1, z0, z1 } ou { x, z, r } (disque)
+local function zonesInterdites(ctx)
+	local Plan = ctx.Plan
+	local zones = {}
+	local function rect(x0, x1, z0, z1)
+		table.insert(zones, { rect = true, x0 = math.min(x0, x1), x1 = math.max(x0, x1), z0 = math.min(z0, z1), z1 = math.max(z0, z1) })
+	end
+	local function disque(x, z, r)
+		table.insert(zones, { x = x, z = z, r = r })
+	end
+	local function sol(cle, defaut)
+		return reglageDe(ctx, "sol", cle, defaut)
+	end
+
+	local zP = 27
+	if type(Plan.promenade) == "table" and type(Plan.promenade.zMax) == "number" then
+		zP = Plan.promenade.zMax
+	end
+	-- Tapis et promenades
+	if type(Plan.tapis) == "table" and typeof(Plan.tapis.debut) == "Vector3" and typeof(Plan.tapis.fin) == "Vector3" then
+		rect(Plan.tapis.debut.X, Plan.tapis.fin.X, -zP, zP)
+	end
+	-- Bases, chemins de ronde et contre-allées
+	local zRondeB = nil
+	if type(Plan.base) == "table" and type(Plan.bases) == "table" then
+		local demiX = (Plan.base.largeur or 0) / 2
+		local demiZ = (Plan.base.profondeur or 0) / 2
+		local xMax, zFond = 0, zP + (Plan.base.profondeur or 0)
+		for _, b in ipairs(Plan.bases) do
+			if typeof(b.centre) == "Vector3" then
+				rect(b.centre.X - demiX, b.centre.X + demiX, b.centre.Z - demiZ, b.centre.Z + demiZ)
+				xMax = math.max(xMax, math.abs(b.centre.X) + demiX)
+				zFond = math.max(zFond, math.abs(b.centre.Z) + demiZ)
+			end
+		end
+		local zRondeA = zFond + sol("ecartRonde", 3)
+		zRondeB = zRondeA + sol("largeurRonde", 8)
+		local xContreA = xMax + sol("ecartContre", 2)
+		local xContreB = xContreA + sol("largeurContre", 10)
+		for _, s in ipairs({ -1, 1 }) do
+			rect(-xContreB, xContreB, s * zRondeA, s * zRondeB)
+			rect(s * xContreA, s * xContreB, s * zP, s * zRondeA)
+		end
+	end
+	-- allées entre les Bases
+	if type(Plan.allees) == "table" and type(Plan.allees.x) == "table" then
+		local l = (Plan.allees.largeur or 0) / 2
+		local zMin = Plan.allees.zMin or zP
+		local zMax = Plan.allees.zMax or zP
+		for _, ax in ipairs(Plan.allees.x) do
+			for _, s in ipairs({ -1, 1 }) do
+				rect(ax - l, ax + l, s * zMin, s * zMax)
+			end
+		end
+	end
+	-- la Place : anneau de sable, anneau de props (Fossiles), liens, sentier de la rivière
+	local place = Plan.place
+	if type(place) == "table" and typeof(place.centre) == "Vector3" and type(place.rayon) == "number" then
+		local pc = place.centre
+		local rPlace = place.rayon + sol("anneauPlace", 6)
+		disque(pc.X, pc.Z, rPlace + reglageDe(ctx, "fossiles", "anneauFin", 5))
+		local dLien = sol("demiLien", 6)
+		local mBat = sol("margeBatiment", 3)
+		local comptoir = Plan.comptoir
+		if type(comptoir) == "table" and typeof(comptoir.centre) == "Vector3" and typeof(comptoir.taille) == "Vector3" then
+			local c, t = comptoir.centre, comptoir.taille
+			rect(c.X + t.X / 2 - 1, pc.X - rPlace + 3, c.Z - dLien, c.Z + dLien)
+			rect(c.X - t.X / 2 - mBat, c.X + t.X / 2 + mBat, c.Z - t.Z / 2 - mBat, c.Z + t.Z / 2 + mBat)
+		end
+		local autel = Plan.autel
+		if type(autel) == "table" and typeof(autel.centre) == "Vector3" and type(autel.rayon) == "number" then
+			rect(pc.X + rPlace - 3, autel.centre.X - autel.rayon + 1, autel.centre.Z - dLien, autel.centre.Z + dLien)
+			disque(autel.centre.X, autel.centre.Z, autel.rayon + mBat)
+		end
+		if zRondeB and pc.Z - rPlace > zRondeB then
+			rect(pc.X - dLien, pc.X + dLien, zRondeB - 1, pc.Z - rPlace + 2)
+		end
+		local riviere = Plan.riviere
+		if type(riviere) == "table" and type(riviere.zMin) == "number" then
+			local dR = sol("demiRiviere", 5)
+			rect(pc.X - dR, pc.X + dR, pc.Z + rPlace - 3, riviere.zMin)
+		end
+	end
+	-- rivière et sa plage
+	local riviere = Plan.riviere
+	if type(riviere) == "table" and type(riviere.zMin) == "number" and type(riviere.zMax) == "number" then
+		rect(riviere.xMin or -1e4, riviere.xMax or 1e4, riviere.zMin - sol("plage", 6), riviere.zMax)
+	end
+	-- bosquets
+	if type(Plan.decor) == "table" and type(Plan.decor.bosquets) == "table" then
+		for _, b in ipairs(Plan.decor.bosquets) do
+			if typeof(b.c) == "Vector3" and type(b.r) == "number" then
+				disque(b.c.X, b.c.Z, b.r)
+			end
+		end
+	end
+	return zones
+end
+
+-- vrai si l'emprise au sol des pieds (repère cf) reste à plus de `marge` de toutes les zones
+local function empriseLibre(zones, cf, marge)
+	local n = 8
+	for i = 0, n do
+		local lx = -EMPRISE_X + 2 * EMPRISE_X * i / n
+		for _, lz in ipairs({ EMPRISE_Z0, (EMPRISE_Z0 + EMPRISE_Z1) / 2, EMPRISE_Z1 }) do
+			local p = (cf * CFrame.new(lx, 0, lz)).Position
+			for _, zone in ipairs(zones) do
+				if zone.rect then
+					if p.X > zone.x0 - marge and p.X < zone.x1 + marge and p.Z > zone.z0 - marge and p.Z < zone.z1 + marge then
+						return false
+					end
+				else
+					local dx, dz = p.X - zone.x, p.Z - zone.z
+					local r = zone.r + marge
+					if dx * dx + dz * dz < r * r then
+						return false
+					end
+				end
+			end
+		end
+	end
+	return true
+end
+
+-- repère du tableau : à Plan.classement.centre, face avant (-Z) tournée vers Plan.classement.regard ;
+-- si les pieds y touchent un chemin, position libre la plus proche (cercles de 0,5 en 0,5 stud)
+local function placerTableau(ctx)
+	local Plan = ctx.Plan
+	local info = Plan.classement
+	local centre, regard
+	if type(info) == "table" and typeof(info.centre) == "Vector3" and typeof(info.regard) == "Vector3" then
+		centre, regard = info.centre, info.regard
+	else
+		local place = Plan.place
+		local rayon = tonumber(place.rayon) or 22
+		local a = math.rad(ANGLE_REPLI)
+		centre = place.centre + Vector3.new(math.cos(a), 0, math.sin(a)) * (rayon * RECUL_REPLI)
+		regard = place.centre
+	end
+	local function orienter(p)
+		local pied = Vector3.new(p.X, 0, p.Z)
+		return CFrame.lookAt(pied, Vector3.new(regard.X, 0, regard.Z))
+	end
+	local base = orienter(centre)
+	local zones = zonesInterdites(ctx)
+	if empriseLibre(zones, base, MARGE_CHEMIN) then
+		return base, 0
+	end
+	local pas = 0.5
+	local nbAngles = 24
+	for k = 1, math.floor(RECHERCHE_MAX / pas) do
+		local r = k * pas
+		for j = 0, nbAngles - 1 do
+			local a = 2 * math.pi * j / nbAngles
+			local essai = orienter((base * CFrame.new(r * math.cos(a), 0, r * math.sin(a))).Position)
+			if empriseLibre(zones, essai, MARGE_CHEMIN) then
+				return essai, r
+			end
+		end
+	end
+	warn("[Dino] Classement : aucune place libre près de Plan.classement.centre, tableau posé tel quel")
+	return base, 0
+end
+
 local function construireTableau(ctx)
 	local O = ctx.Outils
 	local ancien = ctx.racine:FindFirstChild("Classement")
@@ -589,15 +784,10 @@ local function construireTableau(ctx)
 	local dossier = O.dossier(ctx.racine, "Classement")
 	local modele = O.modele(dossier, "TableauHonneur")
 
-	-- sur le bord nord-ouest de la Place (secteur laissé libre par Builders/Place), tourné vers le centre ;
-	-- tout se déduit de Plan.place : pied sur le cercle du rayon, l'axe ouest (lien du Comptoir) reste dégagé
-	local place = ctx.Plan.place
-	local centre = place.centre
-	local rayon = tonumber(place.rayon) or 22
-	local a = math.rad(ANGLE_TABLEAU)
-	local pied = centre + Vector3.new(math.cos(a), 0, math.sin(a)) * (rayon * RECUL_TABLEAU)
-	local cible = Vector3.new(centre.X, pied.Y, centre.Z)
-	local orientation = CFrame.lookAt(pied, cible)
+	-- hors de la Place, à Plan.classement.centre, tourné vers Plan.classement.regard ; si les pieds y
+	-- débordent sur un chemin, on prend la position libre la plus proche (voir placerTableau)
+	local orientation, decalage = placerTableau(ctx)
+	modele:SetAttribute("Decalage", decalage)
 	local function local_(x, y, z)
 		return orientation * CFrame.new(x, y, z)
 	end
